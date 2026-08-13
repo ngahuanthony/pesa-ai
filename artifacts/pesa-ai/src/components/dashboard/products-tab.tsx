@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Edit2, Package, FileSpreadsheet, Tag, Archive } from "lucide-react";
+import { Plus, Trash2, Edit2, Package, FileSpreadsheet, Tag } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +21,7 @@ const productSchema = z.object({
   stockQty:    z.coerce.number().min(0, "Stock can't be negative"),
   description: z.string().optional(),
 });
+
 type ProductForm = z.infer<typeof productSchema>;
 
 function ProductFormFields({ form }: { form: any }) {
@@ -67,8 +68,8 @@ export function ProductsTab() {
     query: { enabled: !!businessId, queryKey: getListProductsQueryKey(businessId) },
   });
 
-  const [isCreateOpen, setIsCreateOpen]       = useState(false);
-  const [editingProduct, setEditingProduct]   = useState<Product | null>(null);
+  const [isCreateOpen, setIsCreateOpen]     = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const queryClient = useQueryClient();
   const { toast }   = useToast();
 
@@ -134,41 +135,35 @@ export function ProductsTab() {
   if (isLoading) return <div className="py-16 text-center text-muted-foreground text-sm">Loading products…</div>;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-foreground">Your Products</h2>
-          <p className="text-sm text-muted-foreground">Everything your WhatsApp assistant can sell.</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleImport}
-            disabled={importProducts.isPending}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-            {importProducts.isPending ? "Importing…" : "Import CSV"}
-          </button>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 transition-colors">
-                <Plus className="h-4 w-4" /> Add Product
-              </button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Add New Product</DialogTitle></DialogHeader>
-              <Form {...createForm}>
-                <form onSubmit={createForm.handleSubmit(onSubmitCreate)} className="space-y-4 mt-2">
-                  <ProductFormFields form={createForm} />
-                  <button type="submit" disabled={createProduct.isPending} className="w-full h-10 rounded-lg bg-primary text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 transition-colors">
-                    {createProduct.isPending ? "Saving…" : "Save Product"}
-                  </button>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
-        </div>
+    <div className="space-y-5">
+      {/* Actions row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2">
+        <button
+          onClick={handleImport}
+          disabled={importProducts.isPending}
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+        >
+          <FileSpreadsheet className="h-4 w-4" />
+          {importProducts.isPending ? "Importing…" : "Import CSV"}
+        </button>
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogTrigger asChild>
+            <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 transition-colors">
+              <Plus className="h-4 w-4" /> Add Product
+            </button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Add New Product</DialogTitle></DialogHeader>
+            <Form {...createForm}>
+              <form onSubmit={createForm.handleSubmit(onSubmitCreate)} className="space-y-4 mt-2">
+                <ProductFormFields form={createForm} />
+                <button type="submit" disabled={createProduct.isPending} className="w-full h-10 rounded-lg bg-primary text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 transition-colors">
+                  {createProduct.isPending ? "Saving…" : "Save Product"}
+                </button>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Empty state */}
