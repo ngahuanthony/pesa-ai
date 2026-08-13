@@ -145,6 +145,14 @@ function save(state) {
   const tmp = DATA_FILE + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
   fs.renameSync(tmp, DATA_FILE);
+  // Mirror to Object Storage so data survives redeploys (non-blocking)
+  try { require("./persistence").pushBackground(DATA_FILE); } catch (_) {}
+}
+
+// Raw state loader — used by whatsapp.js to check per-business verify tokens
+// without going through the full sanitized API.
+function loadRaw() {
+  return load();
 }
 
 function id() {
@@ -937,6 +945,8 @@ function httpError(statusCode, message) {
 }
 
 module.exports = {
+  DATA_FILE,
+  loadRaw,
   load,
   mutate,
   id,

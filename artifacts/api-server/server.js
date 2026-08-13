@@ -6,6 +6,8 @@
 const http = require("http");
 const path = require("path");
 const url = require("url");
+const crypto = require("crypto");
+const persistence = require("./pesa-src/persistence");
 const router = require("./pesa-src/router");
 const db = require("./pesa-src/db");
 const auth = require("./pesa-src/auth");
@@ -74,23 +76,19 @@ router.post("/api/businesses/:businessId/chat", chatRoutes.send);
 // Note: chat history uses path param (not query) to avoid codegen type collision
 router.get("/api/businesses/:businessId/chat/history/:customerPhone", chatRoutes.history);
 
-router.get("/api/healthz", () => ({ status: "ok" }));
+router.get("/api/healthz", () => ({ ok: true }));
 router.get("/api/health", () => ({
   ok: true,
   aiMode: process.env.ANTHROPIC_API_KEY ? "claude" : "mock (set ANTHROPIC_API_KEY for the real assistant)",
 }));
 
-// WhatsApp webhook — see pesa-src/whatsapp.js
+// WhatsApp webhook — GET handled via router (no body needed)
 router.get("/webhook/whatsapp", ({ query }) => {
   const result = whatsapp.verifyWebhook(query);
   if (result.ok) return { rawText: result.challenge };
   return { status: 403, data: { error: "verification failed" } };
 });
-
-router.post("/webhook/whatsapp", async ({ body }) => {
-  whatsapp.handleIncomingWebhook(body).catch((err) => console.error("Webhook handling error:", err));
-  return { received: true };
-});
+// POST handled directly in the HTTP handler below (needs raw body for HMAC)
 
 router.post("/webhook/mpesa", ({ body }) => {
   try {
@@ -136,6 +134,37 @@ function readBody(req) {
   });
 }
 
+// Reads the raw body as a Buffer — used for the WhatsApp webhook so we can
+// validate X-Hub-Signature-256 before parsing JSON.
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (c) => {
+      chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
+      if (chunks.reduce((n, b) => n + b.length, 0) > 2_000_000) {
+        reject(db.httpError(413, "Request body too large"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
+// Verifies X-Hub-Signature-256 from Meta. If WHATSAPP_APP_SECRET is not set
+// the check is skipped (with a boot-time warning) so dev/staging still works.
+function validateWhatsAppSignature(rawBody, sigHeader) {
+  const secret = process.env.WHATSAPP_APP_SECRET;
+  if (!secret) return true; // warning already printed at boot
+  if (!sigHeader || !sigHeader.startsWith("sha256=")) return false;
+  const expected = "sha256=" + crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  try {
+    return crypto.timingSafeEqual(Buffer.from(sigHeader), Buffer.from(expected));
+  } catch {
+    return false; // different lengths — definitely not equal
+  }
+}
+
 function parseQuery(queryString) {
   const out = {};
   if (!queryString) return out;
@@ -150,6 +179,35 @@ function parseQuery(queryString) {
 }
 
 const server = http.createServer(async (req, res) => {
+  const parsed   = url.parse(req.url);
+  const pathname = parsed.pathname;
+
+  // ── WhatsApp POST webhook ─────────────────────────────────────────────
+  // Handled here (before the generic router) so we can validate the raw
+  // request body with HMAC-SHA256 before parsing JSON.
+  if (req.method === "POST" && pathname === "/webhook/whatsapp") {
+    try {
+      const rawBody = await readRawBody(req);
+      if (!validateWhatsAppSignature(rawBody, req.headers["x-hub-signature-256"])) {
+        sendJson(res, 403, { error: "Invalid webhook signature" });
+        return;
+      }
+      let body = {};
+      if (rawBody.length > 0) {
+        try { body = JSON.parse(rawBody.toString("utf8")); }
+        catch { sendJson(res, 400, { error: "Invalid JSON body" }); return; }
+      }
+      whatsapp.handleIncomingWebhook(body).catch((err) =>
+        console.error("[webhook] WhatsApp handling error:", err)
+      );
+      sendJson(res, 200, { received: true });
+    } catch (err) {
+      const status = err.statusCode || 500;
+      sendJson(res, status, { error: err.message || "Internal server error" });
+    }
+    return;
+  }
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -162,8 +220,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const parsed = url.parse(req.url);
-  const pathname = parsed.pathname;
   const query = parseQuery(parsed.query);
 
   const session = auth.resolveSession(req);
@@ -204,9 +260,17 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Pesa AI API running on port ${PORT}`);
-  if (!process.env.ADMIN_PASSWORD) console.warn("Warning: ADMIN_PASSWORD not set — admin panel disabled");
-  if (!process.env.ANTHROPIC_API_KEY) console.warn("Warning: ANTHROPIC_API_KEY not set — using mock AI");
-  if (!process.env.ENCRYPTION_KEY) console.warn("Warning: ENCRYPTION_KEY not set — M-Pesa credentials unencrypted");
+// Restore database from Object Storage before accepting any requests.
+// This ensures signups, products, and orders survive a redeploy.
+persistence.init(db.DATA_FILE).then(() => {
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Pesa AI API running on port ${PORT}`);
+    if (!process.env.ADMIN_PASSWORD)      console.warn("Warning: ADMIN_PASSWORD not set — admin panel disabled");
+    if (!process.env.ANTHROPIC_API_KEY)   console.warn("Warning: ANTHROPIC_API_KEY not set — using mock AI");
+    if (!process.env.ENCRYPTION_KEY)      console.warn("Warning: ENCRYPTION_KEY not set — M-Pesa credentials unencrypted");
+    if (!process.env.WHATSAPP_APP_SECRET) console.warn("Warning: WHATSAPP_APP_SECRET not set — webhook signature validation disabled (set in admin Meta App Dashboard → App Settings → Basic)");
+  });
+}).catch((err) => {
+  console.error("Fatal: could not initialise persistence layer:", err);
+  process.exit(1);
 });

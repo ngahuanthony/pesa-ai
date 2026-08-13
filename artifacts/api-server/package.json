@@ -8,5 +8,7 @@
     "build": "echo 'No build step needed for JS server'",
     "typecheck": "echo 'No typecheck for JS server'"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@replit/object-storage": "^1.0.0"
+  }
 }
