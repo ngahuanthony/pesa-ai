@@ -6,6 +6,7 @@
 const db = require("../db");
 const auth = require("../auth");
 const mpesa = require("../mpesa");
+const fieldCrypto = require("../crypto");
 
 function login({ body }) {
   const password = process.env.ADMIN_PASSWORD;
@@ -59,4 +60,30 @@ function getWhatsAppStatus({ params, session }) {
   return db.getWhatsAppStatus(params.businessId);
 }
 
-module.exports = { login, listBusinesses, chargeSubscription, suspendBusiness, unsuspendBusiness, getStats, setWhatsAppCredentials, getWhatsAppStatus };
+function setMpesaCredentials({ params, body, session }) {
+  auth.requireAdmin(session);
+  if (!fieldCrypto.isConfigured()) {
+    throw db.httpError(503, "ENCRYPTION_KEY is not set on the server — add it in environment secrets before saving M-Pesa credentials.");
+  }
+  const { consumerKey, consumerSecret, passkey, shortcode } = body || {};
+  if (!consumerKey || !consumerSecret || !passkey || !shortcode) {
+    throw db.httpError(400, "consumerKey, consumerSecret, passkey and shortcode are all required");
+  }
+  return db.setMpesaCredentials(params.businessId, { consumerKey, consumerSecret, passkey, shortcode }, "admin");
+}
+
+function getMpesaStatus({ params, session }) {
+  auth.requireAdmin(session);
+  return db.getMpesaStatus(params.businessId);
+}
+
+function disconnectMpesa({ params, session }) {
+  auth.requireAdmin(session);
+  return db.clearMpesaCredentials(params.businessId, "admin");
+}
+
+module.exports = {
+  login, listBusinesses, chargeSubscription, suspendBusiness, unsuspendBusiness,
+  getStats, setWhatsAppCredentials, getWhatsAppStatus,
+  setMpesaCredentials, getMpesaStatus, disconnectMpesa,
+};

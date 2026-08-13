@@ -1,13 +1,9 @@
-import { useGetMe, useUpdateBusiness, getGetMeQueryKey, useConnectMpesa, useDisconnectMpesa, useGetMpesaStatus, getGetMpesaStatusQueryKey } from "@workspace/api-client-react";
+import { useGetMe, useUpdateBusiness, getGetMeQueryKey } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { ExternalLink, CheckCircle2, AlertCircle, Copy, Link as LinkIcon, Unlink, Store, Bot, CreditCard } from "lucide-react";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { Store, Bot, CreditCard, CheckCircle2, Headphones } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const CATEGORIES = [
@@ -21,19 +17,23 @@ const CATEGORIES = [
   "Other",
 ];
 
-const mpesaSchema = z.object({
-  consumerKey:    z.string().min(1, "Consumer Key required"),
-  consumerSecret: z.string().min(1, "Consumer Secret required"),
-  passkey:        z.string().min(1, "Passkey required"),
-  shortcode:      z.string().min(1, "Shortcode required"),
-});
+const BANKS = [
+  "KCB Bank", "Equity Bank", "Co-operative Bank", "NCBA Bank", "Absa Bank Kenya",
+  "Standard Chartered", "Diamond Trust Bank", "Family Bank", "I&M Bank",
+  "Stanbic Bank", "Sidian Bank", "Prime Bank", "Gulf African Bank", "HFC Bank", "Faulu Bank",
+];
 
-/* ── small reusable section card ── */
-function Section({ icon: Icon, title, sub, children }: { icon: React.ElementType; title: string; sub: string; children: React.ReactNode }) {
+function Section({
+  icon: Icon, title, sub, children,
+}: {
+  icon: React.ElementType; title: string; sub: string; children: React.ReactNode;
+}) {
   return (
     <div className="bg-white border border-border rounded-2xl p-6 space-y-5">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-primary" />
+      <div className="flex items-center gap-2.5">
+        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <Icon className="h-4 w-4 text-primary" />
+        </div>
         <div>
           <h3 className="text-sm font-semibold text-foreground leading-tight">{title}</h3>
           <p className="text-xs text-muted-foreground">{sub}</p>
@@ -44,75 +44,79 @@ function Section({ icon: Icon, title, sub, children }: { icon: React.ElementType
   );
 }
 
+function SaveButton({ onClick, isPending, label = "Save Changes" }: { onClick: () => void; isPending: boolean; label?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={isPending}
+      className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 transition-colors"
+    >
+      {isPending ? "Saving…" : label}
+    </button>
+  );
+}
+
 export function SettingsTab() {
   const { data: me } = useGetMe();
-  const business = (me as any)?.business;
+  const business   = (me as any)?.business;
   const businessId = business?.id || "";
 
-  const updateBiz = useUpdateBusiness();
-  const connectMpesa = useConnectMpesa();
-  const disconnectMpesa = useDisconnectMpesa();
-  const { data: mpesaStatus, isLoading: isMpesaLoading } = useGetMpesaStatus(businessId, { query: { enabled: !!businessId, queryKey: getGetMpesaStatusQueryKey(businessId) } });
-
+  const updateBiz   = useUpdateBusiness();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const { toast }   = useToast();
 
-  /* ── Business Profile state ── */
-  const [bizName, setBizName]   = useState("");
-  const [ownerName, setOwnerName] = useState("");
-  const [category, setCategory] = useState("");
+  /* ── state ── */
+  const [bizName,    setBizName]   = useState("");
+  const [ownerName,  setOwnerName] = useState("");
+  const [category,   setCategory]  = useState("");
 
-  /* ── AI Persona state ── */
-  const [personaName, setPersonaName]         = useState("");
+  const [personaName,         setPersonaName]         = useState("");
   const [personaInstructions, setPersonaInstructions] = useState("");
 
-  /* ── Payment & Trust state ── */
-  const [paymentMethod, setPaymentMethod] = useState<"mpesa" | "bank">("mpesa");
-  const [paybillNumber, setPaybillNumber] = useState("");
-  const [bankName, setBankName]           = useState("");
-  const [bankAccountNumber, setBankAccountNumber] = useState("");
-
-  /* ── Physical Shop state ── */
   const [buildingName, setBuildingName] = useState("");
-  const [shopNumber, setShopNumber]     = useState("");
-  const [publicPhone, setPublicPhone]   = useState("");
+  const [shopNumber,   setShopNumber]   = useState("");
+  const [publicPhone,  setPublicPhone]  = useState("");
 
-  /* ── WhatsApp state ── */
-  const [whatsappPhone, setWhatsappPhone] = useState("");
+  const [paymentMethod,    setPaymentMethod]    = useState<"mpesa" | "bank">("mpesa");
+  const [paybillNumber,    setPaybillNumber]    = useState("");
+  const [bankName,         setBankName]         = useState("");
+  const [bankAccountNumber,setBankAccountNumber]= useState("");
 
   const initRef = useRef<string | null>(null);
   useEffect(() => {
     if (business && initRef.current !== business.id) {
       setBizName(business.name || "");
-      setOwnerName((business as any).ownerName || "");
+      setOwnerName(business.ownerName || "");
       setCategory(business.category || "");
       setPersonaName(business.personaName || "");
-      setPersonaInstructions((business as any).personaInstructions || "");
-      setPaymentMethod(((business as any).paymentMethod as "mpesa" | "bank") || "mpesa");
+      setPersonaInstructions(business.personaInstructions || "");
+      setBuildingName(business.buildingName || "");
+      setShopNumber(business.shopNumber || "");
+      setPublicPhone(business.publicPhone || "");
+      setPaymentMethod(business.paymentMethod || "mpesa");
       setPaybillNumber(business.paybillNumber || "");
-      setBankName((business as any).bankName || "");
-      setBankAccountNumber((business as any).bankAccountNumber || "");
-      setBuildingName((business as any).buildingName || "");
-      setShopNumber((business as any).shopNumber || "");
-      setPublicPhone((business as any).publicPhone || "");
-      setWhatsappPhone((business as any).whatsappPhone || "");
+      setBankName(business.bankName || "");
+      setBankAccountNumber(business.bankAccountNumber || "");
       initRef.current = business.id;
     }
   }, [business]);
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
 
-  const saveProfile = () => {
+  const saveProfile = () =>
     updateBiz.mutate({ id: businessId, data: { name: bizName, ownerName, category } as any }, {
-      onSuccess: () => { refetch(); toast({ title: "Business profile saved!" }); }
+      onSuccess: () => { refetch(); toast({ title: "Profile saved!" }); },
     });
-  };
 
-  const savePersona = () => {
+  const savePersona = () =>
     updateBiz.mutate({ id: businessId, data: { personaName, personaInstructions } as any }, {
-      onSuccess: () => { refetch(); toast({ title: "AI Persona saved!" }); }
+      onSuccess: () => { refetch(); toast({ title: "Assistant updated!" }); },
     });
-  };
+
+  const saveShop = () =>
+    updateBiz.mutate({ id: businessId, data: { buildingName, shopNumber, publicPhone } as any }, {
+      onSuccess: () => { refetch(); toast({ title: "Location saved!" }); },
+    });
 
   const savePayment = () => {
     const data: any = { paymentMethod };
@@ -126,31 +130,48 @@ export function SettingsTab() {
       data.paybillNumber = null;
     }
     updateBiz.mutate({ id: businessId, data }, {
-      onSuccess: () => { refetch(); toast({ title: "Payment settings saved!" }); }
+      onSuccess: () => { refetch(); toast({ title: "Payment details saved!" }); },
     });
   };
 
-  const saveShop = () => {
-    updateBiz.mutate({ id: businessId, data: { buildingName, shopNumber, publicPhone } as any }, {
-      onSuccess: () => { refetch(); toast({ title: "Shop details saved!" }); }
-    });
-  };
-
-  const saveWhatsApp = () => {
-    updateBiz.mutate({ id: businessId, data: { whatsappPhone } as any }, {
-      onSuccess: () => { refetch(); toast({ title: "WhatsApp number submitted! Our team will connect it shortly." }); }
-    });
-  };
+  /* ── WhatsApp status banner ── */
+  const waConnected = !!(business?.whatsappPhoneNumberId);
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="space-y-5 max-w-2xl">
 
-      {/* ── 1. Business Profile ── */}
-      <Section icon={Store} title="Business Profile" sub="Update your public facing business details.">
+      {/* Managed-by-team banner */}
+      <div className="flex items-start gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-5 py-4">
+        <Headphones className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-foreground leading-relaxed">
+          Your WhatsApp connection and payment gateway are <strong>managed by the Pesa AI team</strong> — you don't need to touch any of that.
+          Just fill in your shop details below and we handle the rest.
+        </p>
+      </div>
+
+      {/* WhatsApp status pill — read-only */}
+      <div className={`flex items-center gap-2.5 rounded-xl px-4 py-3 border ${
+        waConnected ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"
+      }`}>
+        <span className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${waConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-400"}`} />
+        <div>
+          <p className={`text-sm font-semibold ${waConnected ? "text-emerald-700" : "text-amber-700"}`}>
+            WhatsApp Shop: {waConnected ? "Connected & Live" : "Pending Connection"}
+          </p>
+          <p className={`text-xs ${waConnected ? "text-emerald-600" : "text-amber-600"}`}>
+            {waConnected
+              ? "Your assistant is live and handling customer messages."
+              : "Our team will connect your WhatsApp number — usually within 24 hours of signup."}
+          </p>
+        </div>
+      </div>
+
+      {/* 1. Shop Info */}
+      <Section icon={Store} title="Shop Info" sub="Your business name and what you sell.">
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">Business Name</label>
-            <Input value={bizName} onChange={(e) => setBizName(e.target.value)} placeholder="Your shop name" />
+            <Input value={bizName} onChange={(e) => setBizName(e.target.value)} placeholder="e.g. Digital Nation Accessories" />
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">Owner Name</label>
@@ -160,227 +181,114 @@ export function SettingsTab() {
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-foreground">Category</label>
           <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a category" />
-            </SelectTrigger>
+            <SelectTrigger className="w-full"><SelectValue placeholder="What type of business?" /></SelectTrigger>
             <SelectContent>
-              {CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c}>{c}</SelectItem>
-              ))}
+              {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
-        <button
-          onClick={saveProfile}
-          disabled={updateBiz.isPending}
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 transition-colors"
-        >
-          {updateBiz.isPending ? "Saving…" : "Save Changes"}
-        </button>
+        <SaveButton onClick={saveProfile} isPending={updateBiz.isPending} />
       </Section>
 
-      {/* ── 2. AI Persona ── */}
-      <Section icon={Bot} title="AI Persona" sub="How your AI assistant presents itself to customers.">
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">Assistant Name</label>
-          <Input value={personaName} onChange={(e) => setPersonaName(e.target.value)} placeholder="e.g. Digital AI" />
+      {/* 2. Your Location */}
+      <Section icon={Store} title="Your Location" sub="Optional — shows customers where to find your physical shop.">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Building / Mall</label>
+            <Input value={buildingName} onChange={(e) => setBuildingName(e.target.value)} placeholder="e.g. Westgate Shopping Mall" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Shop / Stall Number</label>
+            <Input value={shopNumber} onChange={(e) => setShopNumber(e.target.value)} placeholder="e.g. Ground Floor, G14" />
+          </div>
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">Persona Instructions <span className="text-muted-foreground font-normal">(Optional)</span></label>
+          <label className="text-sm font-medium text-foreground">Public Phone Number</label>
+          <Input value={publicPhone} onChange={(e) => setPublicPhone(e.target.value)} placeholder="e.g. 0722 542 810" type="tel" />
+        </div>
+        <SaveButton onClick={saveShop} isPending={updateBiz.isPending} label="Save Location" />
+      </Section>
+
+      {/* 3. Your Assistant */}
+      <Section icon={Bot} title="Your Assistant" sub="Give your WhatsApp assistant a name and personality that fits your brand.">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground">Assistant Name</label>
+          <Input value={personaName} onChange={(e) => setPersonaName(e.target.value)} placeholder="e.g. Aisha, Digital AI, ShopBot" />
+          <p className="text-xs text-muted-foreground">This is the name customers see when they chat with your WhatsApp shop.</p>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground">
+            Personality <span className="text-muted-foreground font-normal">(optional)</span>
+          </label>
           <textarea
             rows={4}
             value={personaInstructions}
             onChange={(e) => setPersonaInstructions(e.target.value)}
-            placeholder="e.g. Speak like a friendly Nairobi shopkeeper, use 'sasa' occasionally."
+            placeholder="e.g. Be friendly and speak like a helpful Nairobi shopkeeper. Use casual Swahili greetings like 'Sasa!' occasionally."
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
           />
-          <p className="text-xs text-muted-foreground">Give the AI specific instructions on tone and style.</p>
+          <p className="text-xs text-muted-foreground">Tell the assistant how to speak to customers — tone, language, anything special about your shop.</p>
         </div>
-        <button
-          onClick={savePersona}
-          disabled={updateBiz.isPending}
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 transition-colors"
-        >
-          {updateBiz.isPending ? "Saving…" : "Save Persona"}
-        </button>
+        <SaveButton onClick={savePersona} isPending={updateBiz.isPending} label="Save Assistant" />
       </Section>
 
-      {/* ── 3. Physical Shop Details (Optional) ── */}
-      <Section icon={Store} title="Physical Shop Details" sub="Helps customers trust you are a real business.">
-        <div className="flex items-center gap-1.5 mb-1">
-          <span className="text-xs text-muted-foreground italic">(Optional)</span>
-        </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Building / Mall Name</label>
-            <Input value={buildingName} onChange={(e) => setBuildingName(e.target.value)} placeholder="e.g. Midtown Business Centre" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Shop / Stall Number</label>
-            <Input value={shopNumber} onChange={(e) => setShopNumber(e.target.value)} placeholder="e.g. F25 - First Floor" />
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">Public Business Phone</label>
-          <Input value={publicPhone} onChange={(e) => setPublicPhone(e.target.value)} placeholder="e.g. 0722542810" />
-        </div>
-        <button
-          onClick={saveShop}
-          disabled={updateBiz.isPending}
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 transition-colors"
-        >
-          {updateBiz.isPending ? "Saving…" : "Save Shop Details"}
-        </button>
-      </Section>
-
-      {/* ── 4. WhatsApp Connection (simplified for businesses) ── */}
-      <Section icon={CheckCircle2} title="WhatsApp Connection" sub="Connect your WhatsApp Business number so the AI can chat with customers automatically.">
-        {/* Info box */}
-        <div className="flex gap-3 rounded-xl bg-primary/8 border border-primary/20 p-4">
-          <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-foreground">
-            Once connected, every message sent to your WhatsApp business number is automatically handled by your AI assistant — it greets customers, shows your products, and takes orders, 24/7.
-          </p>
-        </div>
-
-        {/* Status */}
-        {business?.whatsappPhoneNumberId ? (
-          <div className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/20 px-4 py-3">
-            <span className="h-2.5 w-2.5 rounded-full bg-primary animate-pulse flex-shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-primary">Connected &amp; Active</p>
-              <p className="text-xs text-muted-foreground">Your WhatsApp shop is live and handling customer messages.</p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-            <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-amber-700">Not connected yet</p>
-              <p className="text-xs text-amber-600">Enter your WhatsApp number below and our team will connect it for you.</p>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">Your WhatsApp Business Number</label>
-          <Input
-            value={whatsappPhone}
-            onChange={(e) => setWhatsappPhone(e.target.value)}
-            placeholder="e.g. 0712 345 678"
-            type="tel"
-          />
-          <p className="text-xs text-muted-foreground">The phone number customers will message. Our team will complete the technical setup.</p>
-        </div>
-
-        <button
-          onClick={saveWhatsApp}
-          disabled={updateBiz.isPending}
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 transition-colors"
-        >
-          {updateBiz.isPending ? "Submitting…" : "Connect WhatsApp"}
-        </button>
-      </Section>
-
-      {/* ── 4. Payment & Trust ── */}
-      <Section icon={CreditCard} title="Payment & Trust" sub="Setup how customers pay you. Money goes directly to your account — we never hold funds.">
-        <div>
-          <p className="text-sm font-medium text-foreground mb-3">Payment Method</p>
-          <div className="grid grid-cols-2 gap-3">
-            {/* M-Pesa card */}
+      {/* 4. How You Get Paid */}
+      <Section icon={CreditCard} title="How You Get Paid" sub="Tell us where to send customer payments. Money goes directly to your account.">
+        <div className="grid grid-cols-2 gap-3">
+          {(["mpesa", "bank"] as const).map((method) => (
             <button
+              key={method}
               type="button"
-              onClick={() => setPaymentMethod("mpesa")}
+              onClick={() => setPaymentMethod(method)}
               className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
-                paymentMethod === "mpesa"
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-muted-foreground/40"
+                paymentMethod === method ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
               }`}
             >
               <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
-                paymentMethod === "mpesa" ? "border-primary" : "border-muted-foreground/50"
+                paymentMethod === method ? "border-primary" : "border-muted-foreground/50"
               }`}>
-                {paymentMethod === "mpesa" && <span className="h-2 w-2 rounded-full bg-primary" />}
+                {paymentMethod === method && <span className="h-2 w-2 rounded-full bg-primary" />}
               </span>
               <div>
-                <p className="text-sm font-semibold text-foreground">M-Pesa</p>
-                <p className="text-xs text-muted-foreground">Till or Paybill number</p>
+                <p className="text-sm font-semibold text-foreground">{method === "mpesa" ? "M-Pesa" : "Bank Account"}</p>
+                <p className="text-xs text-muted-foreground">{method === "mpesa" ? "Till or Paybill number" : "Receive via bank transfer"}</p>
               </div>
             </button>
-
-            {/* Bank Account card */}
-            <button
-              type="button"
-              onClick={() => setPaymentMethod("bank")}
-              className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
-                paymentMethod === "bank"
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-muted-foreground/40"
-              }`}
-            >
-              <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
-                paymentMethod === "bank" ? "border-primary" : "border-muted-foreground/50"
-              }`}>
-                {paymentMethod === "bank" && <span className="h-2 w-2 rounded-full bg-primary" />}
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-foreground">Bank Account</p>
-                <p className="text-xs text-muted-foreground">Receive via bank transfer</p>
-              </div>
-            </button>
-          </div>
+          ))}
         </div>
 
-        {/* M-Pesa fields */}
         {paymentMethod === "mpesa" && (
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Till or Paybill Number</label>
-            <Input
-              value={paybillNumber}
-              onChange={(e) => setPaybillNumber(e.target.value)}
-              placeholder="e.g. 522522"
-            />
+            <label className="text-sm font-medium text-foreground">Your Till or Paybill Number</label>
+            <Input value={paybillNumber} onChange={(e) => setPaybillNumber(e.target.value)} placeholder="e.g. 522522" />
+            <p className="text-xs text-muted-foreground">Customers pay to this number. You keep 100% — we never deduct from orders.</p>
           </div>
         )}
 
-        {/* Bank fields */}
         {paymentMethod === "bank" && (
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Select Your Bank</label>
+              <label className="text-sm font-medium text-foreground">Your Bank</label>
               <Select value={bankName} onValueChange={setBankName}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose your bank..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {["KCB Bank", "Equity Bank", "Co-operative Bank", "NCBA Bank", "Absa Bank Kenya",
-                    "Standard Chartered", "Diamond Trust Bank", "Family Bank", "I&M Bank",
-                    "Stanbic Bank", "Sidian Bank", "Prime Bank", "Gulf African Bank",
-                    "HFC Bank", "Faulu Bank"].map((b) => (
-                    <SelectItem key={b} value={b}>{b}</SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Select your bank…" /></SelectTrigger>
+                <SelectContent>{BANKS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Your Account Number</label>
-              <Input
-                value={bankAccountNumber}
-                onChange={(e) => setBankAccountNumber(e.target.value)}
-                placeholder="e.g. 0123456789"
-              />
+              <label className="text-sm font-medium text-foreground">Account Number</label>
+              <Input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} placeholder="e.g. 0123456789" />
             </div>
           </div>
         )}
 
-        <button
-          onClick={savePayment}
-          disabled={updateBiz.isPending}
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 transition-colors"
-        >
-          {updateBiz.isPending ? "Saving…" : "Save Payment Settings"}
-        </button>
+        <SaveButton onClick={savePayment} isPending={updateBiz.isPending} label="Save Payment Details" />
       </Section>
+
+      {/* Help footer */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
+        <CheckCircle2 className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+        Need help? WhatsApp us at <strong className="text-foreground">+254 700 000 000</strong> and our team will sort it out.
+      </div>
 
     </div>
   );

@@ -39,6 +39,9 @@ router.post("/api/admin/businesses/:businessId/unsuspend", adminRoutes.unsuspend
 router.get("/api/admin/stats", adminRoutes.getStats);
 router.post("/api/admin/businesses/:businessId/whatsapp", adminRoutes.setWhatsAppCredentials);
 router.get("/api/admin/businesses/:businessId/whatsapp", adminRoutes.getWhatsAppStatus);
+router.post("/api/admin/businesses/:businessId/mpesa", adminRoutes.setMpesaCredentials);
+router.get("/api/admin/businesses/:businessId/mpesa", adminRoutes.getMpesaStatus);
+router.delete("/api/admin/businesses/:businessId/mpesa", adminRoutes.disconnectMpesa);
 
 router.post("/api/reports", reportsRoutes.create);
 router.get("/api/admin/reports", reportsRoutes.list);
