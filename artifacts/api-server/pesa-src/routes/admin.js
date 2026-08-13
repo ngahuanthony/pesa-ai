@@ -48,4 +48,15 @@ function getStats({ session }) {
   return db.getAdminStats();
 }
 
-module.exports = { login, listBusinesses, chargeSubscription, suspendBusiness, unsuspendBusiness, getStats };
+function setWhatsAppCredentials({ params, body, session }) {
+  auth.requireAdmin(session);
+  const { phoneNumberId, accessToken, verifyToken } = body || {};
+  return db.setWhatsAppCredentials(params.businessId, { phoneNumberId, accessToken, verifyToken });
+}
+
+function getWhatsAppStatus({ params, session }) {
+  auth.requireAdmin(session);
+  return db.getWhatsAppStatus(params.businessId);
+}
+
+module.exports = { login, listBusinesses, chargeSubscription, suspendBusiness, unsuspendBusiness, getStats, setWhatsAppCredentials, getWhatsAppStatus };

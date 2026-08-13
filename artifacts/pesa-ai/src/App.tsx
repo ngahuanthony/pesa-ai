@@ -28,6 +28,7 @@ function Router() {
         <Route path="/login" component={LoginPage} />
         <Route path="/signup" component={SignupPage} />
         <Route path="/dashboard" component={DashboardPage} />
+        <Route path="/dashboard/:section" component={DashboardPage} />
         <Route path="/admin" component={AdminPage} />
         <Route component={NotFound} />
       </Switch>

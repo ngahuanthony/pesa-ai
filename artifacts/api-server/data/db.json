@@ -1,0 +1,59 @@
+{
+  "businesses": [
+    {
+      "id": "65632bc3-b18a-4ea1-924c-3ffe8f01a862",
+      "name": "Test Shop",
+      "category": "Retail & Fashion",
+      "personaName": "Test Shop AI",
+      "paybillNumber": null,
+      "whatsappPhoneNumberId": null,
+      "whatsappVerifyToken": "cecda333439b66883227986a",
+      "buildingName": null,
+      "shopNumber": null,
+      "publicPhone": null,
+      "idOrKraPin": null,
+      "verifiedShop": false,
+      "createdAt": "2026-08-13T06:22:51.765Z"
+    }
+  ],
+  "accounts": [
+    {
+      "id": "f16411fd-4619-414a-9055-982fa0b3b295",
+      "businessId": "65632bc3-b18a-4ea1-924c-3ffe8f01a862",
+      "email": "test@demo.com",
+      "passwordHash": "d6a5bf9239a673026b32d9930353889fec9e9049f7dc12fea7b6a6dc686b119800c7d9cc4f13fbbc114a1f4b30048886d0cbc1173d004f6f60cae47ca004c456",
+      "passwordSalt": "cecb3a6fe5a9a4a33929dac6903cedc0",
+      "consentedAt": "2026-08-13T06:22:51.765Z",
+      "createdAt": "2026-08-13T06:22:51.765Z"
+    }
+  ],
+  "sessions": [
+    {
+      "token": "c18e09bfbff65851facb2c306b9c66d0ad8fe4183737ebe9d36ce675e775955a",
+      "accountId": "f16411fd-4619-414a-9055-982fa0b3b295",
+      "businessId": "65632bc3-b18a-4ea1-924c-3ffe8f01a862",
+      "isAdmin": false,
+      "createdAt": "2026-08-13T06:22:51.766Z",
+      "expiresAt": "2026-09-12T06:22:51.766Z"
+    }
+  ],
+  "subscriptions": [
+    {
+      "businessId": "65632bc3-b18a-4ea1-924c-3ffe8f01a862",
+      "plan": "starter",
+      "priceKES": 2999,
+      "status": "trialing",
+      "trialEndsAt": "2026-08-27T06:22:51.765Z",
+      "currentPeriodEnd": "2026-08-27T06:22:51.765Z",
+      "history": [],
+      "createdAt": "2026-08-13T06:22:51.765Z",
+      "updatedAt": "2026-08-13T06:22:51.765Z"
+    }
+  ],
+  "products": [],
+  "customers": [],
+  "conversations": [],
+  "messages": [],
+  "orders": [],
+  "reports": []
+}

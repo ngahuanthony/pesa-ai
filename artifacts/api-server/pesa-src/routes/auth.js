@@ -1,9 +1,9 @@
 const db = require("../db");
 const auth = require("../auth");
 
-function validateSignupInput({ businessName, category, businessPhone, email, password, consent }) {
-  if (!businessName || !category || !businessPhone || !email || !password) {
-    throw db.httpError(400, "businessName, category, businessPhone, email and password are all required");
+function validateSignupInput({ businessName, category, email, password, consent }) {
+  if (!businessName || !category || !email || !password) {
+    throw db.httpError(400, "businessName, category, email and password are all required");
   }
   if (String(password).length < 8) {
     throw db.httpError(400, "Password must be at least 8 characters");
@@ -21,13 +21,13 @@ function validateSignupInput({ businessName, category, businessPhone, email, pas
 }
 
 function signup({ body }) {
-  const { businessName, category, businessPhone, paybillNumber, email, password, consent, plan } = body || {};
-  validateSignupInput({ businessName, category, businessPhone, email, password, consent });
+  const { businessName, category, businessPhone, paybillNumber, fullName, buildingName, stallNumber, publicPhone, nationalId, email, password, consent, plan } = body || {};
+  validateSignupInput({ businessName, category, email, password, consent });
 
   const { passwordHash, passwordSalt } = auth.hashPassword(password);
 
   const { business, account } = db.mutate((state) => {
-    const business = db.createBusiness(state, { name: businessName, category, phone: businessPhone, paybillNumber, plan });
+    const business = db.createBusiness(state, { name: businessName, category, phone: businessPhone || "", paybillNumber, ownerName: fullName, buildingName, shopNumber: stallNumber, publicPhone, idOrKraPin: nationalId, plan });
     const account = db.createAccount(state, { businessId: business.id, email, passwordHash, passwordSalt, consentedAt: db.now() });
     return { business, account };
   });

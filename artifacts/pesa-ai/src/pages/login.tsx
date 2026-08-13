@@ -4,12 +4,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link, useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { useEffect } from "react";
-import { SiWhatsapp } from "react-icons/si";
+import { Store } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -21,7 +20,6 @@ export default function LoginPage() {
   const [, setLocation] = useLocation();
   const login = useLogin();
 
-  // Redirect to dashboard if already logged in (only once data is known)
   useEffect(() => {
     if (me?.authenticated && !me?.isAdmin) setLocation("/dashboard");
     if (me?.isAdmin) setLocation("/admin");
@@ -29,64 +27,65 @@ export default function LoginPage() {
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
+    defaultValues: { email: "", password: "" },
   });
 
   const onSubmit = (data: z.infer<typeof loginSchema>) => {
     login.mutate({ data }, {
-      onSuccess: () => {
-        setLocation("/dashboard");
-      }
+      onSuccess: () => setLocation("/dashboard"),
     });
   };
 
   return (
     <PublicLayout>
-      <div className="flex-1 flex items-center justify-center py-12 px-4">
-        <div className="w-full max-w-md space-y-8 bg-card border border-border p-8 rounded-2xl shadow-xl">
-          <div className="flex flex-col items-center space-y-2 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm mb-2">
-              <SiWhatsapp className="h-7 w-7" />
+      <div className="flex-1 flex items-center justify-center py-12 px-4 bg-[#f7f7f5]">
+        <div className="w-full max-w-md bg-white rounded-2xl border border-border p-8 shadow-sm">
+
+          {/* Header */}
+          <div className="flex flex-col items-center text-center mb-7 space-y-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Store className="h-6 w-6" />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
-            <p className="text-muted-foreground text-sm">
-              Log in to manage your AI sales assistant
-            </p>
+            <h1 className="text-3xl font-extrabold text-foreground">Welcome back</h1>
+            <p className="text-sm text-muted-foreground">Log in to manage your WhatsApp shop</p>
           </div>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="you@example.com" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              {/* Email */}
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email Address</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="you@example.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Password with Forgot password? inline */}
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between">
                       <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                      <Link href="/forgot-password" className="text-xs text-primary hover:underline">
+                        Forgot password?
+                      </Link>
+                    </div>
+                    <FormControl>
+                      <Input type="password" placeholder="••••••••" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               {login.error && (
                 <div className="text-sm font-medium text-destructive bg-destructive/10 p-3 rounded-md">
@@ -94,18 +93,23 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <Button type="submit" className="w-full" size="lg" disabled={login.isPending}>
-                {login.isPending ? "Logging in..." : "Log in"}
-              </Button>
+              <button
+                type="submit"
+                disabled={login.isPending}
+                className="w-full inline-flex h-12 items-center justify-center rounded-xl bg-primary text-white font-semibold text-sm shadow transition-all hover:bg-primary/90 disabled:opacity-60"
+              >
+                {login.isPending ? "Logging in…" : "Log in"}
+              </button>
             </form>
           </Form>
 
-          <div className="text-center text-sm text-muted-foreground">
+          {/* Bottom link */}
+          <p className="text-center text-sm text-muted-foreground mt-6">
             Don't have an account?{" "}
             <Link href="/signup" className="font-semibold text-primary hover:underline">
-              Sign up
+              Sign up for free
             </Link>
-          </div>
+          </p>
         </div>
       </div>
     </PublicLayout>

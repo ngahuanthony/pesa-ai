@@ -37,6 +37,8 @@ router.post("/api/admin/businesses/:businessId/subscription/charge", adminRoutes
 router.post("/api/admin/businesses/:businessId/suspend", adminRoutes.suspendBusiness);
 router.post("/api/admin/businesses/:businessId/unsuspend", adminRoutes.unsuspendBusiness);
 router.get("/api/admin/stats", adminRoutes.getStats);
+router.post("/api/admin/businesses/:businessId/whatsapp", adminRoutes.setWhatsAppCredentials);
+router.get("/api/admin/businesses/:businessId/whatsapp", adminRoutes.getWhatsAppStatus);
 
 router.post("/api/reports", reportsRoutes.create);
 router.get("/api/admin/reports", reportsRoutes.list);

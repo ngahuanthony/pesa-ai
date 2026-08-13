@@ -184,7 +184,7 @@ function derivePersonaName(name, category) {
 
 function createBusiness(
   state,
-  { name, category, phone, paybillNumber, plan, buildingName, shopNumber, publicPhone, idOrKraPin }
+  { name, category, phone, paybillNumber, plan, buildingName, shopNumber, publicPhone, idOrKraPin, ownerName, personaInstructions }
 ) {
   if (state.businesses.some((b) => b.phone === phone)) {
     throw httpError(409, "A business with this phone number already exists");
@@ -195,7 +195,12 @@ function createBusiness(
     name,
     category,
     phone,
+    ownerName: ownerName || null,
     personaName: derivePersonaName(name, category),
+    personaInstructions: personaInstructions || null,
+    paymentMethod: paybillNumber ? "mpesa" : null,
+    bankName: null,
+    bankAccountNumber: null,
     paybillNumber: paybillNumber || null,
     whatsappPhoneNumberId: null, // set once they connect a real WhatsApp number
     whatsappVerifyToken: crypto.randomBytes(12).toString("hex"),
@@ -312,6 +317,31 @@ function setMpesaCredentials(businessId, { consumerKey, consumerSecret, passkey,
     appendChangeLog(business, "mpesaCredentials", actor);
     return { connected: true, shortcodeMasked: fieldCrypto.maskShortcode(shortcode) };
   });
+}
+
+// --- WhatsApp Cloud API credentials (admin-only) --------------------------
+
+function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verifyToken }) {
+  return mutate((state) => {
+    const b = state.businesses.find((b) => b.id === businessId);
+    if (!b) throw httpError(404, "Business not found");
+    if (phoneNumberId !== undefined) b.whatsappPhoneNumberId = phoneNumberId || null;
+    if (verifyToken !== undefined) b.whatsappVerifyToken = verifyToken;
+    if (accessToken !== undefined) {
+      b.whatsappAccessTokenEnc = accessToken ? fieldCrypto.encrypt(accessToken) : null;
+    }
+    return { ok: true, connected: !!(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc) };
+  });
+}
+
+function getWhatsAppStatus(businessId) {
+  const b = getBusiness(businessId);
+  return {
+    phoneNumberId: b.whatsappPhoneNumberId || null,
+    verifyToken: b.whatsappVerifyToken || null,
+    accessTokenSet: !!b.whatsappAccessTokenEnc,
+    connected: !!(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc),
+  };
 }
 
 function clearMpesaCredentials(businessId, actor) {
@@ -925,6 +955,8 @@ module.exports = {
   getBusiness,
   getBusinessByWhatsappPhoneNumberId,
   updateBusiness,
+  setWhatsAppCredentials,
+  getWhatsAppStatus,
   sanitizeBusiness,
   setMpesaCredentials,
   clearMpesaCredentials,

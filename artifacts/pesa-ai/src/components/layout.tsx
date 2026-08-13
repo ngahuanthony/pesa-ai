@@ -12,7 +12,7 @@ export function Footer() {
           <span className="text-xl font-bold tracking-tight text-foreground">Pesa AI</span>
         </div>
         <div className="text-center text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">Empowering Kenyan SMEs with AI.</p>
+          <p className="font-medium text-foreground">Empowering Kenyan SMEs on WhatsApp.</p>
           <p className="mt-1">Built by Adplay Media Ltd &nbsp;&middot;&nbsp; 📞 +254 741 387 785</p>
         </div>
         <div className="w-[100px] hidden md:block">
