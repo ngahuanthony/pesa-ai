@@ -1,4 +1,4 @@
 #!/bin/bash
 set -e
-pnpm install --frozen-lockfile
-pnpm --filter db push
+# Use --no-frozen-lockfile so task-agent merges that add/remove deps don't fail
+pnpm install --no-frozen-lockfile
