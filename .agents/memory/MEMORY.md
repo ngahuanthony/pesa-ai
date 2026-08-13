@@ -1,2 +1,3 @@
-- [Pesa AI backend setup](pesa-ai-backend.md) — JS server in artifacts/api-server/pesa-src, dev script is node --watch server.js
+- [Pesa AI backend setup](pesa-ai-backend.md) — plain JS/HTTP server, route files must export handler functions not Express routers, all secrets now set
+- [Pesa AI product architecture](pesa-ai-product.md) — business/admin split, what each user type can configure, deployment URL
 - [Pesa AI OpenAPI quirks](pesa-ai-openapi-quirks.md) — codegen collision fix: query params must be path params, inline object+nullable uses looseObject (bad)

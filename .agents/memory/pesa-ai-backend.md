@@ -1,23 +1,33 @@
 ---
 name: Pesa AI backend setup
-description: How the API server is structured, where the server files are, and what env vars are needed
+description: How the API server is structured, where the server files are, what env vars are needed, and critical route-file conventions
 ---
 
-The API server uses the GitHub repo's battle-tested CJS/Node.js server, NOT the TypeScript Express scaffold. All GitHub server source files live at `artifacts/api-server/pesa-src/` (not `src/`). The dev script in `artifacts/api-server/package.json` is `node --watch server.js`.
+The API server is plain CJS Node.js — NO Express, NO TypeScript. All source lives in `artifacts/api-server/pesa-src/`. The entry point is `artifacts/api-server/server.js`.
 
-**Key file:** `artifacts/api-server/server.js` — adapted entry point that imports from `./pesa-src/` instead of `./src/`, adds suspend/unsuspend/stats admin routes, updates chat history to path param (not query param).
+**Production run command:** `node artifacts/api-server/server.js` (artifact.toml updated — no longer uses the old esbuild dist bundle).
 
-**Why:** The GitHub server had 0 npm install, battle-tested JS/JSON file DB, full working routes. Converting to TypeScript would have been a major rewrite with no gain.
+**Dev script:** `node --watch server.js` (in `artifacts/api-server/package.json`).
 
-**How to apply:** Any new routes go in server.js route table AND the relevant handler file in `pesa-src/routes/`. Then update openapi.yaml and run codegen.
+**Route handler convention — CRITICAL:**
+All route files export plain functions, NOT Express Router objects. Each function receives `{ params, body, session, query }` and returns data (or throws `db.httpError(status, message)`). Routes are registered in `server.js` route table like: `router.post("/api/reports", reportsRoutes.create)`.
 
-**Env vars needed for full functionality:**
-- `ADMIN_PASSWORD` — required for /admin panel
-- `ANTHROPIC_API_KEY` — required for real AI (mock mode otherwise)
-- `ENCRYPTION_KEY` — required for M-Pesa credential encryption
-- `DATA_DIR` — path to persistent storage for JSON DB (defaults to ./data inside api-server)
-- `WHATSAPP_TOKEN` — required for actual WhatsApp Business API
+**Why this matters:** Task agents routinely write Express-style route files (`const router = express.Router(); router.get(...)`) which break immediately with "Cannot find module 'express'". Always rewrite to plain handler functions before the server can start.
 
-**Router:** Custom tiny router in pesa-src/router.js. Had to add `patch` method (was missing).
-**Auth alias:** pesa-src/auth.js exports `requireOwnBusiness` as alias for `requireBusinessAccess`.
-**Chat history:** Changed from query param (`?customerPhone=...`) to path param (`/chat/history/:customerPhone`) to avoid Orval codegen TS2308 collision.
+**Env vars — all now set as Replit Secrets:**
+- `SESSION_SECRET` ✅
+- `ADMIN_PASSWORD` ✅
+- `ANTHROPIC_API_KEY` ✅ (real Claude AI active)
+- `ENCRYPTION_KEY` ✅ (64-char hex, AES-256-GCM for M-Pesa creds)
+- `DATA_DIR` — not set; defaults to `artifacts/api-server/data/` (fine for now)
+
+**Router:** Custom tiny router in `pesa-src/router.js`. Has `get/post/put/patch/delete` methods.
+**Auth alias:** `pesa-src/auth.js` exports `requireOwnBusiness` (alias for `requireBusinessAccess`).
+**Chat history:** Path param `/chat/history/:customerPhone` (not query param — avoids Orval codegen collision).
+
+**Admin-only routes (businesses never see these):**
+- WhatsApp: `POST/GET /api/admin/businesses/:businessId/whatsapp`
+- M-Pesa API creds: `POST/GET/DELETE /api/admin/businesses/:businessId/mpesa`
+- Businesses only provide their paybill/bank account number in Settings — no API keys.
+
+**Post-merge script (`scripts/post-merge.sh`):** Uses `pnpm install --no-frozen-lockfile` — task agents often remove/add deps without updating the lockfile; frozen mode would always fail.
