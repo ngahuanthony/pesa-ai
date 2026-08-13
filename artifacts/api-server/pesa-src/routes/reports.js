@@ -1,53 +1,37 @@
-/*
-  NEW FILE: server/src/routes/reports.js
-  Wire this into your router.js alongside your other route files.
-  Assumes Express-style routing based on your README's routes/ folder.
-*/
+// Plain HTTP handler functions — wired into server.js route table.
+// No express dependency; matches the pattern used by all other route files.
 
-const express = require('express');
-const router = express.Router();
-const db = require('../db');
-const { requireAdmin } = require('../auth'); // adjust to your actual admin-auth middleware
+const db = require("../db");
+const auth = require("../auth");
 
-// POST /api/reports
-// Public — called from the Chat Tester / WhatsApp flow when a customer
-// flags a business. No auth required, but keep it rate-limited if you
-// have rate-limiting middleware already, to avoid spam/report-flooding.
-router.post('/api/reports', (req, res) => {
-  const { businessId, reason, details, reporterContact } = req.body;
+const VALID_REASONS = ["scam", "no_delivery", "wrong_product", "other"];
 
+function create({ body }) {
+  const { businessId, reason, details, reporterContact } = body || {};
   if (!businessId || !reason) {
-    return res.status(400).json({ error: 'businessId and reason are required' });
+    throw db.httpError(400, "businessId and reason are required");
   }
-
-  const validReasons = ['scam', 'no_delivery', 'wrong_product', 'other'];
-  if (!validReasons.includes(reason)) {
-    return res.status(400).json({ error: 'invalid reason' });
+  if (!VALID_REASONS.includes(reason)) {
+    throw db.httpError(400, `reason must be one of: ${VALID_REASONS.join(", ")}`);
   }
-
   const report = db.createReport({ businessId, reason, details, reporterContact });
-  res.status(201).json({ ok: true, reportId: report.id });
-});
+  return { status: 201, data: { ok: true, reportId: report.id } };
+}
 
-// GET /api/admin/reports
-// Admin-only — powers the new Reports tab in admin.html
-router.get('/api/admin/reports', requireAdmin, (req, res) => {
-  const grouped = db.getReportsGroupedByBusiness();
-  res.json(grouped);
-});
+function list({ session }) {
+  auth.requireAdmin(session);
+  return db.getReportsGroupedByBusiness();
+}
 
-// PATCH /api/admin/reports/:id
-// Admin-only — mark a report reviewed/dismissed. Suspending a business
-// itself should stay a separate, explicit admin action elsewhere —
-// this route only ever changes report status, never account status.
-router.patch('/api/admin/reports/:id', requireAdmin, (req, res) => {
-  const { status } = req.body;
-  if (!['reviewed', 'dismissed', 'open'].includes(status)) {
-    return res.status(400).json({ error: 'invalid status' });
+function updateStatus({ params, body, session }) {
+  auth.requireAdmin(session);
+  const { status } = body || {};
+  if (!["reviewed", "dismissed", "open"].includes(status)) {
+    throw db.httpError(400, "status must be reviewed, dismissed, or open");
   }
-  const updated = db.updateReportStatus(req.params.id, status);
-  if (!updated) return res.status(404).json({ error: 'report not found' });
-  res.json({ ok: true, report: updated });
-});
+  const updated = db.updateReportStatus(params.id, status);
+  if (!updated) throw db.httpError(404, "report not found");
+  return { ok: true, report: updated };
+}
 
-module.exports = router;
+module.exports = { create, list, updateStatus };
