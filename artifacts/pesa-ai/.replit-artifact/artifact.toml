@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Pesa AI"
+description = "Pesa AI — AI-powered WhatsApp sales assistant for Kenyan SMEs. Full SaaS platform with landing page, vendor dashboard (products, orders, sales, billing, WhatsApp/M-Pesa settings), and a secure admin control panel for Adplay Media Ltd staff. Built by Adplay Media Ltd."
+version = "1.0.0"
+id = "artifacts/pesa-ai"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25145
+
+[services.development]
+run = "pnpm --filter @workspace/pesa-ai run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pesa-ai", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pesa-ai/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25145"
+BASE_PATH = "/"

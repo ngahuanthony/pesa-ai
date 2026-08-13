@@ -3,20 +3,27 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Pesa AI API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: auth
+  - name: business
+  - name: products
+  - name: orders
+  - name: sales
+  - name: chat
+  - name: mpesa
+  - name: admin
+  - name: reports
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +31,602 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      responses:
+        "200":
+          description: OK
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResult"
+
+  /businesses/{id}:
+    get:
+      operationId: getBusiness
+      tags: [business]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Business"
+    put:
+      operationId: updateBusiness
+      tags: [business]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Business"
+
+  /businesses/{businessId}/subscription:
+    get:
+      operationId: getSubscription
+      tags: [business]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /businesses/{businessId}/subscription/charge:
+    post:
+      operationId: chargeSubscription
+      tags: [business]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionChargeInput"
+      responses:
+        "200":
+          description: OK
+
+  /businesses/{businessId}/subscription/plan:
+    post:
+      operationId: changeSubscriptionPlan
+      tags: [business]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /businesses/{businessId}/products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [products]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /businesses/{businessId}/products/import:
+    post:
+      operationId: importProducts
+      tags: [products]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductImportInput"
+      responses:
+        "201":
+          description: OK
+
+  /businesses/{businessId}/products/{productId}:
+    put:
+      operationId: updateProduct
+      tags: [products]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+
+  /businesses/{businessId}/orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+  /businesses/{businessId}/orders/{orderId}/status:
+    put:
+      operationId: updateOrderStatus
+      tags: [orders]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderStatusUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /businesses/{businessId}/orders/{orderId}/mpesa:
+    post:
+      operationId: payOrderWithMpesa
+      tags: [orders]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MpesaPayInput"
+      responses:
+        "200":
+          description: OK
+
+  /businesses/{businessId}/mpesa/status:
+    get:
+      operationId: getMpesaStatus
+      tags: [mpesa]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MpesaStatus"
+
+  /businesses/{businessId}/mpesa/connect:
+    post:
+      operationId: connectMpesa
+      tags: [mpesa]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MpesaConnectInput"
+      responses:
+        "201":
+          description: OK
+
+  /businesses/{businessId}/mpesa/disconnect:
+    post:
+      operationId: disconnectMpesa
+      tags: [mpesa]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+
+  /businesses/{businessId}/sales/summary:
+    get:
+      operationId: getSalesSummary
+      tags: [sales]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesSummary"
+
+  /businesses/{businessId}/chat:
+    post:
+      operationId: sendChatMessage
+      tags: [chat]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatReply"
+
+  /businesses/{businessId}/chat/history/{customerPhone}:
+    get:
+      operationId: getChatHistory
+      tags: [chat]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: customerPhone
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatMessage"
+
+  /reports:
+    post:
+      operationId: createReport
+      tags: [reports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportInput"
+      responses:
+        "201":
+          description: OK
+
+  /admin/login:
+    post:
+      operationId: adminLogin
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginInput"
+      responses:
+        "200":
+          description: OK
+
+  /admin/businesses:
+    get:
+      operationId: adminListBusinesses
+      tags: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BusinessWithSubscription"
+
+  /admin/businesses/{businessId}/subscription/charge:
+    post:
+      operationId: adminChargeSubscription
+      tags: [admin]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminChargeInput"
+      responses:
+        "200":
+          description: OK
+
+  /admin/businesses/{businessId}/suspend:
+    post:
+      operationId: adminSuspendBusiness
+      tags: [admin]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+
+  /admin/businesses/{businessId}/unsuspend:
+    post:
+      operationId: adminUnsuspendBusiness
+      tags: [admin]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+
+  /admin/stats:
+    get:
+      operationId: adminGetStats
+      tags: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/reports:
+    get:
+      operationId: adminListReports
+      tags: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReportGroup"
+
+  /admin/reports/{id}:
+    patch:
+      operationId: adminUpdateReport
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportStatusUpdate"
+      responses:
+        "200":
+          description: OK
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +637,572 @@ components:
       required:
         - status
 
+    Business:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        personaName:
+          type: string
+        category:
+          type: string
+        phone:
+          type: string
+        paybillNumber:
+          type: string
+          nullable: true
+        whatsappPhoneNumberId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - personaName
+        - category
+        - phone
+        - createdAt
+
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+      required:
+        - id
+        - email
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+        businessId:
+          type: string
+        plan:
+          type: string
+        status:
+          type: string
+        priceKES:
+          type: number
+        trialEndsAt:
+          type: string
+          nullable: true
+        currentPeriodEnd:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - businessId
+        - plan
+        - status
+        - priceKES
+        - currentPeriodEnd
+        - createdAt
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        businessId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        price:
+          type: number
+        stockQty:
+          type: number
+        imageUrl:
+          type: string
+          nullable: true
+        active:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - businessId
+        - name
+        - price
+        - stockQty
+        - active
+        - createdAt
+
+    OrderItem:
+      type: object
+      properties:
+        productId:
+          type: string
+        productName:
+          type: string
+        qty:
+          type: number
+        unitPrice:
+          type: number
+      required:
+        - productId
+        - productName
+        - qty
+        - unitPrice
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        businessId:
+          type: string
+        customerId:
+          type: string
+        customerPhone:
+          type: string
+        customerName:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        totalKES:
+          type: number
+        status:
+          type: string
+        deliveryAddress:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - businessId
+        - customerId
+        - customerPhone
+        - items
+        - totalKES
+        - status
+        - createdAt
+
+    SalesTrendPoint:
+      type: object
+      properties:
+        date:
+          type: string
+        revenue:
+          type: number
+        orderCount:
+          type: number
+      required:
+        - date
+        - revenue
+        - orderCount
+
+    TopProduct:
+      type: object
+      properties:
+        productId:
+          type: string
+        productName:
+          type: string
+        revenue:
+          type: number
+        qty:
+          type: number
+      required:
+        - productId
+        - productName
+        - revenue
+        - qty
+
+    SalesSummary:
+      type: object
+      properties:
+        totalRevenue:
+          type: number
+        totalOrders:
+          type: number
+        avgOrderValue:
+          type: number
+        trend:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalesTrendPoint"
+        topProducts:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopProduct"
+        advancedAnalyticsLocked:
+          type: boolean
+          nullable: true
+      required:
+        - totalRevenue
+        - totalOrders
+        - avgOrderValue
+
+    MpesaStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        shortcodeMasked:
+          type: string
+          nullable: true
+      required:
+        - connected
+
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - role
+        - content
+        - createdAt
+
+    ChatReply:
+      type: object
+      properties:
+        replyText:
+          type: string
+      required:
+        - replyText
+
+    Report:
+      type: object
+      properties:
+        id:
+          type: string
+        businessId:
+          type: string
+        reason:
+          type: string
+        details:
+          type: string
+          nullable: true
+        reporterContact:
+          type: string
+          nullable: true
+        status:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - businessId
+        - reason
+        - status
+        - createdAt
+
+    ReportGroup:
+      type: object
+      properties:
+        business:
+          $ref: "#/components/schemas/Business"
+        openCount:
+          type: number
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/Report"
+      required:
+        - openCount
+        - reports
+
+    BusinessWithSubscription:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        personaName:
+          type: string
+        phone:
+          type: string
+        category:
+          type: string
+        paybillNumber:
+          type: string
+          nullable: true
+        whatsappPhoneNumberId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        subscription:
+          $ref: "#/components/schemas/Subscription"
+      required:
+        - id
+        - name
+        - personaName
+        - phone
+        - category
+        - createdAt
+        - subscription
+
+    AdminStats:
+      type: object
+      properties:
+        totalBusinesses:
+          type: number
+        activeBusinesses:
+          type: number
+        trialingBusinesses:
+          type: number
+        suspendedBusinesses:
+          type: number
+        totalRevenue:
+          type: number
+        revenueThisMonth:
+          type: number
+        openReports:
+          type: number
+        whatsappConnected:
+          type: number
+      required:
+        - totalBusinesses
+        - activeBusinesses
+        - trialingBusinesses
+        - suspendedBusinesses
+        - totalRevenue
+        - revenueThisMonth
+        - openReports
+        - whatsappConnected
+
+    MeResult:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        isAdmin:
+          type: boolean
+          nullable: true
+        account:
+          $ref: "#/components/schemas/Account"
+        business:
+          $ref: "#/components/schemas/Business"
+        subscription:
+          $ref: "#/components/schemas/Subscription"
+      required:
+        - authenticated
+
+    AuthResult:
+      type: object
+      properties:
+        business:
+          $ref: "#/components/schemas/Business"
+        account:
+          $ref: "#/components/schemas/Account"
+        subscription:
+          $ref: "#/components/schemas/Subscription"
+      required:
+        - business
+        - account
+        - subscription
+
+    SignupInput:
+      type: object
+      properties:
+        businessName:
+          type: string
+        category:
+          type: string
+        businessPhone:
+          type: string
+        paybillNumber:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        consent:
+          type: boolean
+        plan:
+          type: string
+      required:
+        - businessName
+        - category
+        - businessPhone
+        - email
+        - password
+        - consent
+
+    LoginInput:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    AdminLoginInput:
+      type: object
+      properties:
+        password:
+          type: string
+      required:
+        - password
+
+    BusinessUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        paybillNumber:
+          type: string
+        whatsappPhoneNumberId:
+          type: string
+
+    ProductInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        stockQty:
+          type: number
+        imageUrl:
+          type: string
+      required:
+        - name
+        - price
+
+    ProductUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        stockQty:
+          type: number
+        imageUrl:
+          type: string
+        active:
+          type: boolean
+
+    ProductImportInput:
+      type: object
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductInput"
+      required:
+        - rows
+
+    OrderStatusUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    MpesaPayInput:
+      type: object
+      properties:
+        phone:
+          type: string
+      required:
+        - phone
+
+    MpesaConnectInput:
+      type: object
+      properties:
+        consumerKey:
+          type: string
+        consumerSecret:
+          type: string
+        passkey:
+          type: string
+        shortcode:
+          type: string
+      required:
+        - consumerKey
+        - consumerSecret
+        - passkey
+        - shortcode
+
+    PlanInput:
+      type: object
+      properties:
+        plan:
+          type: string
+      required:
+        - plan
+
+    SubscriptionChargeInput:
+      type: object
+      properties:
+        phone:
+          type: string
+
+    ChatMessageInput:
+      type: object
+      properties:
+        customerPhone:
+          type: string
+        customerName:
+          type: string
+        message:
+          type: string
+      required:
+        - customerPhone
+        - message
+
+    ReportInput:
+      type: object
+      properties:
+        businessId:
+          type: string
+        reason:
+          type: string
+        details:
+          type: string
+        reporterContact:
+          type: string
+      required:
+        - businessId
+        - reason
+
+    ReportStatusUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    AdminChargeInput:
+      type: object
+      properties:
+        phone:
+          type: string

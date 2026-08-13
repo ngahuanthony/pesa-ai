@@ -1,0 +1,207 @@
+#!/usr/bin/env node
+// Entry point for Pesa AI API server on Replit.
+// Uses the battle-tested Node.js server logic from the GitHub repo.
+// Run via: node --watch server.js (dev) or node server.js (prod)
+
+const http = require("http");
+const path = require("path");
+const url = require("url");
+const router = require("./pesa-src/router");
+const db = require("./pesa-src/db");
+const auth = require("./pesa-src/auth");
+const businessRoutes = require("./pesa-src/routes/business");
+const productRoutes = require("./pesa-src/routes/products");
+const orderRoutes = require("./pesa-src/routes/orders");
+const chatRoutes = require("./pesa-src/routes/chat");
+const authRoutes = require("./pesa-src/routes/auth");
+const subscriptionRoutes = require("./pesa-src/routes/subscription");
+const salesRoutes = require("./pesa-src/routes/sales");
+const mpesaSettingsRoutes = require("./pesa-src/routes/mpesaSettings");
+const adminRoutes = require("./pesa-src/routes/admin");
+const reportsRoutes = require("./pesa-src/routes/reports");
+const whatsapp = require("./pesa-src/whatsapp");
+const mpesa = require("./pesa-src/mpesa");
+
+const PORT = Number(process.env.PORT) || 8080;
+
+// --- route table ----------------------------------------------------------
+
+router.post("/api/auth/signup", authRoutes.signup);
+router.post("/api/auth/login", authRoutes.login);
+router.post("/api/auth/logout", authRoutes.logout);
+router.get("/api/auth/me", authRoutes.me);
+
+router.post("/api/admin/login", adminRoutes.login);
+router.get("/api/admin/businesses", adminRoutes.listBusinesses);
+router.post("/api/admin/businesses/:businessId/subscription/charge", adminRoutes.chargeSubscription);
+router.post("/api/admin/businesses/:businessId/suspend", adminRoutes.suspendBusiness);
+router.post("/api/admin/businesses/:businessId/unsuspend", adminRoutes.unsuspendBusiness);
+router.get("/api/admin/stats", adminRoutes.getStats);
+
+router.post("/api/reports", reportsRoutes.create);
+router.get("/api/admin/reports", reportsRoutes.list);
+router.patch("/api/admin/reports/:id", reportsRoutes.updateStatus);
+
+router.get("/api/businesses/:id", businessRoutes.get);
+router.put("/api/businesses/:id", businessRoutes.update);
+
+router.get("/api/businesses/:businessId/subscription", subscriptionRoutes.get);
+router.post("/api/businesses/:businessId/subscription/charge", subscriptionRoutes.charge);
+router.post("/api/businesses/:businessId/subscription/plan", subscriptionRoutes.changePlan);
+
+router.get("/api/businesses/:businessId/products", productRoutes.list);
+router.post("/api/businesses/:businessId/products", productRoutes.create);
+router.post("/api/businesses/:businessId/products/import", productRoutes.importBulk);
+router.put("/api/businesses/:businessId/products/:productId", productRoutes.update);
+router.delete("/api/businesses/:businessId/products/:productId", productRoutes.remove);
+
+router.get("/api/businesses/:businessId/orders", orderRoutes.list);
+router.put("/api/businesses/:businessId/orders/:orderId/status", orderRoutes.updateStatus);
+router.post("/api/businesses/:businessId/orders/:orderId/mpesa", orderRoutes.payWithMpesa);
+
+router.get("/api/businesses/:businessId/mpesa/status", mpesaSettingsRoutes.status);
+router.post("/api/businesses/:businessId/mpesa/connect", mpesaSettingsRoutes.connect);
+router.post("/api/businesses/:businessId/mpesa/disconnect", mpesaSettingsRoutes.disconnect);
+
+router.get("/api/businesses/:businessId/sales/summary", salesRoutes.summary);
+
+router.post("/api/businesses/:businessId/chat", chatRoutes.send);
+// Note: chat history uses path param (not query) to avoid codegen type collision
+router.get("/api/businesses/:businessId/chat/history/:customerPhone", chatRoutes.history);
+
+router.get("/api/healthz", () => ({ status: "ok" }));
+router.get("/api/health", () => ({
+  ok: true,
+  aiMode: process.env.ANTHROPIC_API_KEY ? "claude" : "mock (set ANTHROPIC_API_KEY for the real assistant)",
+}));
+
+// WhatsApp webhook — see pesa-src/whatsapp.js
+router.get("/webhook/whatsapp", ({ query }) => {
+  const result = whatsapp.verifyWebhook(query);
+  if (result.ok) return { rawText: result.challenge };
+  return { status: 403, data: { error: "verification failed" } };
+});
+
+router.post("/webhook/whatsapp", async ({ body }) => {
+  whatsapp.handleIncomingWebhook(body).catch((err) => console.error("Webhook handling error:", err));
+  return { received: true };
+});
+
+router.post("/webhook/mpesa", ({ body }) => {
+  try {
+    mpesa.handleStkCallback(body);
+  } catch (err) {
+    console.error("M-Pesa callback handling error:", err);
+  }
+  return { data: { ResultCode: 0, ResultDesc: "Accepted" } };
+});
+
+// --- HTTP plumbing -------------------------------------------------------
+
+function sendJson(res, status, data, headers = {}) {
+  const payload = JSON.stringify(data);
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "access-control-allow-origin": "*",
+    "access-control-allow-credentials": "true",
+    ...headers,
+  });
+  res.end(payload);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let chunks = "";
+    req.on("data", (c) => {
+      chunks += c;
+      if (chunks.length > 2_000_000) {
+        reject(db.httpError(413, "Request body too large"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => {
+      if (!chunks) return resolve({});
+      try {
+        resolve(JSON.parse(chunks));
+      } catch {
+        reject(db.httpError(400, "Invalid JSON body"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function parseQuery(queryString) {
+  const out = {};
+  if (!queryString) return out;
+  for (const part of queryString.split("&")) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    const key = decodeURIComponent(part.slice(0, eq));
+    const value = decodeURIComponent(part.slice(eq + 1));
+    out[key] = value;
+  }
+  return out;
+}
+
+const server = http.createServer(async (req, res) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+      "access-control-allow-headers": "content-type,cookie",
+      "access-control-allow-credentials": "true",
+    });
+    res.end();
+    return;
+  }
+
+  const parsed = url.parse(req.url);
+  const pathname = parsed.pathname;
+  const query = parseQuery(parsed.query);
+
+  const session = auth.resolveSession(req);
+  const match = router.match(req.method, pathname);
+
+  if (!match) {
+    sendJson(res, 404, { error: "Not found" });
+    return;
+  }
+
+  let body = {};
+  try {
+    if (["POST", "PUT", "PATCH"].includes(req.method)) {
+      body = await readBody(req);
+    }
+    const result = await match.handler({ params: match.params, query, body, session, req });
+
+    // A handler can return a special shape to set cookies or status codes
+    if (result && result.cookie) {
+      const responseData = result.data !== undefined ? result.data : result;
+      const setCookieValue = result.cookie;
+      const status = result.status || 200;
+      sendJson(res, status, responseData, { "set-cookie": setCookieValue });
+      return;
+    }
+    if (result && result.rawText !== undefined) {
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.end(result.rawText);
+      return;
+    }
+    const status = result && result.status ? result.status : 200;
+    const data = result && result.data !== undefined && result.status ? result.data : result;
+    sendJson(res, status, data);
+  } catch (err) {
+    const status = err.statusCode || 500;
+    if (status >= 500) console.error(err);
+    sendJson(res, status, { error: err.message || "Internal server error" });
+  }
+});
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Pesa AI API running on port ${PORT}`);
+  if (!process.env.ADMIN_PASSWORD) console.warn("Warning: ADMIN_PASSWORD not set — admin panel disabled");
+  if (!process.env.ANTHROPIC_API_KEY) console.warn("Warning: ANTHROPIC_API_KEY not set — using mock AI");
+  if (!process.env.ENCRYPTION_KEY) console.warn("Warning: ENCRYPTION_KEY not set — M-Pesa credentials unencrypted");
+});

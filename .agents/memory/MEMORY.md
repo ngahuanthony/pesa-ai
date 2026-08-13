@@ -1,0 +1,2 @@
+- [Pesa AI backend setup](pesa-ai-backend.md) — JS server in artifacts/api-server/pesa-src, dev script is node --watch server.js
+- [Pesa AI OpenAPI quirks](pesa-ai-openapi-quirks.md) — codegen collision fix: query params must be path params, inline object+nullable uses looseObject (bad)
