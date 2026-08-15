@@ -86,6 +86,30 @@
       "idOrKraPin": null,
       "verifiedShop": false,
       "createdAt": "2026-08-15T03:31:09.519Z"
+    },
+    {
+      "id": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Digital Nation Accessories",
+      "category": "Mobile Phone Accessories",
+      "phone": "0722542810",
+      "ownerName": "ANTONY MAINA",
+      "personaName": "Digital Nation Accessories AI",
+      "personaInstructions": null,
+      "paymentMethod": null,
+      "bankName": null,
+      "bankAccountNumber": null,
+      "paybillNumber": null,
+      "whatsappPhoneNumberId": null,
+      "whatsappVerifyToken": "2b2a34235cdca927efd3bc8f",
+      "whatsappRequestedPhone": null,
+      "whatsappWabaId": null,
+      "whatsappDisplayName": null,
+      "buildingName": "Midtown Business Centre - China Ndogo",
+      "shopNumber": "F25 - First Floor",
+      "publicPhone": "0722542810",
+      "idOrKraPin": "25465965",
+      "verifiedShop": false,
+      "createdAt": "2026-08-15T04:00:10.052Z"
     }
   ],
   "accounts": [
@@ -124,6 +148,15 @@
       "passwordSalt": "1b094e1e2a1c88377f3916d9994e604b",
       "consentedAt": "2026-08-15T03:31:09.519Z",
       "createdAt": "2026-08-15T03:31:09.519Z"
+    },
+    {
+      "id": "742b8b92-8ac5-45f9-90cd-137576c38117",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "email": "ngahuanthony@gmail.com",
+      "passwordHash": "c57d2545ebe32e4c96fb4e7360b47a787362d22fc2358d7ad535910b524ae8296341c57eaf290be190a17516e8645e7fd5d89e88f398c57a1b1cbd518934eb81",
+      "passwordSalt": "f3be27f88498ff0263a625ce3f5a4c47",
+      "consentedAt": "2026-08-15T04:00:10.052Z",
+      "createdAt": "2026-08-15T04:00:10.052Z"
     }
   ],
   "sessions": [
@@ -292,6 +325,17 @@
       "history": [],
       "createdAt": "2026-08-15T03:31:09.519Z",
       "updatedAt": "2026-08-15T03:31:09.519Z"
+    },
+    {
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "plan": "business",
+      "priceKES": 4999,
+      "status": "trialing",
+      "trialEndsAt": "2026-08-29T04:00:10.052Z",
+      "currentPeriodEnd": "2026-08-29T04:00:10.052Z",
+      "history": [],
+      "createdAt": "2026-08-15T04:00:10.052Z",
+      "updatedAt": "2026-08-15T04:00:10.052Z"
     }
   ],
   "products": [],

@@ -208,9 +208,11 @@ function createBusiness(
     personaName: derivePersonaName(name, category),
     personaInstructions: personaInstructions || null,
     paymentMethod: paybillNumber ? "mpesa" : null,
+    mpesaType: paybillNumber ? "till" : null,
     bankName: null,
     bankAccountNumber: null,
     paybillNumber: paybillNumber || null,
+    paybillAccountNumber: null,
     whatsappPhoneNumberId: null, // set by admin once Meta credentials are activated
     whatsappVerifyToken: crypto.randomBytes(12).toString("hex"),
     whatsappRequestedPhone: null, // vendor-submitted phone number awaiting admin connection

@@ -93,10 +93,12 @@ export function SettingsTab() {
   const [shopNumber,   setShopNumber]   = useState("");
   const [publicPhone,  setPublicPhone]  = useState("");
 
-  const [paymentMethod,    setPaymentMethod]    = useState<"mpesa" | "bank">("mpesa");
-  const [paybillNumber,    setPaybillNumber]    = useState("");
-  const [bankName,         setBankName]         = useState("");
-  const [bankAccountNumber,setBankAccountNumber]= useState("");
+  const [paymentMethod,       setPaymentMethod]       = useState<"mpesa" | "bank">("mpesa");
+  const [mpesaType,           setMpesaType]           = useState<"till" | "paybill">("till");
+  const [paybillNumber,       setPaybillNumber]       = useState("");
+  const [paybillAccountNumber,setPaybillAccountNumber]= useState("");
+  const [bankName,            setBankName]            = useState("");
+  const [bankAccountNumber,   setBankAccountNumber]   = useState("");
 
   const initRef = useRef<string | null>(null);
   useEffect(() => {
@@ -110,7 +112,9 @@ export function SettingsTab() {
       setShopNumber(business.shopNumber || "");
       setPublicPhone(business.publicPhone || "");
       setPaymentMethod(business.paymentMethod || "mpesa");
+      setMpesaType((business as any).mpesaType || "till");
       setPaybillNumber(business.paybillNumber || "");
+      setPaybillAccountNumber((business as any).paybillAccountNumber || "");
       setBankName(business.bankName || "");
       setBankAccountNumber(business.bankAccountNumber || "");
       initRef.current = business.id;
@@ -137,13 +141,17 @@ export function SettingsTab() {
   const savePayment = () => {
     const data: any = { paymentMethod };
     if (paymentMethod === "mpesa") {
+      data.mpesaType = mpesaType;
       data.paybillNumber = paybillNumber;
+      data.paybillAccountNumber = mpesaType === "paybill" ? paybillAccountNumber : null;
       data.bankName = null;
       data.bankAccountNumber = null;
     } else {
+      data.mpesaType = null;
+      data.paybillNumber = null;
+      data.paybillAccountNumber = null;
       data.bankName = bankName;
       data.bankAccountNumber = bankAccountNumber;
-      data.paybillNumber = null;
     }
     updateBiz.mutate({ id: businessId, data }, {
       onSuccess: () => { refetch(); toast({ title: "Payment details saved!" }); },
@@ -274,10 +282,64 @@ export function SettingsTab() {
         </div>
 
         {paymentMethod === "mpesa" && (
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Your Till or Paybill Number</label>
-            <Input value={paybillNumber} onChange={(e) => setPaybillNumber(e.target.value)} placeholder="e.g. 522522" />
-            <p className="text-xs text-muted-foreground">Customers pay to this number. You keep 100% — we never deduct from orders.</p>
+          <div className="space-y-4">
+            {/* Till vs Paybill selector */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">M-Pesa Number Type</label>
+              <div className="grid grid-cols-2 gap-3">
+                {(["till", "paybill"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setMpesaType(type)}
+                    className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
+                      mpesaType === type ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
+                    }`}
+                  >
+                    <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                      mpesaType === type ? "border-primary" : "border-muted-foreground/50"
+                    }`}>
+                      {mpesaType === type && <span className="h-2 w-2 rounded-full bg-primary" />}
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{type === "till" ? "Till Number" : "Paybill Number"}</p>
+                      <p className="text-xs text-muted-foreground">{type === "till" ? "Lipa Na M-Pesa Buy Goods" : "Lipa Na M-Pesa Pay Bill"}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Number field */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">
+                {mpesaType === "till" ? "Till Number" : "Paybill Number"}
+              </label>
+              <Input
+                value={paybillNumber}
+                onChange={(e) => setPaybillNumber(e.target.value)}
+                placeholder={mpesaType === "till" ? "e.g. 522522" : "e.g. 247247"}
+              />
+            </div>
+
+            {/* Account number — only for Paybill */}
+            {mpesaType === "paybill" && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">Account Number</label>
+                <Input
+                  value={paybillAccountNumber}
+                  onChange={(e) => setPaybillAccountNumber(e.target.value)}
+                  placeholder="e.g. 542811"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Customers will send to paybill <strong>{paybillNumber || "…"}</strong>, account <strong>{paybillAccountNumber || "…"}</strong>.
+                </p>
+              </div>
+            )}
+
+            {mpesaType === "till" && (
+              <p className="text-xs text-muted-foreground">Customers pay to this till directly. You keep 100% — we never deduct from orders.</p>
+            )}
           </div>
         )}
 

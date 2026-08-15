@@ -105,7 +105,7 @@ export function WhatsAppAccountTab() {
           </div>
           <p className="text-sm text-amber-800 leading-relaxed">
             We received your request for <strong>{status.requestedPhone}</strong>. Our team is
-            connecting your WhatsApp Business number — this usually takes a few hours. We'll notify
+            connecting your WhatsApp Business number — this usually takes a few minutes. We'll notify
             you once it's live.
           </p>
           <div className="flex items-start gap-2 mt-1">
@@ -137,7 +137,7 @@ export function WhatsAppAccountTab() {
         <h2 className="text-xl font-bold text-foreground">Connect WhatsApp</h2>
         <p className="text-sm text-muted-foreground mt-1">
           Enter your WhatsApp Business phone number. Our team will connect it to your shop — usually
-          within a few hours.
+          within a few minutes.
         </p>
       </div>
 
