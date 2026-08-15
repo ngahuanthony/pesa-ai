@@ -135,7 +135,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           )}
 
           {navLink("/dashboard/products",   "Products",  Package)}
-          {navLink("/dashboard/video-scan", "Video Scan", ScanLine)}
+          {navLink("/dashboard/video-scan", "Stock Scanner", ScanLine)}
 
           {expandable(
             "Stock", Layers,

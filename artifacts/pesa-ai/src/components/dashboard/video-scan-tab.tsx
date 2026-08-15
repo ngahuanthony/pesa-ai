@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useGetMe } from "@workspace/api-client-react";
-import { Upload, Camera, CheckCircle2, AlertCircle, Loader2, Video, Trash2, Plus } from "lucide-react";
+import { Upload, Camera, CheckCircle2, AlertCircle, Loader2, Video, Trash2, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -24,7 +24,7 @@ interface VideoScan {
   error?: string;
 }
 
-// ── API helpers (raw fetch — not in generated client) ────────────────────────
+// ── API helpers ───────────────────────────────────────────────────────────────
 
 async function uploadVideo(businessId: string, file: File, onProgress?: (pct: number) => void): Promise<{ scanId: string }> {
   return new Promise((resolve, reject) => {
@@ -32,24 +32,18 @@ async function uploadVideo(businessId: string, file: File, onProgress?: (pct: nu
     xhr.open("POST", `/api/businesses/${businessId}/video-scan/upload`);
     xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
     xhr.withCredentials = true;
-
     if (onProgress) {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
       };
     }
-
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try { resolve(JSON.parse(xhr.responseText)); }
         catch { reject(new Error("Invalid server response")); }
       } else {
-        try {
-          const err = JSON.parse(xhr.responseText);
-          reject(new Error(err.error || `Upload failed (${xhr.status})`));
-        } catch {
-          reject(new Error(`Upload failed (${xhr.status})`));
-        }
+        try { reject(new Error(JSON.parse(xhr.responseText).error || `Upload failed (${xhr.status})`)); }
+        catch { reject(new Error(`Upload failed (${xhr.status})`)); }
       }
     };
     xhr.onerror = () => reject(new Error("Network error during upload"));
@@ -76,46 +70,12 @@ async function confirmScan(businessId: string, scanId: string, products: Product
   }
 }
 
-// ── Sub-views ────────────────────────────────────────────────────────────────
+// ── Mode Selector ─────────────────────────────────────────────────────────────
 
-function UploadView({ onUploaded }: { onUploaded: (scanId: string) => void }) {
-  const { data: me } = useGetMe();
-  const businessId = (me as any)?.business?.id;
-  const { toast } = useToast();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [dragging, setDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [file, setFile] = useState<File | null>(null);
-
-  const handleFile = (f: File) => {
-    if (!f.type.startsWith("video/")) {
-      toast({ title: "Please select a video file", variant: "destructive" });
-      return;
-    }
-    if (f.size > 200 * 1024 * 1024) {
-      toast({ title: "Video must be under 200 MB", variant: "destructive" });
-      return;
-    }
-    setFile(f);
-  };
-
-  const handleUpload = async () => {
-    if (!file || !businessId) return;
-    setUploading(true);
-    setProgress(0);
-    try {
-      const { scanId } = await uploadVideo(businessId, file, setProgress);
-      onUploaded(scanId);
-    } catch (err: any) {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-      setUploading(false);
-    }
-  };
-
+function ModeSelector({ onRecord, onUpload }: { onRecord: () => void; onUpload: () => void }) {
   return (
     <div className="space-y-6">
-      {/* Instructions */}
+      {/* Tips */}
       <div className="rounded-xl bg-primary/5 border border-primary/20 p-4 flex gap-3">
         <Camera className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
         <div className="text-sm text-foreground space-y-1">
@@ -129,36 +89,308 @@ function UploadView({ onUploaded }: { onUploaded: (scanId: string) => void }) {
         </div>
       </div>
 
-      {/* Drop zone */}
+      {/* Two mode cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Scan Now */}
+        <button
+          type="button"
+          onClick={onRecord}
+          className="group relative flex flex-col items-center gap-4 rounded-2xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary/60 p-8 text-center transition-all cursor-pointer"
+        >
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/15 group-hover:bg-primary/25 transition-colors">
+            <Camera className="h-7 w-7 text-primary" />
+          </div>
+          <div>
+            <p className="font-bold text-foreground text-base">📱 Scan with Camera</p>
+            <p className="text-sm text-muted-foreground mt-1">Record directly with your phone camera — no file needed</p>
+          </div>
+          <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-bold uppercase tracking-wider px-3 py-0.5 rounded-full">
+            Recommended
+          </span>
+        </button>
+
+        {/* Upload existing */}
+        <button
+          type="button"
+          onClick={onUpload}
+          className="group flex flex-col items-center gap-4 rounded-2xl border-2 border-border hover:border-primary/40 bg-white hover:bg-muted/30 p-8 text-center transition-all cursor-pointer"
+        >
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted group-hover:bg-muted/80 transition-colors">
+            <Upload className="h-7 w-7 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="font-bold text-foreground text-base">📁 Upload Existing Video</p>
+            <p className="text-sm text-muted-foreground mt-1">Already recorded? Upload MP4, MOV, or AVI up to 200 MB</p>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Camera Recorder ───────────────────────────────────────────────────────────
+
+function RecordView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () => void }) {
+  const { toast } = useToast();
+  const videoRef    = useRef<HTMLVideoElement>(null);
+  const previewRef  = useRef<HTMLVideoElement>(null);
+  const mrRef       = useRef<MediaRecorder | null>(null);
+  const chunksRef   = useRef<Blob[]>([]);
+  const streamRef   = useRef<MediaStream | null>(null);
+  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const previewUrl  = useRef<string>("");
+
+  type Phase = "init" | "ready" | "recording" | "preview" | "error";
+  const [phase, setPhase]           = useState<Phase>("init");
+  const [seconds, setSeconds]       = useState(0);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [errorMsg, setErrorMsg]     = useState("");
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    setPhase("init");
+    setErrorMsg("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+      setPhase("ready");
+    } catch (err: any) {
+      setErrorMsg(err.message || "Could not access camera. Please allow camera permission and try again.");
+      setPhase("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    startCamera();
+    return () => {
+      stopCamera();
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+    };
+  }, [startCamera, stopCamera]);
+
+  const startRecording = () => {
+    if (!streamRef.current) return;
+    chunksRef.current = [];
+    // Pick the best supported MIME type
+    const mime = ["video/mp4", "video/webm;codecs=vp8", "video/webm"].find((m) =>
+      MediaRecorder.isTypeSupported(m)
+    ) ?? "";
+    const mr = new MediaRecorder(streamRef.current, mime ? { mimeType: mime } : undefined);
+    mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    mr.onstop = () => {
+      const type = mr.mimeType || "video/webm";
+      const blob = new Blob(chunksRef.current, { type });
+      setRecordedBlob(blob);
+      stopCamera();
+      const url = URL.createObjectURL(blob);
+      previewUrl.current = url;
+      if (previewRef.current) previewRef.current.src = url;
+      setPhase("preview");
+    };
+    mr.start(250);
+    mrRef.current = mr;
+    setSeconds(0);
+    setPhase("recording");
+    timerRef.current = setInterval(() => {
+      setSeconds((s) => {
+        if (s >= 89) { stopRecording(); return s; }
+        return s + 1;
+      });
+    }, 1000);
+  };
+
+  const stopRecording = () => {
+    if (mrRef.current?.state === "recording") mrRef.current.stop();
+    if (timerRef.current) clearInterval(timerRef.current);
+  };
+
+  const useVideo = () => {
+    if (!recordedBlob) return;
+    const ext = recordedBlob.type.includes("mp4") ? "mp4" : "webm";
+    const file = new File([recordedBlob], `scan-${Date.now()}.${ext}`, { type: recordedBlob.type });
+    onFile(file);
+  };
+
+  const recordAgain = () => {
+    setRecordedBlob(null);
+    setSeconds(0);
+    if (previewUrl.current) { URL.revokeObjectURL(previewUrl.current); previewUrl.current = ""; }
+    startCamera();
+  };
+
+  const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  return (
+    <div className="space-y-4">
+      {/* Back */}
+      <button type="button" onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5">
+        ← Back
+      </button>
+
+      {/* Viewfinder */}
+      <div className="relative rounded-2xl overflow-hidden bg-black aspect-video shadow-lg">
+        {/* Live camera */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`w-full h-full object-cover ${phase === "preview" ? "hidden" : ""}`}
+        />
+
+        {/* Recorded preview */}
+        <video
+          ref={previewRef}
+          controls
+          playsInline
+          className={`w-full h-full object-cover ${phase !== "preview" ? "hidden" : ""}`}
+        />
+
+        {/* Loading */}
+        {phase === "init" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+            <div className="text-center space-y-2">
+              <Loader2 className="h-8 w-8 text-white animate-spin mx-auto" />
+              <p className="text-white/60 text-sm">Starting camera…</p>
+            </div>
+          </div>
+        )}
+
+        {/* Timer overlay */}
+        {phase === "recording" && (
+          <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/60 backdrop-blur rounded-full px-3 py-1.5">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-white text-sm font-mono font-bold">{fmt(seconds)}</span>
+            <span className="text-white/50 text-xs">/ 1:30</span>
+          </div>
+        )}
+
+        {/* Time warning */}
+        {phase === "recording" && seconds >= 75 && (
+          <div className="absolute top-3 right-3 bg-amber-400 text-black text-xs font-bold rounded-full px-3 py-1">
+            {90 - seconds}s left
+          </div>
+        )}
+
+        {/* Preview label */}
+        {phase === "preview" && (
+          <div className="absolute top-3 left-3 bg-black/60 backdrop-blur rounded-full px-3 py-1.5">
+            <span className="text-white text-xs font-medium">Preview · {fmt(seconds)}</span>
+          </div>
+        )}
+
+        {/* Error */}
+        {phase === "error" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+            <div className="text-center space-y-3 p-6">
+              <AlertCircle className="h-10 w-10 text-red-400 mx-auto" />
+              <p className="text-white font-semibold">Camera unavailable</p>
+              <p className="text-white/60 text-sm">{errorMsg}</p>
+              <Button size="sm" variant="outline" onClick={startCamera} className="text-white border-white/30 hover:bg-white/10">
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Try again
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Record controls */}
+      {(phase === "ready" || phase === "recording") && (
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={phase === "ready" ? startRecording : stopRecording}
+            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-xl ${
+              phase === "recording"
+                ? "bg-red-500 hover:bg-red-600 scale-110"
+                : "bg-red-500 hover:bg-red-600"
+            }`}
+            aria-label={phase === "ready" ? "Start recording" : "Stop recording"}
+          >
+            {phase === "ready" ? (
+              <div className="w-5 h-5 rounded-full bg-white" />
+            ) : (
+              <div className="w-5 h-5 rounded bg-white" />
+            )}
+          </button>
+          <p className="text-xs text-muted-foreground">
+            {phase === "ready"
+              ? "Tap to start · Max 90 seconds"
+              : "Tap to stop · Walk slowly through your shop"}
+          </p>
+        </div>
+      )}
+
+      {/* Preview actions */}
+      {phase === "preview" && (
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={recordAgain} className="flex-1">
+            <RefreshCw className="h-4 w-4 mr-2" /> Record again
+          </Button>
+          <Button onClick={useVideo} className="flex-1">
+            <Camera className="h-4 w-4 mr-2" /> Use this video
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── File Uploader ─────────────────────────────────────────────────────────────
+
+function UploadFileView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const { toast } = useToast();
+
+  const handleFile = (f: File) => {
+    if (!f.type.startsWith("video/")) {
+      toast({ title: "Please select a video file", variant: "destructive" });
+      return;
+    }
+    if (f.size > 200 * 1024 * 1024) {
+      toast({ title: "Video must be under 200 MB", variant: "destructive" });
+      return;
+    }
+    setFile(f);
+  };
+
+  return (
+    <div className="space-y-5">
+      <button type="button" onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5">
+        ← Back
+      </button>
+
       <div
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
         onClick={() => !file && inputRef.current?.click()}
-        className={`relative border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer ${
+        className={`relative border-2 border-dashed rounded-xl p-12 text-center transition-colors cursor-pointer ${
           dragging ? "border-primary bg-primary/5" : file ? "border-green-400 bg-green-50" : "border-border hover:border-primary/50 hover:bg-muted/30"
         }`}
       >
-        <input
-          ref={inputRef}
-          type="file"
-          accept="video/*"
-          className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-        />
-
+        <input ref={inputRef} type="file" accept="video/*" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
         {file ? (
           <div className="space-y-2">
             <Video className="h-10 w-10 text-green-500 mx-auto" />
             <p className="font-semibold text-foreground">{file.name}</p>
             <p className="text-sm text-muted-foreground">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setFile(null); }}
-              className="text-xs text-red-500 hover:text-red-600 underline"
-            >
-              Remove
-            </button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null); }}
+              className="text-xs text-red-500 hover:text-red-600 underline">Remove</button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -169,47 +401,70 @@ function UploadView({ onUploaded }: { onUploaded: (scanId: string) => void }) {
             </div>
           </div>
         )}
-
-        {uploading && (
-          <div className="absolute inset-0 rounded-xl bg-white/80 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="h-8 w-8 text-primary animate-spin" />
-            <p className="text-sm font-medium text-foreground">Uploading… {progress}%</p>
-            <div className="w-48 h-1.5 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
-            </div>
-          </div>
-        )}
       </div>
 
-      <Button onClick={handleUpload} disabled={!file || uploading} className="w-full" size="lg">
-        {uploading ? (
-          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading…</>
-        ) : (
-          <><Camera className="h-4 w-4 mr-2" /> Scan Inventory</>
-        )}
+      <Button onClick={() => file && onFile(file)} disabled={!file} className="w-full" size="lg">
+        <Upload className="h-4 w-4 mr-2" /> Upload & Scan
       </Button>
     </div>
   );
 }
 
+// ── Upload-with-progress (shared after both paths) ────────────────────────────
+
+function UploadingView({ businessId, file, onUploaded }: {
+  businessId: string;
+  file: File;
+  onUploaded: (scanId: string) => void;
+}) {
+  const { toast } = useToast();
+  const [progress, setProgress] = useState(0);
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    uploadVideo(businessId, file, setProgress)
+      .then(({ scanId }) => onUploaded(scanId))
+      .catch((err: any) => toast({ title: "Upload failed", description: err.message, variant: "destructive" }));
+  }, []); // eslint-disable-line
+
+  return (
+    <div className="text-center space-y-5 py-10">
+      <div className="relative mx-auto w-20 h-20">
+        <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+        <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        <Upload className="absolute inset-0 m-auto h-8 w-8 text-primary" />
+      </div>
+      <div>
+        <p className="font-bold text-foreground">Uploading your video…</p>
+        <p className="text-sm text-muted-foreground mt-1">{progress}% · {(file.size / 1024 / 1024).toFixed(1)} MB</p>
+      </div>
+      <div className="w-64 h-2 bg-muted rounded-full overflow-hidden mx-auto">
+        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Processing ────────────────────────────────────────────────────────────────
+
 function ProcessingView({ businessId, scanId, onDone }: { businessId: string; scanId: string; onDone: (scan: VideoScan) => void }) {
   const [scan, setScan] = useState<VideoScan | null>(null);
   const [dots, setDots] = useState(".");
 
-  // Animate dots
   useEffect(() => {
     const t = setInterval(() => setDots((d) => d.length >= 3 ? "." : d + "."), 600);
     return () => clearInterval(t);
   }, []);
 
-  // Poll for status
   useEffect(() => {
     const poll = async () => {
       try {
         const s = await fetchScan(businessId, scanId);
         setScan(s);
         if (s.status === "done") { onDone(s); return; }
-        if (s.status === "error") { setScan(s); return; }
+        if (s.status === "error") return;
       } catch { /* keep polling */ }
     };
     poll();
@@ -227,53 +482,41 @@ function ProcessingView({ businessId, scanId, onDone }: { businessId: string; sc
     );
   }
 
-  const frameCount = scan?.frames ?? 0;
-  const productCount = scan?.productCount ?? 0;
-
   return (
     <div className="text-center space-y-6 py-8">
-      {/* Animated scanning indicator */}
       <div className="relative mx-auto w-20 h-20">
         <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
         <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
         <Camera className="absolute inset-0 m-auto h-8 w-8 text-primary" />
       </div>
-
       <div className="space-y-1">
         <p className="text-lg font-bold text-foreground">🔍 Pesa AI is scanning your shop{dots}</p>
         <p className="text-sm text-muted-foreground">Estimated time: 2–5 minutes</p>
       </div>
-
-      {/* Live stats */}
-      {(frameCount > 0 || productCount > 0) && (
+      {((scan?.frames ?? 0) > 0 || (scan?.productCount ?? 0) > 0) && (
         <div className="inline-block text-left bg-muted/40 rounded-xl px-6 py-4 space-y-2">
-          {frameCount > 0 && (
+          {(scan?.frames ?? 0) > 0 && (
             <div className="flex items-center gap-2 text-sm text-foreground">
               <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span>{frameCount} frames analysed</span>
+              <span>{scan!.frames} frames analysed</span>
             </div>
           )}
-          {productCount > 0 && (
+          {(scan?.productCount ?? 0) > 0 && (
             <div className="flex items-center gap-2 text-sm text-foreground">
               <span className="w-2 h-2 rounded-full bg-green-500" />
-              <span>{productCount} products detected</span>
+              <span>{scan!.productCount} products detected</span>
             </div>
           )}
         </div>
       )}
-
       <p className="text-xs text-muted-foreground">You can leave this page and come back — we'll keep processing.</p>
     </div>
   );
 }
 
-function ReviewView({
-  businessId,
-  scanId,
-  initialDrafts,
-  onConfirmed,
-  onBack,
-}: {
+// ── Review ────────────────────────────────────────────────────────────────────
+
+function ReviewView({ businessId, scanId, initialDrafts, onConfirmed, onBack }: {
   businessId: string;
   scanId: string;
   initialDrafts: ProductDraft[];
@@ -286,20 +529,13 @@ function ReviewView({
 
   const selected = drafts.filter((d) => d.selected);
 
-  const update = (draftId: string, field: keyof ProductDraft, value: any) => {
+  const update = (draftId: string, field: keyof ProductDraft, value: any) =>
     setDrafts((prev) => prev.map((d) => d.draftId === draftId ? { ...d, [field]: value } : d));
-  };
 
   const handleConfirm = async () => {
-    if (selected.length === 0) {
-      toast({ title: "Select at least one product", variant: "destructive" });
-      return;
-    }
+    if (selected.length === 0) { toast({ title: "Select at least one product", variant: "destructive" }); return; }
     const valid = selected.filter((d) => d.name.trim() && (d.price ?? 0) > 0);
-    if (valid.length < selected.length) {
-      toast({ title: "Some products are missing a name or price", variant: "destructive" });
-      return;
-    }
+    if (valid.length < selected.length) { toast({ title: "Some products are missing a name or price", variant: "destructive" }); return; }
     setConfirming(true);
     try {
       await confirmScan(businessId, scanId, valid);
@@ -324,84 +560,40 @@ function ReviewView({
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <p className="font-semibold text-foreground">{drafts.length} product{drafts.length !== 1 ? "s" : ""} detected</p>
           <p className="text-xs text-muted-foreground">{selected.length} selected · review and edit before adding to inventory</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setDrafts((d) => d.map((x) => ({ ...x, selected: true })))}>
-            Select all
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setDrafts((d) => d.map((x) => ({ ...x, selected: false })))}>
-            Deselect all
-          </Button>
+          <Button variant="outline" size="sm" onClick={() => setDrafts((d) => d.map((x) => ({ ...x, selected: true })))}>Select all</Button>
+          <Button variant="outline" size="sm" onClick={() => setDrafts((d) => d.map((x) => ({ ...x, selected: false })))}>Deselect all</Button>
         </div>
       </div>
 
-      {/* Product cards */}
       <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
         {drafts.map((draft) => (
-          <div
-            key={draft.draftId}
-            className={`rounded-xl border p-4 transition-colors ${
-              draft.selected ? "border-primary/40 bg-primary/5" : "border-border bg-white opacity-60"
-            }`}
-          >
+          <div key={draft.draftId} className={`rounded-xl border p-4 transition-colors ${draft.selected ? "border-primary/40 bg-primary/5" : "border-border bg-white opacity-60"}`}>
             <div className="flex items-start gap-3">
-              {/* Checkbox */}
-              <button
-                type="button"
-                onClick={() => update(draft.draftId, "selected", !draft.selected)}
-                className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                  draft.selected ? "bg-primary border-primary" : "border-border"
-                }`}
-              >
+              <button type="button" onClick={() => update(draft.draftId, "selected", !draft.selected)}
+                className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${draft.selected ? "bg-primary border-primary" : "border-border"}`}>
                 {draft.selected && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
               </button>
-
-              {/* Fields */}
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="sm:col-span-2">
                   <label className="text-xs text-muted-foreground mb-1 block">Product name</label>
-                  <Input
-                    value={draft.name}
-                    onChange={(e) => update(draft.draftId, "name", e.target.value)}
-                    placeholder="Product name"
-                    className="h-8 text-sm"
-                    disabled={!draft.selected}
-                  />
+                  <Input value={draft.name} onChange={(e) => update(draft.draftId, "name", e.target.value)} placeholder="Product name" className="h-8 text-sm" disabled={!draft.selected} />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Price (KES)</label>
-                  <Input
-                    type="number"
-                    value={draft.price ?? ""}
-                    onChange={(e) => update(draft.draftId, "price", e.target.value ? Number(e.target.value) : null)}
-                    placeholder="e.g. 250"
-                    className="h-8 text-sm"
-                    disabled={!draft.selected}
-                  />
+                  <Input type="number" value={draft.price ?? ""} onChange={(e) => update(draft.draftId, "price", e.target.value ? Number(e.target.value) : null)} placeholder="e.g. 250" className="h-8 text-sm" disabled={!draft.selected} />
                 </div>
                 <div className="sm:col-span-3">
                   <label className="text-xs text-muted-foreground mb-1 block">Description (optional)</label>
-                  <Input
-                    value={draft.description}
-                    onChange={(e) => update(draft.draftId, "description", e.target.value)}
-                    placeholder="Short description"
-                    className="h-8 text-sm"
-                    disabled={!draft.selected}
-                  />
+                  <Input value={draft.description} onChange={(e) => update(draft.draftId, "description", e.target.value)} placeholder="Short description" className="h-8 text-sm" disabled={!draft.selected} />
                 </div>
               </div>
-
-              {/* Remove */}
-              <button
-                type="button"
-                onClick={() => setDrafts((d) => d.filter((x) => x.draftId !== draft.draftId))}
-                className="text-muted-foreground hover:text-red-500 transition-colors mt-1"
-              >
+              <button type="button" onClick={() => setDrafts((d) => d.filter((x) => x.draftId !== draft.draftId))} className="text-muted-foreground hover:text-red-500 transition-colors mt-1">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -409,22 +601,17 @@ function ReviewView({
         ))}
       </div>
 
-      {/* Actions */}
       <div className="flex gap-3 pt-2">
-        <Button variant="outline" onClick={onBack} disabled={confirming}>
-          Scan again
-        </Button>
+        <Button variant="outline" onClick={onBack} disabled={confirming}>Scan again</Button>
         <Button onClick={handleConfirm} disabled={confirming || selected.length === 0} className="flex-1">
-          {confirming ? (
-            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Adding to inventory…</>
-          ) : (
-            <><Plus className="h-4 w-4 mr-2" /> Add {selected.length} product{selected.length !== 1 ? "s" : ""} to inventory</>
-          )}
+          {confirming ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Adding to inventory…</> : <><Plus className="h-4 w-4 mr-2" /> Add {selected.length} product{selected.length !== 1 ? "s" : ""} to inventory</>}
         </Button>
       </div>
     </div>
   );
 }
+
+// ── Success ───────────────────────────────────────────────────────────────────
 
 function SuccessView({ count, onScanAgain }: { count: number; onScanAgain: () => void }) {
   return (
@@ -437,29 +624,31 @@ function SuccessView({ count, onScanAgain }: { count: number; onScanAgain: () =>
         </p>
       </div>
       <div className="flex gap-3 justify-center">
-        <Button variant="outline" onClick={onScanAgain}>
-          <Camera className="h-4 w-4 mr-2" /> Scan again
-        </Button>
-        <Button asChild>
-          <a href="/dashboard/products">View inventory</a>
-        </Button>
+        <Button variant="outline" onClick={onScanAgain}><Camera className="h-4 w-4 mr-2" /> Scan again</Button>
+        <Button asChild><a href="/dashboard/products">View inventory</a></Button>
       </div>
     </div>
   );
 }
 
-// ── Main tab ─────────────────────────────────────────────────────────────────
+// ── Main tab ──────────────────────────────────────────────────────────────────
 
-type View = "upload" | "processing" | "review" | "success";
+type View = "choose" | "record" | "upload" | "uploading" | "processing" | "review" | "success";
 
 export function VideoScanTab() {
   const { data: me } = useGetMe();
   const businessId = (me as any)?.business?.id as string | undefined;
 
-  const [view, setView] = useState<View>("upload");
-  const [scanId, setScanId] = useState<string | null>(null);
-  const [scan, setScan] = useState<VideoScan | null>(null);
+  const [view, setView]             = useState<View>("choose");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [scanId, setScanId]         = useState<string | null>(null);
+  const [scan, setScan]             = useState<VideoScan | null>(null);
   const [confirmedCount, setConfirmedCount] = useState(0);
+
+  const handleFile = (f: File) => {
+    setPendingFile(f);
+    setView("uploading");
+  };
 
   const handleUploaded = (id: string) => {
     setScanId(id);
@@ -479,29 +668,21 @@ export function VideoScanTab() {
   const handleBack = () => {
     setScanId(null);
     setScan(null);
-    setView("upload");
+    setPendingFile(null);
+    setView("choose");
   };
 
   if (!businessId) return null;
 
   return (
     <div className="max-w-2xl mx-auto">
-      {view === "upload" && <UploadView onUploaded={handleUploaded} />}
-      {view === "processing" && scanId && (
-        <ProcessingView businessId={businessId} scanId={scanId} onDone={handleDone} />
-      )}
-      {view === "review" && scan && scanId && (
-        <ReviewView
-          businessId={businessId}
-          scanId={scanId}
-          initialDrafts={scan.productDrafts}
-          onConfirmed={handleConfirmed}
-          onBack={handleBack}
-        />
-      )}
-      {view === "success" && (
-        <SuccessView count={confirmedCount} onScanAgain={handleBack} />
-      )}
+      {view === "choose"     && <ModeSelector onRecord={() => setView("record")} onUpload={() => setView("upload")} />}
+      {view === "record"     && <RecordView onFile={handleFile} onBack={handleBack} />}
+      {view === "upload"     && <UploadFileView onFile={handleFile} onBack={handleBack} />}
+      {view === "uploading"  && pendingFile && businessId && <UploadingView businessId={businessId} file={pendingFile} onUploaded={handleUploaded} />}
+      {view === "processing" && scanId && <ProcessingView businessId={businessId} scanId={scanId} onDone={handleDone} />}
+      {view === "review"     && scan && scanId && <ReviewView businessId={businessId} scanId={scanId} initialDrafts={scan.productDrafts} onConfirmed={handleConfirmed} onBack={handleBack} />}
+      {view === "success"    && <SuccessView count={confirmedCount} onScanAgain={handleBack} />}
     </div>
   );
 }

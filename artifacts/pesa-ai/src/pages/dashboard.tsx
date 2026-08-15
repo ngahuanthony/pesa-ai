@@ -57,7 +57,7 @@ function DashboardContent() {
     billing:     { title: "Billing",          sub: "Manage your subscription." },
     settings:    { title: "Settings",         sub: "Manage your business profile, AI persona, and integrations." },
     whatsapp:    { title: "WhatsApp Account", sub: "Connect your WhatsApp Business number to your shop." },
-    "video-scan":{ title: "Video Scan",       sub: "Record your shop and AI will build your product catalogue." },
+    "video-scan":{ title: "Stock Scanner",     sub: "Scan your shop and AI will build your product catalogue." },
     profile:     { title: "Business Profile", sub: "Your shop details and account information." },
     stock:       { title: "Stock",            sub: "Manage inventory levels, sales, and adjustments." },
     prices:      { title: "Prices",           sub: "Set pricing rules and discounts." },
