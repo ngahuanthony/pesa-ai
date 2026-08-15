@@ -321,8 +321,10 @@ const server = http.createServer(async (req, res) => {
       res.end(result.rawText);
       return;
     }
-    const status = result && result.status ? result.status : 200;
-    const data = result && result.data !== undefined && result.status ? result.data : result;
+    // Only treat result.status as an HTTP status code when it's a number (e.g. 201).
+    // Scan/order objects also have a string `status` field — those must NOT be used as HTTP codes.
+    const status = result && typeof result.status === "number" ? result.status : 200;
+    const data = result && result.data !== undefined && typeof result.status === "number" ? result.data : result;
     sendJson(res, status, data);
   } catch (err) {
     const status = err.statusCode || 500;

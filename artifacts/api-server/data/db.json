@@ -389,5 +389,18 @@
   "conversations": [],
   "messages": [],
   "orders": [],
-  "reports": []
+  "reports": [],
+  "videoScans": [
+    {
+      "id": "717108c0-8aa7-4ed6-89cd-de65eda71e81",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "status": "processing",
+      "frames": 0,
+      "productCount": 0,
+      "productDrafts": [],
+      "error": null,
+      "createdAt": "2026-08-15T07:38:54.246Z",
+      "processedAt": null
+    }
+  ]
 }

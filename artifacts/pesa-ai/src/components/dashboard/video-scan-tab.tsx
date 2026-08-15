@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useGetMe } from "@workspace/api-client-react";
-import { Upload, Camera, CheckCircle2, AlertCircle, Loader2, Video, Trash2, Plus, RefreshCw } from "lucide-react";
+import { Upload, Camera, CheckCircle2, AlertCircle, Loader2, Video, Trash2, Plus, RefreshCw, History, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -65,6 +65,13 @@ async function fetchScan(businessId: string, scanId: string): Promise<VideoScan>
   return res.json();
 }
 
+async function fetchScans(businessId: string): Promise<VideoScan[]> {
+  const res = await fetch(`/api/businesses/${businessId}/video-scan`, { credentials: "include" });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.scans ?? [];
+}
+
 async function confirmScan(businessId: string, scanId: string, products: ProductDraft[]): Promise<void> {
   const res = await fetch(`/api/businesses/${businessId}/video-scan/${scanId}/confirm`, {
     method: "POST",
@@ -76,6 +83,128 @@ async function confirmScan(businessId: string, scanId: string, products: Product
     const err = await res.json().catch(() => ({ error: "Unknown error" }));
     throw new Error(err.error || "Failed to confirm products");
   }
+}
+
+// ── Scan History ──────────────────────────────────────────────────────────────
+
+interface ScanHistoryProps {
+  businessId: string;
+  activeScanId: string | null;
+  onResumeProcessing: (scanId: string) => void;
+  onReviewDone: (scan: VideoScan) => void;
+}
+
+function timeAgo(ms: number) {
+  const diff = Date.now() - ms;
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDone }: ScanHistoryProps) {
+  const [scans, setScans] = useState<VideoScan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const load = useCallback(async () => {
+    const data = await fetchScans(businessId);
+    setScans(data);
+    setLoading(false);
+  }, [businessId]);
+
+  useEffect(() => {
+    load();
+    // Re-poll while any scan is still processing
+    const t = setInterval(async () => {
+      const data = await fetchScans(businessId);
+      setScans(data);
+      if (!data.some((s) => s.status === "pending" || s.status === "processing")) {
+        clearInterval(t);
+      }
+    }, 5000);
+    return () => clearInterval(t);
+  }, [load, businessId]);
+
+  const visible = scans.filter((s) => s.id !== activeScanId);
+  if (loading || visible.length === 0) return null;
+
+  const statusBadge = (scan: VideoScan) => {
+    switch (scan.status) {
+      case "pending":
+        return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5"><Loader2 className="h-3 w-3 animate-spin" /> Queued</span>;
+      case "processing":
+        return <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5"><Loader2 className="h-3 w-3 animate-spin" /> Scanning…</span>;
+      case "done":
+        return <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 border border-green-200 rounded-full px-2 py-0.5"><CheckCircle2 className="h-3 w-3" /> Ready to review</span>;
+      case "confirmed":
+        return <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5"><CheckCircle2 className="h-3 w-3" /> Added to inventory</span>;
+      case "error":
+        return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5"><AlertCircle className="h-3 w-3" /> Failed</span>;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="mb-6 rounded-xl border border-border bg-white overflow-hidden">
+      {/* Header */}
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <History className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-semibold text-foreground">Recent Scans</span>
+          <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">{visible.length}</span>
+        </div>
+        {collapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+      </button>
+
+      {/* List */}
+      {!collapsed && (
+        <div className="divide-y divide-border">
+          {visible.map((scan) => (
+            <div key={scan.id} className="flex items-center justify-between px-4 py-3 gap-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {statusBadge(scan)}
+                  <span className="text-xs text-muted-foreground">{timeAgo((scan as any).createdAt)}</span>
+                </div>
+                {(scan.status === "done" || scan.status === "confirmed") && scan.productCount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {scan.productCount} product{scan.productCount !== 1 ? "s" : ""} detected
+                    {scan.status === "confirmed" && ` · added to inventory`}
+                  </p>
+                )}
+                {scan.status === "error" && scan.error && (
+                  <p className="text-xs text-red-500 truncate">{scan.error}</p>
+                )}
+                {scan.status === "processing" && scan.frames > 0 && (
+                  <p className="text-xs text-muted-foreground">{scan.frames} frames analysed so far</p>
+                )}
+              </div>
+              <div className="flex-shrink-0">
+                {(scan.status === "pending" || scan.status === "processing") && (
+                  <Button size="sm" variant="outline" onClick={() => onResumeProcessing(scan.id)}>
+                    View progress
+                  </Button>
+                )}
+                {scan.status === "done" && (
+                  <Button size="sm" onClick={() => onReviewDone(scan)}>
+                    Review
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Mode Selector ─────────────────────────────────────────────────────────────
@@ -685,6 +814,9 @@ function SuccessView({ count, onScanAgain }: { count: number; onScanAgain: () =>
 
 type View = "choose" | "record" | "upload" | "uploading" | "processing" | "review" | "success";
 
+// Show history only on the "neutral" screens where the user isn't mid-flow
+const HISTORY_VISIBLE_VIEWS: View[] = ["choose", "success"];
+
 export function VideoScanTab() {
   const { data: me } = useGetMe();
   const businessId = (me as any)?.business?.id as string | undefined;
@@ -722,10 +854,34 @@ export function VideoScanTab() {
     setView("choose");
   };
 
+  // Called from history panel — resume watching a still-processing scan
+  const handleResumeProcessing = useCallback((id: string) => {
+    setScanId(id);
+    setScan(null);
+    setView("processing");
+  }, []);
+
+  // Called from history panel — open review for a completed (but unconfirmed) scan
+  const handleReviewDone = useCallback((s: VideoScan) => {
+    setScan(s);
+    setScanId(s.id);
+    setView("review");
+  }, []);
+
   if (!businessId) return null;
+
+  const showHistory = HISTORY_VISIBLE_VIEWS.includes(view);
 
   return (
     <div className="max-w-2xl mx-auto">
+      {showHistory && (
+        <ScanHistory
+          businessId={businessId}
+          activeScanId={scanId}
+          onResumeProcessing={handleResumeProcessing}
+          onReviewDone={handleReviewDone}
+        />
+      )}
       {view === "choose"     && <ModeSelector onRecord={() => setView("record")} onUpload={() => setView("upload")} />}
       {view === "record"     && <RecordView onFile={handleFile} onBack={handleBack} />}
       {view === "upload"     && <UploadFileView onFile={handleFile} onBack={handleBack} />}
