@@ -299,8 +299,10 @@ function ModeSelector({ onRecord, onUpload }: { onRecord: () => void; onUpload: 
 
 function RecordView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () => void }) {
   const { toast } = useToast();
-  const videoRef    = useRef<HTMLVideoElement>(null);
-  const previewRef  = useRef<HTMLVideoElement>(null);
+  const videoRef           = useRef<HTMLVideoElement>(null); // mobile live feed
+  const videoDesktopRef    = useRef<HTMLVideoElement>(null); // desktop live feed
+  const previewRef         = useRef<HTMLVideoElement>(null); // mobile preview
+  const previewDesktopRef  = useRef<HTMLVideoElement>(null); // desktop preview
   const mrRef       = useRef<MediaRecorder | null>(null);
   const chunksRef   = useRef<Blob[]>([]);
   const streamRef   = useRef<MediaStream | null>(null);
@@ -335,9 +337,23 @@ function RecordView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () 
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       }
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => {});
+      // On iOS, calling play() on a display:none element blocks the visible one.
+      // Detect which layout is active and only play() on the visible element.
+      // Both refs get srcObject so a resize to desktop still works.
+      const isMobile = !window.matchMedia("(min-width: 640px)").matches;
+      const primaryRef   = isMobile ? videoRef   : videoDesktopRef;
+      const secondaryRef = isMobile ? videoDesktopRef : videoRef;
+
+      // Set srcObject on both but only play() the visible one.
+      // iOS requires load() after setting srcObject dynamically.
+      if (primaryRef.current) {
+        primaryRef.current.srcObject = stream;
+        primaryRef.current.load();
+        primaryRef.current.play().catch(() => {});
+      }
+      if (secondaryRef.current) {
+        secondaryRef.current.srcObject = stream;
+        // Do NOT call play() on the hidden element — causes black screen on iOS
       }
       setPhase("ready");
     } catch (err: any) {
@@ -380,7 +396,10 @@ function RecordView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () 
       stopCamera();
       const url = URL.createObjectURL(blob);
       previewUrl.current = url;
-      if (previewRef.current) previewRef.current.src = url;
+      // Set preview on both refs — same layout split as live feed
+      const isMobilePreview = !window.matchMedia("(min-width: 640px)").matches;
+      const activePreviewRef = isMobilePreview ? previewRef : previewDesktopRef;
+      if (activePreviewRef.current) activePreviewRef.current.src = url;
       setPhase("preview");
     };
     mr.start(250);
@@ -507,8 +526,8 @@ function RecordView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () 
           ← Back
         </button>
         <div className="relative rounded-2xl overflow-hidden bg-black aspect-video shadow-lg">
-          <video ref={videoRef}   autoPlay playsInline muted   className={`w-full h-full object-cover ${phase === "preview" ? "hidden" : ""}`} />
-          <video ref={previewRef} controls playsInline         className={`w-full h-full object-cover ${phase !== "preview" ? "hidden" : ""}`} />
+          <video ref={videoDesktopRef}   autoPlay playsInline muted   className={`w-full h-full object-cover ${phase === "preview" ? "hidden" : ""}`} />
+          <video ref={previewDesktopRef} controls playsInline         className={`w-full h-full object-cover ${phase !== "preview" ? "hidden" : ""}`} />
           {phase === "init" && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/80">
               <div className="text-center space-y-2">
