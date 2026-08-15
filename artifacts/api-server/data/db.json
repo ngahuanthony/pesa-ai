@@ -180,8 +180,70 @@
           "field": "personaInstructions",
           "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
           "at": "2026-08-15T11:13:27.254Z"
+        },
+        {
+          "field": "paymentMethod",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:33.280Z"
+        },
+        {
+          "field": "mpesaType",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:33.280Z"
+        },
+        {
+          "field": "paybillNumber",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:33.280Z"
+        },
+        {
+          "field": "paybillAccountNumber",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:33.280Z"
+        },
+        {
+          "field": "bankName",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:33.280Z"
+        },
+        {
+          "field": "bankAccountNumber",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:33.280Z"
+        },
+        {
+          "field": "paymentMethod",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:47.898Z"
+        },
+        {
+          "field": "mpesaType",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:47.898Z"
+        },
+        {
+          "field": "paybillNumber",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:47.898Z"
+        },
+        {
+          "field": "paybillAccountNumber",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:47.898Z"
+        },
+        {
+          "field": "bankName",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:47.898Z"
+        },
+        {
+          "field": "bankAccountNumber",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:30:47.898Z"
         }
-      ]
+      ],
+      "mpesaType": "paybill",
+      "paybillAccountNumber": "542811"
     }
   ],
   "accounts": [
@@ -369,20 +431,28 @@
       "expiresAt": "2026-09-14T06:58:41.763Z"
     },
     {
-      "token": "93adf19afffd250ea371a97c31d7c57f9038dc16fec459bf0576ea970bb62b3e",
-      "accountId": "742b8b92-8ac5-45f9-90cd-137576c38117",
-      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
-      "isAdmin": false,
-      "createdAt": "2026-08-15T08:11:01.569Z",
-      "expiresAt": "2026-09-14T08:11:01.569Z"
-    },
-    {
       "token": "b6d6ad310f969ddcd77a3053b00f79bed66326c691471b8dc6d75fcfdd81a529",
       "accountId": "742b8b92-8ac5-45f9-90cd-137576c38117",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
       "isAdmin": false,
       "createdAt": "2026-08-15T08:23:26.631Z",
       "expiresAt": "2026-09-14T08:23:26.631Z"
+    },
+    {
+      "token": "b3dd27f8e21fdf97eb67ec8f274906534fc46afb2d6236e870bf52c1d34b5615",
+      "accountId": "742b8b92-8ac5-45f9-90cd-137576c38117",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "isAdmin": false,
+      "createdAt": "2026-08-15T11:30:00.105Z",
+      "expiresAt": "2026-09-14T11:30:00.105Z"
+    },
+    {
+      "token": "aa8ae991c17805506367a7a70341bad441e88d1ad4018105ac8da06d396837e8",
+      "accountId": null,
+      "businessId": null,
+      "isAdmin": true,
+      "createdAt": "2026-08-15T11:42:05.298Z",
+      "expiresAt": "2026-09-14T11:42:05.298Z"
     }
   ],
   "subscriptions": [
