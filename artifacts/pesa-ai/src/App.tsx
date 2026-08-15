@@ -18,6 +18,7 @@ import SignupPage from '@/pages/signup';
 import ForgotPasswordPage from '@/pages/forgot-password';
 import DashboardPage from '@/pages/dashboard';
 import AdminPage from '@/pages/admin';
+import PrivacyPage from '@/pages/privacy';
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ function Router() {
         <Route path="/dashboard/:section" component={DashboardPage} />
         <Route path="/dashboard/:section/:sub" component={DashboardPage} />
         <Route path="/admin" component={AdminPage} />
+        <Route path="/privacy" component={PrivacyPage} />
         <Route path="/admin/login">{() => { window.location.replace("/admin"); return null; }}</Route>
         <Route component={NotFound} />
       </Switch>
