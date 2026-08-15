@@ -94,7 +94,7 @@
       "phone": "0722542810",
       "ownerName": "ANTONY MAINA",
       "personaName": "Digital Nation Accessories AI",
-      "personaInstructions": null,
+      "personaInstructions": "",
       "paymentMethod": "mpesa",
       "bankName": null,
       "bankAccountNumber": null,
@@ -130,6 +130,56 @@
           "field": "bankAccountNumber",
           "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
           "at": "2026-08-15T04:25:28.298Z"
+        },
+        {
+          "field": "paybillNumber",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:13:20.947Z"
+        },
+        {
+          "field": "paymentMethod",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:13:20.947Z"
+        },
+        {
+          "field": "bankName",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:13:20.947Z"
+        },
+        {
+          "field": "bankAccountNumber",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:13:20.947Z"
+        },
+        {
+          "field": "paybillNumber",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:13:23.709Z"
+        },
+        {
+          "field": "paymentMethod",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:13:23.709Z"
+        },
+        {
+          "field": "bankName",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:13:23.709Z"
+        },
+        {
+          "field": "bankAccountNumber",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:13:23.709Z"
+        },
+        {
+          "field": "personaName",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:13:27.254Z"
+        },
+        {
+          "field": "personaInstructions",
+          "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
+          "at": "2026-08-15T11:13:27.254Z"
         }
       ]
     }
