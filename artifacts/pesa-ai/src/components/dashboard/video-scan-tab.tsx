@@ -403,119 +403,161 @@ function RecordView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () 
 
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
+  // On mobile the camera renders as a fullscreen overlay so the sidebar doesn't
+  // eat half the screen. On desktop (sm+) it stays inline inside the card.
   return (
-    <div className="space-y-4">
-      {/* Back */}
-      <button type="button" onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5">
-        ← Back
-      </button>
+    <>
+      {/* ── Mobile fullscreen overlay ── */}
+      <div className="fixed inset-0 z-[60] bg-black flex flex-col sm:hidden">
+        {/* Viewfinder — fills entire screen */}
+        <div className="relative flex-1 overflow-hidden">
+          <video ref={videoRef}   autoPlay playsInline muted   className={`w-full h-full object-cover ${phase === "preview" ? "hidden" : ""}`} />
+          <video ref={previewRef} controls playsInline         className={`w-full h-full object-cover ${phase !== "preview" ? "hidden" : ""}`} />
 
-      {/* Viewfinder */}
-      <div className="relative rounded-2xl overflow-hidden bg-black aspect-[3/4] sm:aspect-video shadow-lg">
-        {/* Live camera */}
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className={`w-full h-full object-cover ${phase === "preview" ? "hidden" : ""}`}
-        />
-
-        {/* Recorded preview */}
-        <video
-          ref={previewRef}
-          controls
-          playsInline
-          className={`w-full h-full object-cover ${phase !== "preview" ? "hidden" : ""}`}
-        />
-
-        {/* Loading */}
-        {phase === "init" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-            <div className="text-center space-y-2">
-              <Loader2 className="h-8 w-8 text-white animate-spin mx-auto" />
-              <p className="text-white/60 text-sm">Starting camera…</p>
+          {/* Loading */}
+          {phase === "init" && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+              <div className="text-center space-y-2">
+                <Loader2 className="h-8 w-8 text-white animate-spin mx-auto" />
+                <p className="text-white/60 text-sm">Starting camera…</p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Timer overlay */}
-        {phase === "recording" && (
-          <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/60 backdrop-blur rounded-full px-3 py-1.5">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-white text-sm font-mono font-bold">{fmt(seconds)}</span>
-            <span className="text-white/50 text-xs">/ 1:30</span>
-          </div>
-        )}
+          {/* Back / close — top-left */}
+          <button type="button" onClick={onBack}
+            className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/50 backdrop-blur flex items-center justify-center text-white">
+            ✕
+          </button>
 
-        {/* Time warning */}
-        {phase === "recording" && seconds >= 75 && (
-          <div className="absolute top-3 right-3 bg-amber-400 text-black text-xs font-bold rounded-full px-3 py-1">
-            {90 - seconds}s left
-          </div>
-        )}
+          {/* Timer */}
+          {phase === "recording" && (
+            <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/60 backdrop-blur rounded-full px-3 py-1.5">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-white text-sm font-mono font-bold">{fmt(seconds)}</span>
+            </div>
+          )}
+          {phase === "recording" && seconds >= 75 && (
+            <div className="absolute top-16 right-4 bg-amber-400 text-black text-xs font-bold rounded-full px-3 py-1">
+              {90 - seconds}s left
+            </div>
+          )}
+          {phase === "preview" && (
+            <div className="absolute top-4 left-4 bg-black/60 backdrop-blur rounded-full px-3 py-1.5">
+              <span className="text-white text-xs font-medium">Preview · {fmt(seconds)}</span>
+            </div>
+          )}
+          {phase === "error" && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+              <div className="text-center space-y-3 p-6">
+                <AlertCircle className="h-10 w-10 text-red-400 mx-auto" />
+                <p className="text-white font-semibold">Camera unavailable</p>
+                <p className="text-white/60 text-sm">{errorMsg}</p>
+                <Button size="sm" variant="outline" onClick={startCamera} className="text-white border-white/30 hover:bg-white/10">
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Try again
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
 
-        {/* Preview label */}
-        {phase === "preview" && (
-          <div className="absolute top-3 left-3 bg-black/60 backdrop-blur rounded-full px-3 py-1.5">
-            <span className="text-white text-xs font-medium">Preview · {fmt(seconds)}</span>
-          </div>
-        )}
-
-        {/* Error */}
-        {phase === "error" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-            <div className="text-center space-y-3 p-6">
-              <AlertCircle className="h-10 w-10 text-red-400 mx-auto" />
-              <p className="text-white font-semibold">Camera unavailable</p>
-              <p className="text-white/60 text-sm">{errorMsg}</p>
-              <Button size="sm" variant="outline" onClick={startCamera} className="text-white border-white/30 hover:bg-white/10">
-                <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Try again
+        {/* Controls bar — pinned to bottom */}
+        <div className="flex flex-col items-center gap-3 pb-10 pt-5 bg-black">
+          {(phase === "ready" || phase === "recording") && (
+            <>
+              <button type="button" onClick={phase === "ready" ? startRecording : stopRecording}
+                className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-xl ${phase === "recording" ? "bg-red-500 scale-110" : "bg-red-500"}`}
+                aria-label={phase === "ready" ? "Start recording" : "Stop recording"}>
+                {phase === "ready" ? <div className="w-7 h-7 rounded-full bg-white" /> : <div className="w-7 h-7 rounded bg-white" />}
+              </button>
+              <p className="text-white/60 text-sm">
+                {phase === "ready" ? "Tap to start · Max 90 seconds" : "Tap to stop · Walk slowly through your shop"}
+              </p>
+            </>
+          )}
+          {phase === "preview" && (
+            <div className="flex gap-3 w-full px-6">
+              <Button variant="outline" onClick={recordAgain} className="flex-1 text-white border-white/30 bg-white/10 hover:bg-white/20">
+                <RefreshCw className="h-4 w-4 mr-2" /> Record again
+              </Button>
+              <Button onClick={useVideo} className="flex-1">
+                <Camera className="h-4 w-4 mr-2" /> Use this video
               </Button>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Desktop inline layout (unchanged) ── */}
+      <div className="hidden sm:block space-y-4">
+        <button type="button" onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5">
+          ← Back
+        </button>
+        <div className="relative rounded-2xl overflow-hidden bg-black aspect-video shadow-lg">
+          <video ref={videoRef}   autoPlay playsInline muted   className={`w-full h-full object-cover ${phase === "preview" ? "hidden" : ""}`} />
+          <video ref={previewRef} controls playsInline         className={`w-full h-full object-cover ${phase !== "preview" ? "hidden" : ""}`} />
+          {phase === "init" && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+              <div className="text-center space-y-2">
+                <Loader2 className="h-8 w-8 text-white animate-spin mx-auto" />
+                <p className="text-white/60 text-sm">Starting camera…</p>
+              </div>
+            </div>
+          )}
+          {phase === "recording" && (
+            <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/60 backdrop-blur rounded-full px-3 py-1.5">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-white text-sm font-mono font-bold">{fmt(seconds)}</span>
+              <span className="text-white/50 text-xs">/ 1:30</span>
+            </div>
+          )}
+          {phase === "recording" && seconds >= 75 && (
+            <div className="absolute top-3 right-3 bg-amber-400 text-black text-xs font-bold rounded-full px-3 py-1">
+              {90 - seconds}s left
+            </div>
+          )}
+          {phase === "preview" && (
+            <div className="absolute top-3 left-3 bg-black/60 backdrop-blur rounded-full px-3 py-1.5">
+              <span className="text-white text-xs font-medium">Preview · {fmt(seconds)}</span>
+            </div>
+          )}
+          {phase === "error" && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+              <div className="text-center space-y-3 p-6">
+                <AlertCircle className="h-10 w-10 text-red-400 mx-auto" />
+                <p className="text-white font-semibold">Camera unavailable</p>
+                <p className="text-white/60 text-sm">{errorMsg}</p>
+                <Button size="sm" variant="outline" onClick={startCamera} className="text-white border-white/30 hover:bg-white/10">
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Try again
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+        {(phase === "ready" || phase === "recording") && (
+          <div className="flex flex-col items-center gap-2">
+            <button type="button" onClick={phase === "ready" ? startRecording : stopRecording}
+              className={`w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-xl ${phase === "recording" ? "bg-red-500 hover:bg-red-600 scale-110" : "bg-red-500 hover:bg-red-600"}`}
+              aria-label={phase === "ready" ? "Start recording" : "Stop recording"}>
+              {phase === "ready" ? <div className="w-5 h-5 rounded-full bg-white" /> : <div className="w-5 h-5 rounded bg-white" />}
+            </button>
+            <p className="text-xs text-muted-foreground">
+              {phase === "ready" ? "Tap to start · Max 90 seconds" : "Tap to stop · Walk slowly through your shop"}
+            </p>
+          </div>
+        )}
+        {phase === "preview" && (
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={recordAgain} className="flex-1">
+              <RefreshCw className="h-4 w-4 mr-2" /> Record again
+            </Button>
+            <Button onClick={useVideo} className="flex-1">
+              <Camera className="h-4 w-4 mr-2" /> Use this video
+            </Button>
           </div>
         )}
       </div>
-
-      {/* Record controls */}
-      {(phase === "ready" || phase === "recording") && (
-        <div className="flex flex-col items-center gap-2">
-          <button
-            type="button"
-            onClick={phase === "ready" ? startRecording : stopRecording}
-            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-xl ${
-              phase === "recording"
-                ? "bg-red-500 hover:bg-red-600 scale-110"
-                : "bg-red-500 hover:bg-red-600"
-            }`}
-            aria-label={phase === "ready" ? "Start recording" : "Stop recording"}
-          >
-            {phase === "ready" ? (
-              <div className="w-5 h-5 rounded-full bg-white" />
-            ) : (
-              <div className="w-5 h-5 rounded bg-white" />
-            )}
-          </button>
-          <p className="text-xs text-muted-foreground">
-            {phase === "ready"
-              ? "Tap to start · Max 90 seconds"
-              : "Tap to stop · Walk slowly through your shop"}
-          </p>
-        </div>
-      )}
-
-      {/* Preview actions */}
-      {phase === "preview" && (
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={recordAgain} className="flex-1">
-            <RefreshCw className="h-4 w-4 mr-2" /> Record again
-          </Button>
-          <Button onClick={useVideo} className="flex-1">
-            <Camera className="h-4 w-4 mr-2" /> Use this video
-          </Button>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 
