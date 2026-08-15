@@ -1059,6 +1059,7 @@ module.exports = {
   getVideoScan,
   updateVideoScan,
   listVideoScans,
+  deleteVideoScan,
 };
 
 // ── Video Scan ──────────────────────────────────────────────────────────────
@@ -1122,6 +1123,13 @@ function listVideoScans(businessId) {
   if (!state.videoScans) return [];
   return state.videoScans
     .filter((s) => s.businessId === businessId)
-    .sort((a, b) => b.createdAt - a.createdAt)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 20);
+}
+
+function deleteVideoScan(scanId) {
+  return mutate((state) => {
+    if (!state.videoScans) return;
+    state.videoScans = state.videoScans.filter((s) => s.id !== scanId);
+  });
 }

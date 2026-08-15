@@ -60,4 +60,16 @@ function confirmScan({ params, body, session }) {
   return result;
 }
 
-module.exports = { listScans, getScan, confirmScan };
+// DELETE /api/businesses/:businessId/video-scan/:scanId
+// Lets a vendor remove a failed or unwanted scan from their history.
+function deleteScan({ params, session }) {
+  auth.requireOwnBusiness(session, params.businessId);
+  const scan = db.getVideoScan(params.scanId);
+  if (!scan || scan.businessId !== params.businessId) {
+    throw db.httpError(404, "Scan not found");
+  }
+  db.deleteVideoScan(params.scanId);
+  return { deleted: true };
+}
+
+module.exports = { listScans, getScan, confirmScan, deleteScan };

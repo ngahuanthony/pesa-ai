@@ -77,9 +77,10 @@ router.post("/api/businesses/:businessId/mpesa/disconnect", mpesaSettingsRoutes.
 
 router.get("/api/businesses/:businessId/sales/summary", salesRoutes.summary);
 
-router.get("/api/businesses/:businessId/video-scan",            videoScanRoutes.listScans);
-router.get("/api/businesses/:businessId/video-scan/:scanId",     videoScanRoutes.getScan);
-router.post("/api/businesses/:businessId/video-scan/:scanId/confirm", videoScanRoutes.confirmScan);
+router.get("/api/businesses/:businessId/video-scan",                  videoScanRoutes.listScans);
+router.get("/api/businesses/:businessId/video-scan/:scanId",           videoScanRoutes.getScan);
+router.post("/api/businesses/:businessId/video-scan/:scanId/confirm",  videoScanRoutes.confirmScan);
+router.delete("/api/businesses/:businessId/video-scan/:scanId",        videoScanRoutes.deleteScan);
 
 router.post("/api/businesses/:businessId/chat", chatRoutes.send);
 // Note: chat history uses path param (not query) to avoid codegen type collision

@@ -311,20 +311,20 @@
       "expiresAt": "2026-09-14T04:13:27.045Z"
     },
     {
-      "token": "d78fba745f0aa77d7cb9a4b0217d378df9fd2eeb27ed0a625260e0ca59355a72",
-      "accountId": "742b8b92-8ac5-45f9-90cd-137576c38117",
-      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
-      "isAdmin": false,
-      "createdAt": "2026-08-15T04:52:19.572Z",
-      "expiresAt": "2026-09-14T04:52:19.572Z"
-    },
-    {
       "token": "5e5723e0151508bb99d625cf26d8483f594cf81e70b4e79b8f0bd9fd365d6e7b",
       "accountId": "742b8b92-8ac5-45f9-90cd-137576c38117",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
       "isAdmin": false,
       "createdAt": "2026-08-15T06:58:41.763Z",
       "expiresAt": "2026-09-14T06:58:41.763Z"
+    },
+    {
+      "token": "93adf19afffd250ea371a97c31d7c57f9038dc16fec459bf0576ea970bb62b3e",
+      "accountId": "742b8b92-8ac5-45f9-90cd-137576c38117",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "isAdmin": false,
+      "createdAt": "2026-08-15T08:11:01.569Z",
+      "expiresAt": "2026-09-14T08:11:01.569Z"
     }
   ],
   "subscriptions": [
@@ -392,15 +392,15 @@
   "reports": [],
   "videoScans": [
     {
-      "id": "717108c0-8aa7-4ed6-89cd-de65eda71e81",
+      "id": "ebcaede7-147d-4a40-a8e2-1ccf3a958c17",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
-      "status": "processing",
+      "status": "error",
       "frames": 0,
       "productCount": 0,
       "productDrafts": [],
-      "error": null,
-      "createdAt": "2026-08-15T07:38:54.246Z",
-      "processedAt": null
+      "error": "Both ffmpeg passes failed — cannot extract frames",
+      "createdAt": "2026-08-15T07:58:29.846Z",
+      "processedAt": "2026-08-15T07:58:29.918Z"
     }
   ]
 }

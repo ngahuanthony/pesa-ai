@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useGetMe } from "@workspace/api-client-react";
-import { Upload, Camera, CheckCircle2, AlertCircle, Loader2, Video, Trash2, Plus, RefreshCw, History, ChevronDown, ChevronUp } from "lucide-react";
+import { Upload, Camera, CheckCircle2, AlertCircle, Loader2, Video, Trash2, Plus, RefreshCw, History, ChevronDown, ChevronUp, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +22,7 @@ interface VideoScan {
   productCount: number;
   productDrafts: ProductDraft[];
   error?: string;
+  createdAt?: string | number; // ISO string from db.now()
 }
 
 // ── API helpers ───────────────────────────────────────────────────────────────
@@ -94,7 +95,10 @@ interface ScanHistoryProps {
   onReviewDone: (scan: VideoScan) => void;
 }
 
-function timeAgo(ms: number) {
+function timeAgo(ts: string | number | undefined) {
+  if (!ts) return "just now";
+  const ms = typeof ts === "string" ? new Date(ts).getTime() : ts;
+  if (isNaN(ms)) return "just now";
   const diff = Date.now() - ms;
   const mins = Math.floor(diff / 60_000);
   if (mins < 1) return "just now";
@@ -108,12 +112,26 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
   const [scans, setScans] = useState<VideoScan[]>([]);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
+  const [dismissing, setDismissing] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const data = await fetchScans(businessId);
     setScans(data);
     setLoading(false);
   }, [businessId]);
+
+  const handleDismiss = async (scanId: string) => {
+    setDismissing(scanId);
+    try {
+      await fetch(`/api/businesses/${businessId}/video-scan/${scanId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      setScans((prev) => prev.filter((s) => s.id !== scanId));
+    } catch { /* ignore */ } finally {
+      setDismissing(null);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -172,7 +190,7 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   {statusBadge(scan)}
-                  <span className="text-xs text-muted-foreground">{timeAgo((scan as any).createdAt)}</span>
+                  <span className="text-xs text-muted-foreground">{timeAgo(scan.createdAt)}</span>
                 </div>
                 {(scan.status === "done" || scan.status === "confirmed") && scan.productCount > 0 && (
                   <p className="text-xs text-muted-foreground">
@@ -187,7 +205,7 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
                   <p className="text-xs text-muted-foreground">{scan.frames} frames analysed so far</p>
                 )}
               </div>
-              <div className="flex-shrink-0">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 {(scan.status === "pending" || scan.status === "processing") && (
                   <Button size="sm" variant="outline" onClick={() => onResumeProcessing(scan.id)}>
                     View progress
@@ -197,6 +215,17 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
                   <Button size="sm" onClick={() => onReviewDone(scan)}>
                     Review
                   </Button>
+                )}
+                {(scan.status === "error" || scan.status === "confirmed") && (
+                  <button
+                    type="button"
+                    onClick={() => handleDismiss(scan.id)}
+                    disabled={dismissing === scan.id}
+                    className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
+                    title="Remove from history"
+                  >
+                    {dismissing === scan.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                  </button>
                 )}
               </div>
             </div>
