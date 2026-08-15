@@ -492,11 +492,12 @@ export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
             <div className="px-4 py-16 text-center text-gray-400 text-sm">No businesses found.</div>
           ) : (
             filtered.map((b, i) => {
-              const isSuspended  = b.subscription.status === "suspended";
-              const reportCount  = (b as any).openReportCount ?? 0;
-              const productCount = (b as any).productCount ?? 0;
-              const orderCount   = (b as any).orderCount ?? 0;
-              const waConnected  = !!(b as any).whatsappPhoneNumberId;
+              const isSuspended   = b.subscription.status === "suspended";
+              const reportCount   = (b as any).openReportCount ?? 0;
+              const productCount  = (b as any).productCount ?? 0;
+              const orderCount    = (b as any).orderCount ?? 0;
+              const waConnected   = !!(b as any).whatsappPhoneNumberId;
+              const waPending     = !!(b as any).whatsappRequestedPhone && !waConnected;
               const joinedDate   = b.createdAt
                 ? new Date(b.createdAt).toLocaleDateString("en-GB", { month: "short", year: "numeric" })
                 : "";
@@ -525,9 +526,9 @@ export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
 
                   {/* Connections */}
                   <div className="space-y-1.5">
-                    <div className={`flex items-center gap-1.5 text-xs font-medium ${waConnected ? "text-emerald-600" : "text-gray-400"}`}>
+                    <div className={`flex items-center gap-1.5 text-xs font-medium ${waConnected ? "text-emerald-600" : waPending ? "text-amber-600" : "text-gray-400"}`}>
                       <MessageSquare className="h-3.5 w-3.5" />
-                      {waConnected ? "WhatsApp ✓" : "WhatsApp —"}
+                      {waConnected ? "WhatsApp ✓" : waPending ? "WhatsApp ⏳ pending" : "WhatsApp —"}
                     </div>
                     <div className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
                       <Smartphone className="h-3.5 w-3.5" />
@@ -552,14 +553,17 @@ export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
                   <div className="flex items-center gap-1 flex-wrap">
                     <button
                       onClick={() => setWaBusiness(b)}
-                      title="Set up WhatsApp"
+                      title={waPending ? "Pending WhatsApp request — click to approve" : "Set up WhatsApp"}
                       className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${
                         waConnected
                           ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                          : waPending
+                          ? "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 ring-1 ring-amber-300"
                           : "border-gray-200 text-gray-600 hover:bg-gray-100"
                       }`}
                     >
-                      <MessageSquare className="h-3.5 w-3.5" /> WhatsApp
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {waPending ? "Approve WA" : "WhatsApp"}
                     </button>
 
                     <button
