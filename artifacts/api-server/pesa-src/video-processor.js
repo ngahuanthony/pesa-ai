@@ -123,28 +123,32 @@ async function extractFrames(videoBuffer, scanId) {
 
 // ── Claude vision ───────────────────────────────────────────────────────────
 
-const VISION_PROMPT = `These are frames from a Kenyan shop or market video.
+function buildVisionPrompt(frameCount) {
+  return `These are ${frameCount} frames (indexed 0–${frameCount - 1}) from a Kenyan shop or market video.
 
 Look carefully across ALL frames. For each distinct product you can clearly see, extract:
 - name: short product name (e.g. "Sunlight Soap 500g", "Maize Flour 2kg", "Cocacola 500ml")
 - price: the price in KES as a whole number if visible on a label or price tag (null if not visible)
 - description: one short sentence describing the product
+- frameIndex: the 0-based index of the frame where this product is most clearly visible (must be 0–${frameCount - 1})
 
 Rules:
 - Only list products you can clearly see — ignore blurry or partially visible items
 - Do not duplicate products that appear in multiple frames; list each product only once
 - If price is not readable, use null
 - Be specific with names: include size/weight if visible (e.g. "500g" not just "soap")
+- frameIndex must be a valid integer between 0 and ${frameCount - 1}
 - Return ONLY a valid JSON array — no preamble, no explanation, no markdown fences
 
 Example:
 [
-  {"name":"Sunlight Soap 500g","price":45,"description":"Green bar soap for laundry and dishes"},
-  {"name":"Brookside Milk 500ml","price":55,"description":"Fresh whole milk in a white carton"},
-  {"name":"Maize Flour 2kg","price":175,"description":"Unga wa sembe in a branded blue packet"}
+  {"name":"Sunlight Soap 500g","price":45,"description":"Green bar soap for laundry and dishes","frameIndex":0},
+  {"name":"Brookside Milk 500ml","price":55,"description":"Fresh whole milk in a white carton","frameIndex":2},
+  {"name":"Maize Flour 2kg","price":175,"description":"Unga wa sembe in a branded blue packet","frameIndex":4}
 ]
 
 If no products are visible return: []`;
+}
 
 /**
  * Call Claude with retry on transient errors (rate limits, 529, network blips).
@@ -155,7 +159,7 @@ async function callClaudeWithRetry(base64Frames, attempt = 0) {
       type: "image",
       source: { type: "base64", media_type: "image/jpeg", data },
     })),
-    { type: "text", text: VISION_PROMPT },
+    { type: "text", text: buildVisionPrompt(base64Frames.length) },
   ];
 
   const res = await fetch(`${ANTHROPIC_BASE_URL}/v1/messages`, {
@@ -239,14 +243,21 @@ async function processVideoScan(db, scanId, businessId, videoBuffer) {
       return true;
     });
 
-    // Step 4: Build draft records
-    const drafts = unique.map((p, i) => ({
-      draftId: `draft-${scanId.slice(0, 6)}-${i}`,
-      name: String(p.name || "").trim(),
-      price: p.price != null ? Number(p.price) : null,
-      description: String(p.description || "").trim(),
-      selected: true,
-    }));
+    // Step 4: Build draft records — attach the frame thumbnail so the review
+    // UI can show an image next to each product for easier price verification.
+    const drafts = unique.map((p, i) => {
+      const fi = typeof p.frameIndex === "number" && Number.isFinite(p.frameIndex)
+        ? Math.max(0, Math.min(Math.round(p.frameIndex), frames.length - 1))
+        : i % frames.length;   // fallback: spread evenly across available frames
+      return {
+        draftId: `draft-${scanId.slice(0, 6)}-${i}`,
+        name: String(p.name || "").trim(),
+        price: p.price != null ? Number(p.price) : null,
+        description: String(p.description || "").trim(),
+        selected: true,
+        thumbnailBase64: frames[fi] || null,
+      };
+    });
 
     db.updateVideoScan(scanId, {
       status: "done",

@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 
 interface ProductDraft {
   draftId: string;
+  thumbnailBase64?: string | null;
   name: string;
   price: number | null;
   description: string;
@@ -781,13 +782,29 @@ function ReviewView({ businessId, scanId, initialDrafts, onConfirmed, onBack }: 
 
       <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
         {drafts.map((draft) => (
-          <div key={draft.draftId} className={`rounded-xl border p-4 transition-colors ${draft.selected ? "border-primary/40 bg-primary/5" : "border-border bg-white opacity-60"}`}>
+          <div key={draft.draftId} className={`rounded-xl border p-3 transition-colors ${draft.selected ? "border-primary/40 bg-primary/5" : "border-border bg-white opacity-60"}`}>
             <div className="flex items-start gap-3">
+              {/* Checkbox */}
               <button type="button" onClick={() => update(draft.draftId, "selected", !draft.selected)}
                 className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${draft.selected ? "bg-primary border-primary" : "border-border"}`}>
                 {draft.selected && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
               </button>
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+
+              {/* Thumbnail */}
+              {draft.thumbnailBase64 ? (
+                <img
+                  src={`data:image/jpeg;base64,${draft.thumbnailBase64}`}
+                  alt={draft.name}
+                  className="w-16 h-16 rounded-lg object-cover flex-shrink-0 border border-border"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 border border-border">
+                  <span className="text-2xl">📦</span>
+                </div>
+              )}
+
+              {/* Fields */}
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2 min-w-0">
                 <div className="sm:col-span-2">
                   <label className="text-xs text-muted-foreground mb-1 block">Product name</label>
                   <Input value={draft.name} onChange={(e) => update(draft.draftId, "name", e.target.value)} placeholder="Product name" className="h-8 text-sm" disabled={!draft.selected} />
@@ -801,6 +818,8 @@ function ReviewView({ businessId, scanId, initialDrafts, onConfirmed, onBack }: 
                   <Input value={draft.description} onChange={(e) => update(draft.draftId, "description", e.target.value)} placeholder="Short description" className="h-8 text-sm" disabled={!draft.selected} />
                 </div>
               </div>
+
+              {/* Delete */}
               <button type="button" onClick={() => setDrafts((d) => d.filter((x) => x.draftId !== draft.draftId))} className="text-muted-foreground hover:text-red-500 transition-colors mt-1">
                 <Trash2 className="h-4 w-4" />
               </button>
