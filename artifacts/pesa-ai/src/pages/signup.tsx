@@ -135,29 +135,6 @@ export default function SignupPage() {
     });
   };
 
-  const selectedPlan = form.watch("plan");
-
-  const PLANS = [
-    {
-      name: "Starter" as const,
-      price: "KSh 2,000",
-      features: ["WhatsApp AI salesperson", "100 products", "Stock & orders"],
-      popular: false,
-    },
-    {
-      name: "Business" as const,
-      price: "KSh 3,000",
-      features: ["Everything in Starter", "1,000 products", "AI sales assistant"],
-      popular: true,
-    },
-    {
-      name: "Pro" as const,
-      price: "KSh 6,000",
-      features: ["Everything in Business", "Unlimited products", "Advanced AI"],
-      popular: false,
-    },
-  ];
-
   return (
     <PublicLayout>
       <div className="flex-1 flex items-start justify-center py-10 px-4 bg-[#f7f7f5]">
@@ -166,44 +143,6 @@ export default function SignupPage() {
           <div className="text-center mb-8">
             <h1 className="text-4xl font-extrabold text-foreground">Create your WhatsApp Shop</h1>
             <p className="text-muted-foreground mt-2">5-day free trial · No credit card required</p>
-          </div>
-
-          {/* Plan selection cards */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            {PLANS.map((plan) => {
-              const isSelected = selectedPlan === plan.name;
-              return (
-                <button
-                  key={plan.name}
-                  type="button"
-                  onClick={() => form.setValue("plan", plan.name)}
-                  className={`relative text-left rounded-xl border-2 p-4 transition-all cursor-pointer ${
-                    isSelected
-                      ? "border-primary bg-primary/5"
-                      : "border-border bg-white hover:border-primary/40"
-                  }`}
-                >
-                  {plan.popular && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-xs font-semibold px-3 py-0.5 rounded-full">
-                      POPULAR
-                    </span>
-                  )}
-                  <div className="mb-2">
-                    <p className="font-semibold text-foreground">{plan.name}</p>
-                    <p className="text-primary font-bold">
-                      {plan.price}<span className="text-sm font-normal text-muted-foreground">/mo</span>
-                    </p>
-                  </div>
-                  <ul className="space-y-1">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="text-primary">✓</span> {f}
-                      </li>
-                    ))}
-                  </ul>
-                </button>
-              );
-            })}
           </div>
 
           {/* Card */}
