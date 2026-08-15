@@ -323,7 +323,7 @@ function RecordView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () 
     try {
       // 640×480 @ 10 fps is plenty for AI frame extraction and keeps uploads small (~3 MB for 90s)
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 10, max: 15 } },
+        video: { facingMode: "environment", frameRate: { ideal: 10, max: 15 } },
         audio: false,
       });
       streamRef.current = stream;
@@ -410,7 +410,7 @@ function RecordView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () 
       </button>
 
       {/* Viewfinder */}
-      <div className="relative rounded-2xl overflow-hidden bg-black aspect-video shadow-lg">
+      <div className="relative rounded-2xl overflow-hidden bg-black aspect-[3/4] sm:aspect-video shadow-lg">
         {/* Live camera */}
         <video
           ref={videoRef}

@@ -131,7 +131,7 @@ export function ChatTesterTab() {
           )}
 
           {history?.map((msg) => {
-            const isAI = msg.role === "ai";
+            const isAI = msg.role === "assistant";
             return (
               <div key={msg.id} className={`flex ${isAI ? "justify-start" : "justify-end"}`}>
                 <div className={`max-w-[75%] rounded-xl px-3 pt-2 pb-5 shadow-sm relative text-sm leading-relaxed whitespace-pre-wrap ${
