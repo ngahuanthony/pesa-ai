@@ -51,8 +51,8 @@ function getStats({ session }) {
 
 function setWhatsAppCredentials({ params, body, session }) {
   auth.requireAdmin(session);
-  const { phoneNumberId, accessToken, verifyToken } = body || {};
-  return db.setWhatsAppCredentials(params.businessId, { phoneNumberId, accessToken, verifyToken });
+  const { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone } = body || {};
+  return db.setWhatsAppCredentials(params.businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone });
 }
 
 function getWhatsAppStatus({ params, session }) {

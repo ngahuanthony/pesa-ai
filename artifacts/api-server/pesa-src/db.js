@@ -210,8 +210,11 @@ function createBusiness(
     bankName: null,
     bankAccountNumber: null,
     paybillNumber: paybillNumber || null,
-    whatsappPhoneNumberId: null, // set once they connect a real WhatsApp number
+    whatsappPhoneNumberId: null, // set by admin once Meta credentials are activated
     whatsappVerifyToken: crypto.randomBytes(12).toString("hex"),
+    whatsappRequestedPhone: null, // vendor-submitted phone number awaiting admin connection
+    whatsappWabaId: null,         // WhatsApp Business Account ID (set by admin)
+    whatsappDisplayName: null,    // display name from Meta (set by admin)
 
     // Optional physical-shop trust fields. All optional — a WhatsApp/
     // delivery-only business leaves these null. buildingName+shopNumber
@@ -329,12 +332,26 @@ function setMpesaCredentials(businessId, { consumerKey, consumerSecret, passkey,
 
 // --- WhatsApp Cloud API credentials (admin-only) --------------------------
 
-function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verifyToken }) {
+// Vendor submits their WhatsApp Business phone number and waits for admin to activate
+function requestWhatsAppConnection(businessId, phone) {
+  return mutate((state) => {
+    const b = state.businesses.find((b) => b.id === businessId);
+    if (!b) throw httpError(404, "Business not found");
+    b.whatsappRequestedPhone = phone || null;
+    return { ok: true, requestedPhone: b.whatsappRequestedPhone };
+  });
+}
+
+// Admin activates a business's WhatsApp by setting Meta API credentials
+function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone }) {
   return mutate((state) => {
     const b = state.businesses.find((b) => b.id === businessId);
     if (!b) throw httpError(404, "Business not found");
     if (phoneNumberId !== undefined) b.whatsappPhoneNumberId = phoneNumberId || null;
     if (verifyToken !== undefined) b.whatsappVerifyToken = verifyToken;
+    if (wabaId !== undefined) b.whatsappWabaId = wabaId || null;
+    if (displayName !== undefined) b.whatsappDisplayName = displayName || null;
+    if (waPhone !== undefined) b.whatsappRequestedPhone = waPhone || null;
     if (accessToken !== undefined) {
       b.whatsappAccessTokenEnc = accessToken ? fieldCrypto.encrypt(accessToken) : null;
     }
@@ -342,6 +359,7 @@ function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verify
   });
 }
 
+// Admin view: full credentials status for a business
 function getWhatsAppStatus(businessId) {
   const b = getBusiness(businessId);
   return {
@@ -349,6 +367,22 @@ function getWhatsAppStatus(businessId) {
     verifyToken: b.whatsappVerifyToken || null,
     accessTokenSet: !!b.whatsappAccessTokenEnc,
     connected: !!(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc),
+    requestedPhone: b.whatsappRequestedPhone || null,
+    wabaId: b.whatsappWabaId || null,
+    displayName: b.whatsappDisplayName || null,
+  };
+}
+
+// Vendor view: only shows status safe for the business owner to see
+function getVendorWhatsAppStatus(businessId) {
+  const b = getBusiness(businessId);
+  return {
+    requestedPhone: b.whatsappRequestedPhone || null,
+    connected: !!(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc),
+    phoneNumberId: b.whatsappPhoneNumberId || null,
+    wabaId: b.whatsappWabaId || null,
+    displayName: b.whatsappDisplayName || null,
+    verifyToken: b.whatsappVerifyToken || null,
   };
 }
 
@@ -947,6 +981,8 @@ function httpError(statusCode, message) {
 module.exports = {
   DATA_FILE,
   loadRaw,
+  requestWhatsAppConnection,
+  getVendorWhatsAppStatus,
   load,
   mutate,
   id,

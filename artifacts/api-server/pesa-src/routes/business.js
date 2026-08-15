@@ -32,4 +32,18 @@ function update({ params, body, session }) {
   return db.sanitizeBusiness(db.updateBusiness(params.id, patch, actor));
 }
 
-module.exports = { get, update };
+// Vendor submits their WhatsApp Business phone number for admin to activate
+function requestWhatsApp({ params, body, session }) {
+  auth.requireOwnBusiness(session, params.businessId);
+  const { phone } = body || {};
+  if (!phone || !phone.trim()) throw db.httpError(400, "phone is required");
+  return db.requestWhatsAppConnection(params.businessId, phone.trim());
+}
+
+// Vendor checks their WhatsApp connection status (safe subset — no tokens)
+function getWhatsAppStatus({ params, session }) {
+  auth.requireOwnBusiness(session, params.businessId);
+  return db.getVendorWhatsAppStatus(params.businessId);
+}
+
+module.exports = { get, update, requestWhatsApp, getWhatsAppStatus };

@@ -51,6 +51,8 @@ router.patch("/api/admin/reports/:id", reportsRoutes.updateStatus);
 
 router.get("/api/businesses/:id", businessRoutes.get);
 router.put("/api/businesses/:id", businessRoutes.update);
+router.get("/api/businesses/:businessId/whatsapp/status", businessRoutes.getWhatsAppStatus);
+router.post("/api/businesses/:businessId/whatsapp/request", businessRoutes.requestWhatsApp);
 
 router.get("/api/businesses/:businessId/subscription", subscriptionRoutes.get);
 router.post("/api/businesses/:businessId/subscription/charge", subscriptionRoutes.charge);

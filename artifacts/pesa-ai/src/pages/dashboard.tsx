@@ -8,6 +8,7 @@ import { OrdersTab } from "@/components/dashboard/orders-tab";
 import { SalesTab } from "@/components/dashboard/sales-tab";
 import { BillingTab } from "@/components/dashboard/billing-tab";
 import { SettingsTab } from "@/components/dashboard/settings-tab";
+import { WhatsAppAccountTab } from "@/components/dashboard/whatsapp-account-tab";
 
 function DashboardContent() {
   const [location] = useLocation();
@@ -21,20 +22,22 @@ function DashboardContent() {
       case "orders":   return <OrdersTab />;
       case "chat":     return <ChatTesterTab />;
       case "sales":    return <SalesTab />;
-      case "billing":  return <BillingTab />;
-      case "settings": return <SettingsTab />;
-      default:         return <OverviewTab />;
+      case "billing":   return <BillingTab />;
+      case "settings":  return <SettingsTab />;
+      case "whatsapp":  return <WhatsAppAccountTab />;
+      default:          return <OverviewTab />;
     }
   };
 
   // Section pages wrap content with a title when not overview
   const sectionTitles: Record<string, { title: string; sub: string }> = {
-    products: { title: "Products",    sub: "Manage your inventory." },
-    orders:   { title: "Orders",      sub: "Track customer purchases." },
-    chat:     { title: "Chat Tester", sub: "Preview how your shop responds." },
-    sales:    { title: "Sales",       sub: "Review your revenue and performance." },
-    billing:  { title: "Billing",     sub: "Manage your subscription." },
-    settings: { title: "Settings",    sub: "Manage your business profile, AI persona, and integrations." },
+    products:  { title: "Products",           sub: "Manage your inventory." },
+    orders:    { title: "Orders",             sub: "Track customer purchases." },
+    chat:      { title: "Chat Tester",        sub: "Preview how your shop responds." },
+    sales:     { title: "Sales",              sub: "Review your revenue and performance." },
+    billing:   { title: "Billing",            sub: "Manage your subscription." },
+    settings:  { title: "Settings",           sub: "Manage your business profile, AI persona, and integrations." },
+    whatsapp:  { title: "WhatsApp Account",   sub: "Connect your WhatsApp Business number to your shop." },
   };
 
   const meta = sectionTitles[section];

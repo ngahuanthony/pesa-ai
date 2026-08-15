@@ -14,6 +14,30 @@
       "idOrKraPin": null,
       "verifiedShop": false,
       "createdAt": "2026-08-13T06:22:51.765Z"
+    },
+    {
+      "id": "3852cd7d-293d-47f9-9e80-850a43273020",
+      "name": "Demo Shop",
+      "category": "Retail & Fashion",
+      "phone": "",
+      "ownerName": "Demo Owner",
+      "personaName": "Demo Shop AI",
+      "personaInstructions": null,
+      "paymentMethod": null,
+      "bankName": null,
+      "bankAccountNumber": null,
+      "paybillNumber": null,
+      "whatsappPhoneNumberId": null,
+      "whatsappVerifyToken": "0fdad8993699d9af5aec06c9",
+      "whatsappRequestedPhone": null,
+      "whatsappWabaId": null,
+      "whatsappDisplayName": null,
+      "buildingName": null,
+      "shopNumber": null,
+      "publicPhone": null,
+      "idOrKraPin": null,
+      "verifiedShop": false,
+      "createdAt": "2026-08-15T00:54:15.091Z"
     }
   ],
   "accounts": [
@@ -25,6 +49,15 @@
       "passwordSalt": "cecb3a6fe5a9a4a33929dac6903cedc0",
       "consentedAt": "2026-08-13T06:22:51.765Z",
       "createdAt": "2026-08-13T06:22:51.765Z"
+    },
+    {
+      "id": "d3fae5ce-14bb-401e-b6e0-23cb98502248",
+      "businessId": "3852cd7d-293d-47f9-9e80-850a43273020",
+      "email": "demo@pesaai.test",
+      "passwordHash": "1454afbdbbe01b11539770df0f798fc6497dd9f53472bd24023f5e6c00681f94a00db5504236419033a202c618773cdd4a5e6c1592b1c910d28c9eedb35cfc01",
+      "passwordSalt": "9863e96268c053f1598d2174f5e7b872",
+      "consentedAt": "2026-08-15T00:54:15.091Z",
+      "createdAt": "2026-08-15T00:54:15.091Z"
     }
   ],
   "sessions": [
@@ -35,6 +68,14 @@
       "isAdmin": false,
       "createdAt": "2026-08-13T06:22:51.766Z",
       "expiresAt": "2026-09-12T06:22:51.766Z"
+    },
+    {
+      "token": "41325410ff010e33d4130d610932d476ccfc50db10b6402f67efc238dd3dd164",
+      "accountId": "d3fae5ce-14bb-401e-b6e0-23cb98502248",
+      "businessId": "3852cd7d-293d-47f9-9e80-850a43273020",
+      "isAdmin": false,
+      "createdAt": "2026-08-15T00:54:15.092Z",
+      "expiresAt": "2026-09-14T00:54:15.092Z"
     }
   ],
   "subscriptions": [
@@ -48,6 +89,17 @@
       "history": [],
       "createdAt": "2026-08-13T06:22:51.765Z",
       "updatedAt": "2026-08-13T06:22:51.765Z"
+    },
+    {
+      "businessId": "3852cd7d-293d-47f9-9e80-850a43273020",
+      "plan": "starter",
+      "priceKES": 2999,
+      "status": "trialing",
+      "trialEndsAt": "2026-08-29T00:54:15.091Z",
+      "currentPeriodEnd": "2026-08-29T00:54:15.091Z",
+      "history": [],
+      "createdAt": "2026-08-15T00:54:15.091Z",
+      "updatedAt": "2026-08-15T00:54:15.091Z"
     }
   ],
   "products": [],
