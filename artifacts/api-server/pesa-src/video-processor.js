@@ -124,30 +124,34 @@ async function extractFrames(videoBuffer, scanId) {
 // ── Claude vision ───────────────────────────────────────────────────────────
 
 function buildVisionPrompt(frameCount) {
-  return `These are ${frameCount} frames (indexed 0–${frameCount - 1}) from a Kenyan shop or market video.
+  return `I am sending you ${frameCount} frames (numbered 0 to ${frameCount - 1}) from a Kenyan shop or market video.
 
-Look carefully across ALL frames. For each distinct product you can clearly see, extract:
-- name: short product name (e.g. "Sunlight Soap 500g", "Maize Flour 2kg", "Cocacola 500ml")
-- price: the price in KES as a whole number if visible on a label or price tag (null if not visible)
-- description: one short sentence describing the product
-- frameIndex: the 0-based index of the frame where this product is most clearly visible (must be 0–${frameCount - 1})
+For EACH frame, independently list every product you can clearly see in that specific frame.
 
-Rules:
-- Only list products you can clearly see — ignore blurry or partially visible items
-- Do not duplicate products that appear in multiple frames; list each product only once
-- If price is not readable, use null
-- Be specific with names: include size/weight if visible (e.g. "500g" not just "soap")
-- frameIndex must be a valid integer between 0 and ${frameCount - 1}
-- Return ONLY a valid JSON array — no preamble, no explanation, no markdown fences
-
-Example:
+Return a single JSON array where every element covers one frame:
 [
-  {"name":"Sunlight Soap 500g","price":45,"description":"Green bar soap for laundry and dishes","frameIndex":0},
-  {"name":"Brookside Milk 500ml","price":55,"description":"Fresh whole milk in a white carton","frameIndex":2},
-  {"name":"Maize Flour 2kg","price":175,"description":"Unga wa sembe in a branded blue packet","frameIndex":4}
+  {
+    "frame": 0,
+    "products": [
+      {"name": "Sunlight Soap 500g", "price": 45, "description": "Green bar soap for laundry and dishes"},
+      {"name": "Omo Detergent 1kg",  "price": 190, "description": "Blue washing powder packet"}
+    ]
+  },
+  {
+    "frame": 1,
+    "products": [
+      {"name": "Brookside Milk 500ml", "price": 55, "description": "Fresh whole milk in a white carton"}
+    ]
+  }
 ]
 
-If no products are visible return: []`;
+Rules:
+- Process each frame on its own — the "frame" number must match the image position (0-based)
+- Only list products clearly visible in THAT frame — ignore blurry or cut-off items
+- If a frame has no clear products, use an empty products array: []
+- Include size/weight in the name when readable (e.g. "500g", "2kg", "500ml")
+- price must be a whole KES number if a price tag is readable, otherwise null
+- Return ONLY valid JSON — no preamble, no explanation, no markdown fences`;
 }
 
 /**
@@ -233,31 +237,40 @@ async function processVideoScan(db, scanId, businessId, videoBuffer) {
     console.log(`[video-processor] Sending ${frames.length} frames to Claude (${MODEL})`);
     const raw = await analyzeFrames(frames);
 
-    // Step 3: Deduplicate by normalised name
-    const seen   = new Set();
-    const unique = raw.filter((p) => {
-      if (!p || !p.name) return false;
-      const key = String(p.name).toLowerCase().trim();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    // Step 3: Flatten per-frame results and deduplicate by normalised name.
+    // Each entry in `raw` is { frame: N, products: [...] } — the frame index
+    // comes from Claude's own structure, not a guess inside a product object,
+    // so the thumbnail is guaranteed to match what Claude actually saw.
+    const seen  = new Map(); // normalised name → draft record
+    const perFrameEntries = Array.isArray(raw) ? raw : [];
 
-    // Step 4: Build draft records — attach the frame thumbnail so the review
-    // UI can show an image next to each product for easier price verification.
-    const drafts = unique.map((p, i) => {
-      const fi = typeof p.frameIndex === "number" && Number.isFinite(p.frameIndex)
-        ? Math.max(0, Math.min(Math.round(p.frameIndex), frames.length - 1))
-        : i % frames.length;   // fallback: spread evenly across available frames
-      return {
-        draftId: `draft-${scanId.slice(0, 6)}-${i}`,
-        name: String(p.name || "").trim(),
-        price: p.price != null ? Number(p.price) : null,
-        description: String(p.description || "").trim(),
-        selected: true,
-        thumbnailBase64: frames[fi] || null,
-      };
-    });
+    for (const entry of perFrameEntries) {
+      const fi       = typeof entry?.frame === "number" ? Math.max(0, Math.min(Math.round(entry.frame), frames.length - 1)) : null;
+      const products = Array.isArray(entry?.products) ? entry.products : [];
+
+      for (const p of products) {
+        if (!p || !p.name) continue;
+        const key = String(p.name).toLowerCase().trim();
+        if (seen.has(key)) continue;   // keep first (earliest) occurrence
+        seen.set(key, {
+          name:             String(p.name).trim(),
+          price:            p.price != null ? Number(p.price) : null,
+          description:      String(p.description || "").trim(),
+          // thumbnail is the actual frame the product was identified in
+          thumbnailBase64:  fi !== null ? (frames[fi] || null) : null,
+        });
+      }
+    }
+
+    // Step 4: Build final draft records
+    const drafts = [...seen.values()].map((p, i) => ({
+      draftId:         `draft-${scanId.slice(0, 6)}-${i}`,
+      name:            p.name,
+      price:           p.price,
+      description:     p.description,
+      selected:        true,
+      thumbnailBase64: p.thumbnailBase64,
+    }));
 
     db.updateVideoScan(scanId, {
       status: "done",
