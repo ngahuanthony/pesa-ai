@@ -4,12 +4,13 @@ import {
   useAdminChargeSubscription,
   useAdminSuspendBusiness,
   useAdminUnsuspendBusiness,
+  useAdminResetPassword,
 } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Search, Ban, PlayCircle, CreditCard, Smartphone, MessageSquare,
-  CheckCircle2, AlertCircle, KeyRound, Trash2, Eye, EyeOff, X,
+  CheckCircle2, AlertCircle, KeyRound, Trash2, Eye, EyeOff, LockKeyhole,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -173,6 +174,78 @@ function WhatsAppDialog({ business, onClose }: { business: any; onClose: () => v
   );
 }
 
+// ── Reset Password dialog ──────────────────────────────────────────────────
+function ResetPasswordDialog({ business, onClose }: { business: any; onClose: () => void }) {
+  const [newPassword, setNewPassword] = useState("");
+  const [show, setShow]               = useState(false);
+  const { toast } = useToast();
+  const reset = useAdminResetPassword();
+
+  const handleReset = async () => {
+    if (newPassword.length < 8) {
+      toast({ title: "Too short", description: "Password must be at least 8 characters.", variant: "destructive" });
+      return;
+    }
+    reset.mutate({ businessId: business.id, data: { newPassword } }, {
+      onSuccess: () => {
+        toast({ title: "Password reset!", description: `${business.name} can now log in with the new password.` });
+        onClose();
+      },
+      onError: (err: any) => {
+        toast({ title: "Reset failed", description: err?.message || "Unknown error", variant: "destructive" });
+      },
+    });
+  };
+
+  return (
+    <DialogContent className="max-w-sm">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <LockKeyhole className="h-4 w-4 text-primary" /> Reset Password
+        </DialogTitle>
+        <p className="text-sm text-muted-foreground">{business.name} · {(business as any).email}</p>
+      </DialogHeader>
+
+      <div className="space-y-4 mt-1">
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-700 leading-relaxed">
+          This immediately replaces the owner's password. Share the new password with them securely.
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-700">New Password</label>
+          <div className="relative">
+            <Input
+              type={show ? "text" : "password"}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Min. 8 characters"
+              className="pr-10"
+              onKeyDown={(e) => e.key === "Enter" && handleReset()}
+            />
+            <button type="button" onClick={() => setShow(!show)} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
+              {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleReset}
+            disabled={reset.isPending || newPassword.length < 8}
+            className="flex-1 h-10 rounded-xl bg-primary text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
+          >
+            <LockKeyhole className="h-4 w-4" />
+            {reset.isPending ? "Resetting…" : "Reset Password"}
+          </button>
+        </div>
+      </div>
+    </DialogContent>
+  );
+}
+
 // ── M-Pesa admin dialog ────────────────────────────────────────────────────
 function MpesaDialog({ business, onClose }: { business: any; onClose: () => void }) {
   const [consumerKey,    setConsumerKey]    = useState("");
@@ -314,8 +387,9 @@ function MpesaDialog({ business, onClose }: { business: any; onClose: () => void
 export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
   const { data: businesses, isLoading } = useAdminListBusinesses();
   const [search, setSearch]             = useState("");
-  const [mpesaBusiness,  setMpesaBusiness]  = useState<any>(null);
-  const [waBusiness,     setWaBusiness]     = useState<any>(null);
+  const [mpesaBusiness,    setMpesaBusiness]    = useState<any>(null);
+  const [waBusiness,       setWaBusiness]       = useState<any>(null);
+  const [resetBusiness,    setResetBusiness]    = useState<any>(null);
 
   const charge    = useAdminChargeSubscription();
   const suspend   = useAdminSuspendBusiness();
@@ -386,6 +460,11 @@ export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
       {/* M-Pesa Dialog */}
       <Dialog open={!!mpesaBusiness} onOpenChange={(open) => !open && setMpesaBusiness(null)}>
         {mpesaBusiness && <MpesaDialog business={mpesaBusiness} onClose={() => setMpesaBusiness(null)} />}
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetBusiness} onOpenChange={(open) => !open && setResetBusiness(null)}>
+        {resetBusiness && <ResetPasswordDialog business={resetBusiness} onClose={() => setResetBusiness(null)} />}
       </Dialog>
 
       <div className="space-y-4">
@@ -489,6 +568,14 @@ export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
                       className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
                     >
                       <KeyRound className="h-3.5 w-3.5" /> M-Pesa
+                    </button>
+
+                    <button
+                      onClick={() => setResetBusiness(b)}
+                      title="Reset owner password"
+                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+                    >
+                      <LockKeyhole className="h-3.5 w-3.5" /> Reset PW
                     </button>
 
                     <button

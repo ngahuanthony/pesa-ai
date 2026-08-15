@@ -46,6 +46,7 @@ router.get("/api/admin/businesses/:businessId/whatsapp", adminRoutes.getWhatsApp
 router.post("/api/admin/businesses/:businessId/mpesa", adminRoutes.setMpesaCredentials);
 router.get("/api/admin/businesses/:businessId/mpesa", adminRoutes.getMpesaStatus);
 router.delete("/api/admin/businesses/:businessId/mpesa", adminRoutes.disconnectMpesa);
+router.post("/api/admin/businesses/:businessId/reset-password", adminRoutes.resetPassword);
 
 router.post("/api/reports", reportsRoutes.create);
 router.get("/api/admin/reports", reportsRoutes.list);

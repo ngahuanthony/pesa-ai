@@ -449,6 +449,16 @@ function getAccountById(accountId) {
   return load().accounts.find((a) => a.id === accountId);
 }
 
+function resetAccountPasswordByBusinessId(businessId, passwordHash, passwordSalt) {
+  return mutate((state) => {
+    const idx = state.accounts.findIndex((a) => a.businessId === businessId);
+    if (idx === -1) throw httpError(404, "No account found for this business");
+    state.accounts[idx].passwordHash = passwordHash;
+    state.accounts[idx].passwordSalt = passwordSalt;
+    return { ok: true };
+  });
+}
+
 // --- Sessions ------------------------------------------------------------
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -1012,6 +1022,7 @@ module.exports = {
   createAccount,
   getAccountByEmail,
   getAccountById,
+  resetAccountPasswordByBusinessId,
   createSession,
   getSession,
   deleteSession,

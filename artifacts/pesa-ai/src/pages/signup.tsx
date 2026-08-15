@@ -15,6 +15,7 @@ const signupSchema = z.object({
   // Business Basics
   businessName: z.string().min(2, "Business name is required"),
   category: z.string().min(1, "Please select a category"),
+  businessPhone: z.string().min(9, "Business phone number is required"),
   fullName: z.string().min(2, "Your full name is required"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
@@ -86,6 +87,7 @@ export default function SignupPage() {
     defaultValues: {
       businessName: "",
       category: "",
+      businessPhone: "",
       fullName: "",
       email: "",
       password: "",
@@ -112,6 +114,7 @@ export default function SignupPage() {
       data: {
         businessName: data.businessName,
         category: data.category,
+        businessPhone: data.businessPhone,
         email: data.email,
         password: data.password,
         paybillNumber: data.paymentMethod === "mpesa" ? data.paybillNumber : undefined,
@@ -124,7 +127,7 @@ export default function SignupPage() {
         stallNumber: data.stallNumber,
         publicPhone: data.publicPhone,
         nationalId: data.nationalId,
-        plan: data.plan,
+        plan: data.plan.toLowerCase(),
         consent: true,
       } as any,
     }, {
@@ -247,6 +250,19 @@ export default function SignupPage() {
                               ))}
                             </SelectContent>
                           </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="businessPhone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Business Phone Number</FormLabel>
+                          <FormControl>
+                            <Input type="tel" placeholder="e.g. 0722 123 456" {...field} />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}

@@ -82,8 +82,18 @@ function disconnectMpesa({ params, session }) {
   return db.clearMpesaCredentials(params.businessId, "admin");
 }
 
+function resetPassword({ params, body, session }) {
+  auth.requireAdmin(session);
+  const { newPassword } = body || {};
+  if (!newPassword || String(newPassword).length < 8) {
+    throw db.httpError(400, "newPassword must be at least 8 characters");
+  }
+  const { passwordHash, passwordSalt } = auth.hashPassword(newPassword);
+  return db.resetAccountPasswordByBusinessId(params.businessId, passwordHash, passwordSalt);
+}
+
 module.exports = {
   login, listBusinesses, chargeSubscription, suspendBusiness, unsuspendBusiness,
   getStats, setWhatsAppCredentials, getWhatsAppStatus,
-  setMpesaCredentials, getMpesaStatus, disconnectMpesa,
+  setMpesaCredentials, getMpesaStatus, disconnectMpesa, resetPassword,
 };
