@@ -35,11 +35,12 @@ function verifyPassword(password, passwordHash, passwordSalt) {
 // call with (null, { clear: true }) to expire/clear the cookie on logout.
 function sessionCookieHeader(token, { clear = false } = {}) {
   const name = db.SESSION_COOKIE_NAME;
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
   if (clear || !token) {
-    return `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+    return `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
   }
   const maxAgeSeconds = 30 * 24 * 60 * 60; // 30 days — matches db.js's SESSION_TTL_MS
-  return `${name}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
+  return `${name}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`;
 }
 
 function parseCookies(cookieHeader) {

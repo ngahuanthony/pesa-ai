@@ -75,7 +75,7 @@ function logout({ session }) {
 }
 
 function me({ session }) {
-  if (!session) return { status: 401, data: { authenticated: false } };
+  if (!session) return { authenticated: false };
 
   if (session.isAdmin) {
     return { data: { authenticated: true, isAdmin: true } };

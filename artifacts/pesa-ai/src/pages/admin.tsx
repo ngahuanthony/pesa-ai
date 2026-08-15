@@ -18,7 +18,6 @@ const adminLoginSchema = z.object({ password: z.string().min(1, "Password is req
 
 function AdminLogin() {
   const adminLogin = useAdminLogin();
-  const queryClient = useQueryClient();
 
   const form = useForm<z.infer<typeof adminLoginSchema>>({
     resolver: zodResolver(adminLoginSchema),
@@ -27,7 +26,10 @@ function AdminLogin() {
 
   const onSubmit = (data: z.infer<typeof adminLoginSchema>) => {
     adminLogin.mutate({ data }, {
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() }),
+      onSuccess: () => {
+        // Hard reload so the new session cookie is picked up cleanly
+        window.location.href = "/admin";
+      },
     });
   };
 
