@@ -1063,12 +1063,22 @@ module.exports = {
 
 // ── Video Scan ──────────────────────────────────────────────────────────────
 
+const SCAN_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 function createVideoScan(businessId) {
   return mutate((state) => {
     if (!state.businesses.some((b) => b.id === businessId)) {
       throw httpError(404, "Business not found");
     }
     if (!state.videoScans) state.videoScans = [];
+
+    // Purge scans older than 30 days — keeps db.json lean automatically
+    const cutoff = Date.now() - SCAN_RETENTION_MS;
+    const before = state.videoScans.length;
+    state.videoScans = state.videoScans.filter((s) => s.createdAt > cutoff);
+    const purged = before - state.videoScans.length;
+    if (purged > 0) console.log(`[db] Purged ${purged} video scan record(s) older than 30 days`);
+
     const scan = {
       id: id(),
       businessId,

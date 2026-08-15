@@ -200,8 +200,16 @@ const server = http.createServer(async (req, res) => {
     const businessId = videoUploadMatch[1];
     try {
       const session = auth.resolveSession(req);
-      if (!session) { sendJson(res, 401, { error: "Not authenticated" }); return; }
-      if (session.businessId !== businessId) { sendJson(res, 403, { error: "Not authorized for this business" }); return; }
+      if (!session) {
+        console.warn("[video-upload] 401 — no session cookie for business", businessId);
+        sendJson(res, 401, { error: "Not authenticated" });
+        return;
+      }
+      if (!session.isAdmin && session.businessId !== businessId) {
+        console.warn("[video-upload] 403 — session.businessId", session.businessId, "≠ url", businessId);
+        sendJson(res, 403, { error: "Not authorized for this business" });
+        return;
+      }
 
       // Read raw video bytes (allow up to 200 MB)
       const chunks = [];
@@ -221,7 +229,13 @@ const server = http.createServer(async (req, res) => {
         req.on("error", reject);
       });
       const videoBuffer = Buffer.concat(chunks);
-      if (videoBuffer.length === 0) { sendJson(res, 400, { error: "Empty video body" }); return; }
+      if (videoBuffer.length === 0) {
+        console.warn("[video-upload] 400 — empty body for business", businessId);
+        sendJson(res, 400, { error: "Empty video body — no data received" });
+        return;
+      }
+
+      console.log(`[video-upload] received ${(videoBuffer.length / 1024 / 1024).toFixed(1)} MB for business ${businessId}`);
 
       // Create the scan record and kick off processing in the background
       const scan = db.createVideoScan(businessId);
@@ -233,7 +247,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { scanId: scan.id });
     } catch (err) {
       const status = err.statusCode || 500;
-      if (status >= 500) console.error(err);
+      console.error("[video-upload] error for business", businessId, err.message);
       sendJson(res, status, { error: err.message || "Internal server error" });
     }
     return;

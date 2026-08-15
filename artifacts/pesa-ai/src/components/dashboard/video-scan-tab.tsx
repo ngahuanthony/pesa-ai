@@ -26,9 +26,15 @@ interface VideoScan {
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
-async function uploadVideo(businessId: string, file: File, onProgress?: (pct: number) => void): Promise<{ scanId: string }> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
+const UPLOAD_CANCELLED = "UPLOAD_CANCELLED";
+
+function startUpload(businessId: string, file: File, onProgress?: (pct: number) => void): {
+  promise: Promise<{ scanId: string }>;
+  abort: () => void;
+} {
+  let xhr: XMLHttpRequest;
+  const promise = new Promise<{ scanId: string }>((resolve, reject) => {
+    xhr = new XMLHttpRequest();
     xhr.open("POST", `/api/businesses/${businessId}/video-scan/upload`);
     xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
     xhr.withCredentials = true;
@@ -46,9 +52,11 @@ async function uploadVideo(businessId: string, file: File, onProgress?: (pct: nu
         catch { reject(new Error(`Upload failed (${xhr.status})`)); }
       }
     };
-    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.onerror  = () => reject(new Error("Network error during upload"));
+    xhr.onabort  = () => reject(new Error(UPLOAD_CANCELLED));
     xhr.send(file);
   });
+  return { promise, abort: () => xhr?.abort() };
 }
 
 async function fetchScan(businessId: string, scanId: string): Promise<VideoScan> {
@@ -155,8 +163,9 @@ function RecordView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () 
     setPhase("init");
     setErrorMsg("");
     try {
+      // 640×480 @ 10 fps is plenty for AI frame extraction and keeps uploads small (~3 MB for 90s)
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 10, max: 15 } },
         audio: false,
       });
       streamRef.current = stream;
@@ -186,7 +195,11 @@ function RecordView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () 
     const mime = ["video/mp4", "video/webm;codecs=vp8", "video/webm"].find((m) =>
       MediaRecorder.isTypeSupported(m)
     ) ?? "";
-    const mr = new MediaRecorder(streamRef.current, mime ? { mimeType: mime } : undefined);
+    // 500 kbps is plenty for AI frame extraction; keeps 90s video ≈ 3–5 MB
+    const mr = new MediaRecorder(streamRef.current, {
+      ...(mime ? { mimeType: mime } : {}),
+      videoBitsPerSecond: 500_000,
+    });
     mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     mr.onstop = () => {
       const type = mr.mimeType || "video/webm";
@@ -412,22 +425,56 @@ function UploadFileView({ onFile, onBack }: { onFile: (f: File) => void; onBack:
 
 // ── Upload-with-progress (shared after both paths) ────────────────────────────
 
-function UploadingView({ businessId, file, onUploaded }: {
+function UploadingView({ businessId, file, onUploaded, onBack }: {
   businessId: string;
   file: File;
   onUploaded: (scanId: string) => void;
+  onBack: () => void;
 }) {
-  const { toast } = useToast();
   const [progress, setProgress] = useState(0);
-  const started = useRef(false);
+  const [error, setError]       = useState<string | null>(null);
+  const started  = useRef(false);
+  const abortRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    uploadVideo(businessId, file, setProgress)
+    const { promise, abort } = startUpload(businessId, file, setProgress);
+    abortRef.current = abort;
+    promise
       .then(({ scanId }) => onUploaded(scanId))
-      .catch((err: any) => toast({ title: "Upload failed", description: err.message, variant: "destructive" }));
+      .catch((err: any) => {
+        if (err.message === UPLOAD_CANCELLED) return; // user cancelled — onBack already called
+        setError(err.message || "Upload failed");
+      });
   }, []); // eslint-disable-line
+
+  const handleCancel = () => {
+    abortRef.current?.();
+    onBack();
+  };
+
+  const handleRetry = () => {
+    setError(null);
+    setProgress(0);
+    started.current = false;
+  };
+
+  if (error) {
+    return (
+      <div className="text-center space-y-4 py-10">
+        <AlertCircle className="h-12 w-12 text-red-400 mx-auto" />
+        <div>
+          <p className="font-semibold text-foreground">Upload failed</p>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto">{error}</p>
+        </div>
+        <div className="flex gap-3 justify-center">
+          <Button variant="outline" onClick={onBack}>← Go back</Button>
+          <Button onClick={handleRetry}>Try again</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="text-center space-y-5 py-10">
@@ -443,6 +490,9 @@ function UploadingView({ businessId, file, onUploaded }: {
       <div className="w-64 h-2 bg-muted rounded-full overflow-hidden mx-auto">
         <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
       </div>
+      <Button variant="ghost" size="sm" onClick={handleCancel} className="text-muted-foreground hover:text-foreground">
+        Cancel upload
+      </Button>
     </div>
   );
 }
@@ -679,7 +729,7 @@ export function VideoScanTab() {
       {view === "choose"     && <ModeSelector onRecord={() => setView("record")} onUpload={() => setView("upload")} />}
       {view === "record"     && <RecordView onFile={handleFile} onBack={handleBack} />}
       {view === "upload"     && <UploadFileView onFile={handleFile} onBack={handleBack} />}
-      {view === "uploading"  && pendingFile && businessId && <UploadingView businessId={businessId} file={pendingFile} onUploaded={handleUploaded} />}
+      {view === "uploading"  && pendingFile && businessId && <UploadingView businessId={businessId} file={pendingFile} onUploaded={handleUploaded} onBack={handleBack} />}
       {view === "processing" && scanId && <ProcessingView businessId={businessId} scanId={scanId} onDone={handleDone} />}
       {view === "review"     && scan && scanId && <ReviewView businessId={businessId} scanId={scanId} initialDrafts={scan.productDrafts} onConfirmed={handleConfirmed} onBack={handleBack} />}
       {view === "success"    && <SuccessView count={confirmedCount} onScanAgain={handleBack} />}

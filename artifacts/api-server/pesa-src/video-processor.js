@@ -37,7 +37,9 @@ async function extractFrames(videoBuffer, scanId) {
   const tmpDir = path.join(os.tmpdir(), `pesa-scan-${scanId}`);
   fs.mkdirSync(tmpDir, { recursive: true });
 
-  const videoPath = path.join(tmpDir, "input.mp4");
+  // Preserve the actual container format so ffmpeg demuxes correctly
+  const ext = videoBuffer[0] === 0x1a && videoBuffer[1] === 0x45 ? "webm" : "mp4";
+  const videoPath = path.join(tmpDir, `input.${ext}`);
   const framesDir = path.join(tmpDir, "frames");
   fs.writeFileSync(videoPath, videoBuffer);
   fs.mkdirSync(framesDir, { recursive: true });
