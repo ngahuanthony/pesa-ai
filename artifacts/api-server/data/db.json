@@ -400,15 +400,15 @@
   "reports": [],
   "videoScans": [
     {
-      "id": "23ba0b5a-cbbc-4952-9cc2-958ceb3a655c",
+      "id": "1f986bf7-6695-40c9-ba76-88f70c0fb8ad",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
       "status": "error",
       "frames": 15,
       "productCount": 0,
       "productDrafts": [],
-      "error": "Claude API error 404: {\"type\":\"error\",\"error\":{\"type\":\"not_found_error\",\"message\":\"model: claude-haiku-3-5-20241022\"},\"request_id\":\"req_011Ce4FXQWzAJKtjtE3CgFrz\"}",
-      "createdAt": "2026-08-15T08:53:02.720Z",
-      "processedAt": "2026-08-15T08:53:15.144Z"
+      "error": "Claude API error 404: {\"type\":\"error\",\"error\":{\"type\":\"not_found_error\",\"message\":\"model: claude-3-5-sonnet-20241022\"},\"request_id\":\"req_011Ce4Gp3Bw2oPRya4bu8Spn\"}",
+      "createdAt": "2026-08-15T09:09:46.563Z",
+      "processedAt": "2026-08-15T09:10:05.233Z"
     }
   ]
 }

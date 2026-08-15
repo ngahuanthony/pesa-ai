@@ -14,11 +14,14 @@ const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+// Use Replit AI Integration proxy (no user API key needed, billed to Replit credits).
+// Falls back to a direct ANTHROPIC_API_KEY if the integration env vars are not set.
+const ANTHROPIC_API_KEY  = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+const ANTHROPIC_BASE_URL = process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL || "https://api.anthropic.com";
 
-// claude-haiku-3-5 is ~3-5x faster and ~10x cheaper than Sonnet for product detection.
-// Override with ANTHROPIC_MODEL env var if you want to test Sonnet.
-const MODEL      = process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022";
+// claude-haiku-4-5 is the fastest model available through Replit AI Integrations.
+// Override with ANTHROPIC_MODEL env var if needed.
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5";
 const MAX_FRAMES = 15;   // 15 frames covers a 90-second shop walk well
 const MAX_RETRIES = 2;   // retry Claude calls on transient errors
 
@@ -155,7 +158,7 @@ async function callClaudeWithRetry(base64Frames, attempt = 0) {
     { type: "text", text: VISION_PROMPT },
   ];
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch(`${ANTHROPIC_BASE_URL}/v1/messages`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -193,7 +196,7 @@ async function callClaudeWithRetry(base64Frames, attempt = 0) {
 
 async function analyzeFrames(base64Frames) {
   if (!ANTHROPIC_API_KEY) {
-    console.warn("[video-processor] ANTHROPIC_API_KEY not set — returning mock products");
+    console.warn("[video-processor] No Anthropic key available — returning mock products");
     return [
       { name: "Sample Product A", price: 150, description: "Mock product detected from video" },
       { name: "Sample Product B", price: 380, description: "Mock product detected from video" },
