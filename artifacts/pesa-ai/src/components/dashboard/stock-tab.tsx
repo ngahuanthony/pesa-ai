@@ -1,5 +1,6 @@
 import { Package, PlusCircle, MinusCircle, ClipboardList, History } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { StockInTab } from "./stock-in-tab";
 
 const SECTIONS = [
   {
@@ -45,6 +46,8 @@ export function StockTab() {
   const sub = location.split("/").pop(); // in | sale | take | history
 
   const active = SECTIONS.find((s) => s.slug === sub);
+
+  if (sub === "in") return <StockInTab />;
 
   if (active) {
     const { icon: Icon, title, color, bg } = active;

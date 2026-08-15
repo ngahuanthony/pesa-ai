@@ -31,6 +31,7 @@ function Router() {
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/dashboard" component={DashboardPage} />
         <Route path="/dashboard/:section" component={DashboardPage} />
+        <Route path="/dashboard/:section/:sub" component={DashboardPage} />
         <Route path="/admin" component={AdminPage} />
         <Route path="/admin/login">{() => { window.location.replace("/admin"); return null; }}</Route>
         <Route component={NotFound} />
