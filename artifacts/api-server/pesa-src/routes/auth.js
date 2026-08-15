@@ -78,19 +78,17 @@ function me({ session }) {
   if (!session) return { authenticated: false };
 
   if (session.isAdmin) {
-    return { data: { authenticated: true, isAdmin: true } };
+    return { authenticated: true, isAdmin: true };
   }
 
   const account = db.getAccountById(session.accountId);
   const business = db.getBusiness(session.businessId);
   return {
-    data: {
-      authenticated: true,
-      isAdmin: false,
-      account: { id: account.id, email: account.email },
-      business: db.sanitizeBusiness(business),
-      subscription: db.getSubscription(business.id),
-    },
+    authenticated: true,
+    isAdmin: false,
+    account: { id: account.id, email: account.email },
+    business: db.sanitizeBusiness(business),
+    subscription: db.getSubscription(business.id),
   };
 }
 
