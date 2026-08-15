@@ -1,7 +1,7 @@
 import { PublicLayout } from "@/components/layout";
 import {
   CheckCircle2, MessageSquare, Zap, ArrowRight, Package,
-  Phone, Check, Minus, ShoppingBag,
+  Phone, Check, Minus, ShoppingBag, Video, Sparkles, ScanLine,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -9,53 +9,54 @@ import { Link } from "wouter";
 const plans = [
   {
     name: "Starter",
-    tagline: "Perfect for getting started",
+    tagline: "Get your business online",
     price: "KSh 2,000",
     popular: false,
+    badge: null,
     features: [
       "WhatsApp AI salesperson",
-      "100 products",
-      "Stock management",
-      "Order tracking",
+      "Up to 100 products",
+      "10 inventory scans / month",
       "M-Pesa integration",
+      "Order tracking",
       "1 staff account",
       "Basic analytics",
     ],
-    cta: "Get started",
+    cta: "Get started free",
     href: "/signup?plan=Starter",
   },
   {
     name: "Business",
-    tagline: "For growing businesses",
-    price: "KSh 3,000",
+    tagline: "Automate your inventory",
+    price: "KSh 3,500",
     popular: true,
+    badge: "MOST POPULAR",
     features: [
       "Everything in Starter",
-      "1,000 products",
-      "AI sales assistant",
-      "3 staff accounts",
+      "Up to 1,000 products",
+      "40 inventory scans / month",
       "Offers & promotions",
       "Customer follow-up",
-      "M-Pesa integration",
-      "Better analytics",
+      "3 staff accounts",
+      "Advanced analytics",
     ],
     cta: "Start free trial",
     href: "/signup?plan=Business",
   },
   {
     name: "Pro",
-    tagline: "For high-volume merchants",
+    tagline: "Large, constantly changing catalogue",
     price: "KSh 6,000",
     popular: false,
+    badge: null,
     features: [
       "Everything in Business",
       "Unlimited products",
-      "Advanced AI",
+      "100 inventory scans / month",
       "Multiple branches",
       "10+ staff accounts",
       "Automated campaigns",
-      "Business analytics",
-      "All integrations",
+      "Priority support",
     ],
     cta: "Get started",
     href: "/signup?plan=Pro",
@@ -70,17 +71,17 @@ type TableRow = {
 };
 
 const tableRows: TableRow[] = [
-  { label: "Monthly price",       starter: "KSh 2,000",    business: "KSh 3,000",    pro: "KSh 6,000" },
-  { label: "Products",            starter: "100",           business: "1,000",         pro: "Unlimited" },
-  { label: "Staff accounts",      starter: "1",             business: "3",             pro: "10+" },
-  { label: "AI salesperson",      starter: true,            business: true,            pro: true },
-  { label: "Stock management",    starter: true,            business: true,            pro: true },
-  { label: "Orders",              starter: true,            business: true,            pro: true },
-  { label: "M-Pesa integration",  starter: true,            business: true,            pro: true },
-  { label: "WhatsApp usage",      starter: "Usage-based",   business: "Usage-based",   pro: "Usage-based" },
-  { label: "Offers & promotions", starter: false,           business: true,            pro: true },
-  { label: "Automated campaigns", starter: false,           business: false,           pro: true },
-  { label: "Multiple branches",   starter: false,           business: false,           pro: true },
+  { label: "Monthly price",         starter: "KSh 2,000",    business: "KSh 3,500",    pro: "KSh 6,000" },
+  { label: "Products",              starter: "100",           business: "1,000",         pro: "Unlimited" },
+  { label: "Inventory scans / month", starter: "10",            business: "40",            pro: "100" },
+  { label: "Staff accounts",        starter: "1",             business: "3",             pro: "10+" },
+  { label: "AI salesperson",        starter: true,            business: true,            pro: true },
+  { label: "M-Pesa integration",    starter: true,            business: true,            pro: true },
+  { label: "Orders",                starter: true,            business: true,            pro: true },
+  { label: "WhatsApp usage",        starter: "Usage-based",   business: "Usage-based",   pro: "Usage-based" },
+  { label: "Offers & promotions",   starter: false,           business: true,            pro: true },
+  { label: "Automated campaigns",   starter: false,           business: false,           pro: true },
+  { label: "Multiple branches",     starter: false,           business: false,           pro: true },
 ];
 
 function CellVal({ val, highlight }: { val: string | boolean; highlight?: boolean }) {
@@ -303,8 +304,8 @@ export default function LandingPage() {
           </div>
           <div className="grid md:grid-cols-3 gap-10 max-w-3xl mx-auto">
             {[
-              { n: "01", title: "Add your products",     desc: "Upload your inventory with names and prices. Your shop instantly learns your catalog." },
-              { n: "02", title: "Go live on WhatsApp",   desc: "Connect your number. Your shop starts chatting with customers like a pro." },
+              { n: "01", title: "Build your catalogue",   desc: "Add products manually — or point your phone at your shop and let AI do it in 60 seconds." },
+              { n: "02", title: "Go live on WhatsApp",    desc: "Connect your number. Your shop starts chatting with customers like a pro." },
               { n: "03", title: "Watch the sales roll in", desc: "Customers order and pay via M-Pesa — all through WhatsApp, without you lifting a finger." },
             ].map(({ n, title, desc }) => (
               <div key={n} className="flex flex-col items-center text-center space-y-4">
@@ -342,16 +343,100 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── VIDEO SCAN SHOWCASE ──────────────────────────────────── */}
+      <section className="w-full py-16 md:py-24 bg-[#0d3d26] overflow-hidden">
+        <div className="container px-4 md:px-6 mx-auto max-w-5xl">
+
+          {/* Centred header */}
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 rounded-full border border-green-500/40 bg-green-500/15 px-3 py-1 text-sm font-semibold text-green-400 mb-5">
+              <Video className="h-3.5 w-3.5" /> New — AI Inventory Scanning
+            </div>
+            <h2 className="text-4xl font-extrabold text-white sm:text-5xl leading-tight">
+              Walk your shop once.<br />
+              <span className="text-green-400">Your catalogue builds itself.</span>
+            </h2>
+            <p className="text-white/65 text-base mt-4 max-w-xl mx-auto leading-relaxed">
+              Point your phone at your shelves and record a 60-second video. Our AI reads every product, price tag, and label — and adds them to your shop automatically. No typing. No spreadsheets. Ever.
+            </p>
+            {/* Free trial CTA — the hook */}
+            <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center items-center">
+              <Link
+                href="/signup"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-green-500 text-white px-8 text-sm font-bold hover:bg-green-400 transition-all gap-2 shadow-lg shadow-green-900/40"
+              >
+                <Sparkles className="h-4 w-4" /> Try your first scan free
+              </Link>
+              <p className="text-white/40 text-sm">No credit card · Takes 2 minutes</p>
+            </div>
+          </div>
+
+          {/* Three steps */}
+          <div className="grid md:grid-cols-3 gap-4 mb-10">
+            {[
+              {
+                icon: Video,
+                n: "1",
+                title: "Record",
+                desc: "Walk through your shelves with your phone. 30–60 seconds is enough for a full shop.",
+                color: "bg-blue-500/20 text-blue-300",
+              },
+              {
+                icon: Sparkles,
+                n: "2",
+                title: "AI reads everything",
+                desc: "Our vision model scans every frame — product names, prices, quantities, even handwritten tags.",
+                color: "bg-yellow-400/20 text-yellow-300",
+              },
+              {
+                icon: ScanLine,
+                n: "3",
+                title: "Products appear",
+                desc: "Review the list, make any edits, and publish. Your WhatsApp shop now knows your full catalogue.",
+                color: "bg-green-500/20 text-green-300",
+              },
+            ].map(({ icon: Icon, n, title, desc, color }) => (
+              <div key={n} className="rounded-2xl bg-white/[0.06] border border-white/10 px-5 py-5 flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${color} flex-shrink-0`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Step {n}</span>
+                    <p className="text-sm font-bold text-white leading-none mt-0.5">{title}</p>
+                  </div>
+                </div>
+                <p className="text-sm text-white/60 leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* What happens after the free scan — upgrade nudge */}
+          <div className="rounded-2xl bg-white/[0.05] border border-white/10 px-6 py-5 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-white mb-1">After your free scan</p>
+              <p className="text-sm text-white/60">You'll see exactly how it works — then choose a plan that fits your shop size. Starter gets 10 scans/month. Business gets 40. No pressure, no auto-charges.</p>
+            </div>
+            <div className="flex-shrink-0 flex gap-2 text-sm font-semibold">
+              <span className="rounded-full bg-white/10 border border-white/15 px-4 py-2 text-white/70">Starter · 10/mo</span>
+              <span className="rounded-full bg-green-500/20 border border-green-500/30 px-4 py-2 text-green-300">Business · 40/mo</span>
+              <span className="rounded-full bg-white/10 border border-white/15 px-4 py-2 text-white/70">Pro · 100/mo</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
       {/* ── PRICING ──────────────────────────────────────────────── */}
       <section id="pricing" className="w-full py-16 md:py-24 bg-[#0d3d26]">
         <div className="container px-4 md:px-6 mx-auto max-w-5xl">
           {/* Header */}
           <div className="text-center mb-4">
-            <h2 className="text-3xl font-bold text-white sm:text-4xl">Simple, transparent pricing</h2>
-            <p className="text-white/70 mt-2">
-              All plans include a <span className="text-green-400 font-semibold">5-day free trial</span>. No credit card required.
+            <h2 className="text-3xl font-bold text-white sm:text-4xl">Grow at your own pace</h2>
+            <p className="text-white/70 mt-2 max-w-xl mx-auto">
+              Start simple. Automate as you grow. Video Scans are included in Business &amp; Pro — priced around actual usage, not arbitrary limits.
             </p>
-            <p className="text-white/50 text-sm mt-1">+ WhatsApp usage billed separately based on Meta's conversation rates</p>
+            <p className="text-white/40 text-sm mt-2">5-day free trial · No credit card required · WhatsApp usage billed separately by Meta</p>
           </div>
 
           {/* Plan cards */}

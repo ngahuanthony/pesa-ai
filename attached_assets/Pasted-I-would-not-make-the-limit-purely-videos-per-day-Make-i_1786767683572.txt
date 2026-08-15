@@ -1,0 +1,112 @@
+I would not make the limit purely “videos per day.” Make it a monthly Scan Credits allowance, with a daily protection limit.
+
+Recommended structure
+Package	Video scans / month	Daily soft limit	Best for
+Starter	10	2/day	Small vendors
+Business	40	5/day	Regular shops
+Pro	100	10/day	Larger inventory
+Enterprise	300+	Custom	Large businesses
+
+A scan could have a maximum duration, e.g. 2 minutes, so one customer can't upload a 45-minute video and consume enormous processing resources.
+
+🔥 Even better: automatic upgrade based on usage
+
+Don't force the vendor to manually choose a package.
+
+For example:
+
+Starter — 10 scans
+
+8/10 scans used
+2 scans remaining
+
+When they attempt scan #11:
+
+🚀 You've reached your Starter scan limit.
+
+Upgrade to Business to get 40 inventory scans/month.
+
+Upgrade
+
+This creates a very natural upgrade path.
+
+But I would make one important change
+
+Don't automatically charge/upgrade someone without their approval.
+
+Instead:
+
+You've exceeded your current plan. Move to Business?
+
+Then they approve the upgrade.
+
+You can, however, automatically recommend the next package based on their usage.
+
+💡 The really clever pricing model
+
+Eventually, don't think of it as:
+
+“You get 40 videos.”
+
+Think:
+
+“You get 40 AI Inventory Scans.”
+
+Because later you could have different scan types:
+
+📹 Video Scan = 1 credit
+📦 Product Scan = 0.25 credit
+📄 Bulk Image Scan = 0.5 credit
+🔄 Stock Re-scan = 1 credit
+
+That gives you much more flexibility.
+
+Example
+
+A vendor has 40 Scan Credits.
+
+They use:
+
+10 shop scans
+
+20 product scans
+10 image scans
+
+The system calculates the usage accordingly.
+
+I would also put a fair-use ceiling on each scan
+
+For example:
+
+Maximum video: 90 seconds or 2 minutes
+
+Maximum resolution: automatically compress before processing.
+
+Maximum file size: perhaps 50–100 MB after compression.
+
+This is important because your costs are driven much more by video length, frames processed, AI calls and storage than simply the number of uploads.
+
+The Pesa AI pricing engine could therefore track:
+Business
+   ↓
+Plan
+   ↓
+Scan Credits
+   ↓
+Video duration
+   ↓
+Frames processed
+   ↓
+AI processing cost
+   ↓
+Usage
+
+Then your dashboard can show:
+
+AI Inventory Usage
+
+🟢 27 / 40 scans used
+
+13 scans remaining
+
+Your usage this month is normal.
