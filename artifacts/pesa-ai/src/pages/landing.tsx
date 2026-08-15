@@ -308,88 +308,120 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── VIDEO SCAN — the hero feature ────────────────────────── */}
-      <section className="w-full py-20 md:py-28 bg-[#0d3d26] overflow-hidden">
+      {/* ── THREE STEPS — scan integrated into step 01 ───────────── */}
+      <section className="w-full py-20 md:py-28 bg-[#050f09]">
         <div className="container px-4 md:px-6 mx-auto max-w-5xl">
+
           {/* Header */}
-          <div className="text-center mb-14">
-            <div className="inline-flex items-center gap-2 rounded-full border border-green-400/30 bg-green-400/10 px-4 py-1.5 text-sm font-semibold text-green-300 mb-6">
-              <Video className="h-3.5 w-3.5" /> AI Inventory Scanning — New
-            </div>
-            <h2 className="text-4xl font-extrabold text-white sm:text-5xl leading-tight">
-              Walk your shop once.<br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-300 to-emerald-200">
-                Your catalogue builds itself.
-              </span>
-            </h2>
-            <p className="text-white/60 text-base mt-5 max-w-lg mx-auto leading-relaxed">
-              Record a 60-second video. Our AI reads every product, price tag, and label — and adds them to your shop automatically.
-            </p>
-            <Link
-              href="/signup"
-              className="mt-8 inline-flex h-12 items-center justify-center rounded-full bg-green-400 text-[#0d3d26] px-8 text-sm font-bold hover:bg-green-300 transition-all gap-2 shadow-lg shadow-green-900/50"
-            >
-              <Sparkles className="h-4 w-4" /> Try your first scan free
-            </Link>
-            <p className="text-white/30 text-xs mt-3">No credit card · Takes 2 minutes</p>
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-white sm:text-4xl">Three steps to your first sale</h2>
+            <p className="text-white/40 mt-3 text-sm">From zero to selling on WhatsApp — in minutes.</p>
           </div>
 
-          {/* Three steps */}
-          <div className="grid md:grid-cols-3 gap-4 mb-8">
-            {[
-              { icon: Video,    n: "1", title: "Record",               desc: "Walk your shelves. 30–60 seconds is enough.",                             color: "bg-blue-500/20 text-blue-300" },
-              { icon: Sparkles, n: "2", title: "AI reads everything",  desc: "Every product name, price, and quantity — detected automatically.",         color: "bg-yellow-400/20 text-yellow-300" },
-              { icon: ScanLine, n: "3", title: "Catalogue ready",      desc: "Review, edit if needed, publish — your shop knows your full stock.",        color: "bg-green-400/20 text-green-300" },
-            ].map(({ icon: Icon, n, title, desc, color }) => (
-              <div key={n} className="rounded-2xl bg-white/[0.06] border border-white/10 px-5 py-5 flex flex-col gap-3">
+          {/* ── Step 01: hero card with scan flow ── */}
+          <div className="relative rounded-3xl border border-green-500/20 bg-gradient-to-br from-[#0d2d18] to-[#071a10] p-8 md:p-10 mb-5 overflow-hidden">
+            <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-green-500/8 blur-3xl pointer-events-none" />
+            <div className="relative grid md:grid-cols-2 gap-10 items-center">
+
+              {/* Left copy */}
+              <div className="flex flex-col gap-5">
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${color} flex-shrink-0`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-white/25 uppercase tracking-widest">Step {n}</span>
-                    <p className="text-sm font-bold text-white leading-none mt-0.5">{title}</p>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full border border-green-500/40 bg-green-500/10 text-green-400 text-sm font-extrabold">01</span>
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-green-500/25 bg-green-500/10 px-3 py-1 text-[11px] font-bold text-green-400 uppercase tracking-widest">
+                    <Video className="h-3 w-3" /> AI Inventory Scanning
                   </div>
                 </div>
-                <p className="text-sm text-white/55 leading-relaxed">{desc}</p>
+                <h3 className="text-2xl font-extrabold text-white leading-snug">
+                  Build your catalogue —<br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-300 to-emerald-200">
+                    point and record.
+                  </span>
+                </h3>
+                <p className="text-white/55 text-sm leading-relaxed">
+                  Walk through your shelves with your phone. Our AI watches every frame, reads every product name, price, and label — and builds your catalogue automatically. No typing. No spreadsheets.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <Link
+                    href="/signup"
+                    className="inline-flex h-11 items-center justify-center rounded-full bg-green-500 text-white px-7 text-sm font-bold hover:bg-green-400 transition-all gap-2 w-fit shadow-lg shadow-green-900/30"
+                  >
+                    <Sparkles className="h-4 w-4" /> Try your first scan free
+                  </Link>
+                  <p className="text-white/30 text-xs ml-1">No credit card · Takes 2 minutes</p>
+                </div>
               </div>
-            ))}
+
+              {/* Right: scan mini-flow */}
+              <div className="flex flex-col gap-2.5">
+                {([
+                  { icon: Video,    n: "1", title: "Record",              desc: "Walk your shelves with your phone. 30–60 seconds is enough.",           color: "bg-blue-500/20 text-blue-300",    border: "border-blue-500/15" },
+                  { icon: Sparkles, n: "2", title: "AI reads everything", desc: "Every product name, price, and label detected automatically.",           color: "bg-yellow-400/15 text-yellow-300", border: "border-yellow-400/15" },
+                  { icon: ScanLine, n: "3", title: "Catalogue ready",     desc: "Review, edit if needed, and publish. Your shop knows your full stock.",  color: "bg-green-400/15 text-green-300",   border: "border-green-400/15" },
+                ] as const).map(({ icon: Icon, n, title, desc, color, border }, i) => (
+                  <div key={n} className="relative">
+                    {i < 2 && <div className="absolute left-[18px] top-full h-2.5 w-px bg-white/10 z-10" />}
+                    <div className={`flex items-start gap-3 rounded-xl bg-white/[0.04] border ${border} px-4 py-3.5`}>
+                      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${color} flex-shrink-0 mt-0.5`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-white">{title}</p>
+                        <p className="text-xs text-white/45 leading-relaxed mt-0.5">{desc}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Plan teaser */}
+                <div className="flex flex-wrap items-center gap-2 mt-1 pt-2 border-t border-white/5">
+                  <span className="text-[11px] text-white/25">After your free scan, choose a plan:</span>
+                  {[
+                    { label: "Starter · 10/mo",  cls: "text-white/45 border-white/10  bg-white/[0.03]" },
+                    { label: "Business · 40/mo", cls: "text-green-300 border-green-500/25 bg-green-500/8" },
+                    { label: "Pro · 100/mo",     cls: "text-white/45 border-white/10  bg-white/[0.03]" },
+                  ].map(({ label, cls }) => (
+                    <span key={label} className={`rounded-full border text-[11px] font-semibold px-3 py-1 ${cls}`}>{label}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* After the free scan — upgrade clarity */}
-          <div className="rounded-2xl bg-white/[0.05] border border-white/10 px-6 py-5 flex flex-col sm:flex-row items-start sm:items-center gap-5">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-white mb-1">After your free scan</p>
-              <p className="text-sm text-white/50">Choose a plan that fits your shop. No auto-charges — you decide when to upgrade.</p>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs font-semibold flex-shrink-0">
-              <span className="rounded-full bg-white/8 border border-white/10 px-4 py-2 text-white/60">Starter · 10/mo</span>
-              <span className="rounded-full bg-green-500/20 border border-green-500/30 px-4 py-2 text-green-300">Business · 40/mo</span>
-              <span className="rounded-full bg-white/8 border border-white/10 px-4 py-2 text-white/60">Pro · 100/mo</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── HOW IT WORKS ─────────────────────────────────────────── */}
-      <section className="w-full py-20 bg-[#050f09]">
-        <div className="container px-4 md:px-6 mx-auto max-w-4xl">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl font-bold text-white sm:text-4xl">Up in three steps</h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
+          {/* ── Steps 02 + 03 ── */}
+          <div className="grid sm:grid-cols-2 gap-5">
             {[
-              { n: "01", title: "Build your catalogue",    desc: "Add products manually or record a 60-second video scan — AI does the rest.",       col: "text-blue-400" },
-              { n: "02", title: "Connect WhatsApp",        desc: "Link your business number. Your AI starts chatting with customers immediately.",    col: "text-purple-400" },
-              { n: "03", title: "Sales on autopilot",      desc: "Orders placed, M-Pesa collected, stock updated — without you lifting a finger.",   col: "text-green-400" },
-            ].map(({ n, title, desc, col }) => (
-              <div key={n} className="flex flex-col items-center text-center gap-4">
-                <div className={`text-4xl font-extrabold ${col} opacity-60`}>{n}</div>
-                <h3 className="text-base font-bold text-white">{title}</h3>
-                <p className="text-white/50 text-sm leading-relaxed">{desc}</p>
+              {
+                n: "02",
+                icon: MessageSquare,
+                title: "Connect WhatsApp",
+                desc: "Link your business number. Your AI starts chatting with customers immediately — answering questions, taking orders, and sending M-Pesa payment instructions.",
+                numCol: "text-purple-400 border-purple-500/30 bg-purple-500/8",
+                iconBg: "bg-purple-500/15 text-purple-400",
+              },
+              {
+                n: "03",
+                icon: Zap,
+                title: "Watch the sales roll in",
+                desc: "Orders placed, M-Pesa collected, stock updated — automatically, around the clock. You just pack and deliver.",
+                numCol: "text-green-400 border-green-500/30 bg-green-500/8",
+                iconBg: "bg-green-500/15 text-green-400",
+              },
+            ].map(({ n, icon: Icon, title, desc, numCol, iconBg }) => (
+              <div key={n} className="flex flex-col gap-5 rounded-2xl bg-white/[0.03] border border-white/8 p-7">
+                <div className="flex items-center gap-3">
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-full border text-sm font-extrabold ${numCol}`}>{n}</span>
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${iconBg}`}>
+                    <Icon className="h-4 w-4" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white mb-1.5">{title}</h3>
+                  <p className="text-sm text-white/50 leading-relaxed">{desc}</p>
+                </div>
               </div>
             ))}
           </div>
+
         </div>
       </section>
 
