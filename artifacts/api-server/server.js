@@ -41,8 +41,9 @@ router.post("/api/admin/businesses/:businessId/subscription/charge", adminRoutes
 router.post("/api/admin/businesses/:businessId/suspend", adminRoutes.suspendBusiness);
 router.post("/api/admin/businesses/:businessId/unsuspend", adminRoutes.unsuspendBusiness);
 router.get("/api/admin/stats", adminRoutes.getStats);
+router.get("/api/admin/platform-defaults",                adminRoutes.getPlatformDefaults);
 router.post("/api/admin/businesses/:businessId/whatsapp", adminRoutes.setWhatsAppCredentials);
-router.get("/api/admin/businesses/:businessId/whatsapp", adminRoutes.getWhatsAppStatus);
+router.get("/api/admin/businesses/:businessId/whatsapp",  adminRoutes.getWhatsAppStatus);
 router.post("/api/admin/businesses/:businessId/mpesa", adminRoutes.setMpesaCredentials);
 router.get("/api/admin/businesses/:businessId/mpesa", adminRoutes.getMpesaStatus);
 router.delete("/api/admin/businesses/:businessId/mpesa", adminRoutes.disconnectMpesa);

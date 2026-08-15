@@ -49,9 +49,28 @@ function getStats({ session }) {
   return db.getAdminStats();
 }
 
+// GET /api/admin/platform-defaults
+// Returns the platform-level WABA ID and whether the system token is configured.
+// The token itself is never sent to the browser — only a boolean flag.
+function getPlatformDefaults({ session }) {
+  auth.requireAdmin(session);
+  return {
+    wabaId:   process.env.WHATSAPP_PLATFORM_WABA_ID || "",
+    hasToken: !!process.env.WHATSAPP_PLATFORM_TOKEN,
+  };
+}
+
 function setWhatsAppCredentials({ params, body, session }) {
   auth.requireAdmin(session);
-  const { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone } = body || {};
+  let { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone } = body || {};
+  // If admin left token blank, fall back to the platform-level system user token.
+  if (!accessToken && process.env.WHATSAPP_PLATFORM_TOKEN) {
+    accessToken = process.env.WHATSAPP_PLATFORM_TOKEN;
+  }
+  // If admin left WABA ID blank, fall back to platform default.
+  if (!wabaId && process.env.WHATSAPP_PLATFORM_WABA_ID) {
+    wabaId = process.env.WHATSAPP_PLATFORM_WABA_ID;
+  }
   return db.setWhatsAppCredentials(params.businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone });
 }
 
@@ -94,6 +113,6 @@ function resetPassword({ params, body, session }) {
 
 module.exports = {
   login, listBusinesses, chargeSubscription, suspendBusiness, unsuspendBusiness,
-  getStats, setWhatsAppCredentials, getWhatsAppStatus,
+  getStats, getPlatformDefaults, setWhatsAppCredentials, getWhatsAppStatus,
   setMpesaCredentials, getMpesaStatus, disconnectMpesa, resetPassword,
 };

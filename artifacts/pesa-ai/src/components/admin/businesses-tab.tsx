@@ -31,19 +31,31 @@ function WhatsAppDialog({ business, onClose }: { business: any; onClose: () => v
   const [saving,        setSaving]        = useState(false);
   const [status,        setStatus]        = useState<any>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
+  const [platformToken, setPlatformToken] = useState(false);   // server has WHATSAPP_PLATFORM_TOKEN set
+  const [overrideToken, setOverrideToken] = useState(false);   // admin wants to enter a custom token
   const { toast } = useToast();
   const qc = useQueryClient();
 
   const load = async () => {
     setLoadingStatus(true);
     try {
-      const res = await fetch(`/api/admin/businesses/${business.id}/whatsapp`, { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
+      const [statusRes, defaultsRes] = await Promise.all([
+        fetch(`/api/admin/businesses/${business.id}/whatsapp`, { credentials: "include" }),
+        fetch(`/api/admin/platform-defaults`, { credentials: "include" }),
+      ]);
+      if (statusRes.ok) {
+        const data = await statusRes.json();
         setStatus(data);
         if (data.requestedPhone) setWaPhone(data.requestedPhone);
-        if (data.wabaId)         setWabaId(data.wabaId);
         if (data.displayName)    setDisplayName(data.displayName);
+        // Pre-fill WABA ID: prefer existing vendor value, fall back to platform default
+        if (data.wabaId) setWabaId(data.wabaId);
+      }
+      if (defaultsRes.ok) {
+        const defaults = await defaultsRes.json();
+        setPlatformToken(defaults.hasToken);
+        // Only use platform WABA ID if vendor doesn't already have one set
+        if (defaults.wabaId) setWabaId((prev) => prev || defaults.wabaId);
       }
     } finally { setLoadingStatus(false); }
   };
@@ -124,31 +136,48 @@ function WhatsAppDialog({ business, onClose }: { business: any; onClose: () => v
         {/* Form */}
         <div className="space-y-3">
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Phone Number</label>
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Vendor Phone Number</label>
             <Input value={waPhone} onChange={(e) => setWaPhone(e.target.value)} placeholder="e.g. 0722542810" className="bg-gray-50 h-10" />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Phone Number ID</label>
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Phone Number ID <span className="font-normal text-gray-400 normal-case">(from Meta)</span></label>
             <Input value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} placeholder="e.g. 1234567890" className="bg-gray-50 h-10" />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">WABA ID</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">WABA ID</label>
+              {wabaId && <span className="text-[10px] text-emerald-600 font-medium">✓ pre-filled</span>}
+            </div>
             <Input value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="e.g. 0987654321" className="bg-gray-50 h-10" />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Permanent Access Token</label>
-            <div className="relative">
-              <Input
-                type={showToken ? "text" : "password"}
-                value={accessToken}
-                onChange={(e) => setAccessToken(e.target.value)}
-                placeholder="EAAxxxxxxxxx..."
-                className="bg-gray-50 h-10 pr-10"
-              />
-              <button type="button" onClick={() => setShowToken(!showToken)} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
-                {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Access Token</label>
+              {platformToken && !overrideToken && (
+                <button type="button" onClick={() => setOverrideToken(true)} className="text-[10px] text-blue-500 hover:text-blue-600 font-medium">
+                  use different token
+                </button>
+              )}
             </div>
+            {platformToken && !overrideToken ? (
+              <div className="flex items-center gap-2 h-10 rounded-lg border border-emerald-200 bg-emerald-50 px-3">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                <span className="text-sm text-emerald-700 font-medium">Platform token configured</span>
+              </div>
+            ) : (
+              <div className="relative">
+                <Input
+                  type={showToken ? "text" : "password"}
+                  value={accessToken}
+                  onChange={(e) => setAccessToken(e.target.value)}
+                  placeholder="EAAxxxxxxxxx…"
+                  className="bg-gray-50 h-10 pr-10"
+                />
+                <button type="button" onClick={() => setShowToken(!showToken)} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
+                  {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            )}
           </div>
           <div className="space-y-1">
             <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Display Name <span className="font-normal text-gray-400">(optional)</span></label>
@@ -162,7 +191,7 @@ function WhatsAppDialog({ business, onClose }: { business: any; onClose: () => v
           </button>
           <button
             onClick={activate}
-            disabled={saving || !phoneNumberId || !wabaId || !accessToken}
+            disabled={saving || !phoneNumberId || !wabaId || (!platformToken && !accessToken)}
             className="flex-1 h-10 rounded-xl bg-primary text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
           >
             <CheckCircle2 className="h-4 w-4" />
