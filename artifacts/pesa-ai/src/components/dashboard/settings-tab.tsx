@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const CATEGORIES = [
   "Retail & Fashion",
   "Electronics & Gadgets",
+  "Mobile Phone Accessories",
+  "Computers & Laptops",
   "Beauty & Cosmetics",
   "Food & Beverages",
   "Home & Furniture",
@@ -18,9 +20,23 @@ const CATEGORIES = [
 ];
 
 const BANKS = [
-  "KCB Bank", "Equity Bank", "Co-operative Bank", "NCBA Bank", "Absa Bank Kenya",
-  "Standard Chartered", "Diamond Trust Bank", "Family Bank", "I&M Bank",
-  "Stanbic Bank", "Sidian Bank", "Prime Bank", "Gulf African Bank", "HFC Bank", "Faulu Bank",
+  "KCB Bank",
+  "Equity Bank",
+  "Co-operative Bank",
+  "NCBA Bank",
+  "Absa Bank Kenya",
+  "Standard Chartered",
+  "I&M Bank",
+  "Diamond Trust Bank (DTB)",
+  "Family Bank",
+  "Stanbic Bank",
+  "Prime Bank",
+  "Sidian Bank",
+  "Gulf African Bank",
+  "HF Group",
+  "Faulu Bank",
+  "Postbank",
+  "Other",
 ];
 
 function Section({
@@ -182,7 +198,7 @@ export function SettingsTab() {
           <label className="text-sm font-medium text-foreground">Category</label>
           <Select value={category} onValueChange={setCategory}>
             <SelectTrigger className="w-full"><SelectValue placeholder="What type of business?" /></SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-52 overflow-y-auto">
               {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -271,7 +287,7 @@ export function SettingsTab() {
               <label className="text-sm font-medium text-foreground">Your Bank</label>
               <Select value={bankName} onValueChange={setBankName}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Select your bank…" /></SelectTrigger>
-                <SelectContent>{BANKS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                <SelectContent className="max-h-52 overflow-y-auto">{BANKS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">

@@ -21,6 +21,11 @@ const signupSchema = z.object({
   // Payment
   paymentMethod: z.enum(["mpesa", "bank"]),
   paybillNumber: z.string().optional(),
+  mpesaType: z.enum(["till", "paybill"]).optional(),
+  bankName: z.string().optional(),
+  bankAccountNumber: z.string().optional(),
+  bankAccountName: z.string().optional(),
+  bankBranch: z.string().optional(),
   // Trust & Verification (all optional)
   buildingName: z.string().optional(),
   stallNumber: z.string().optional(),
@@ -29,6 +34,26 @@ const signupSchema = z.object({
   // Plan
   plan: z.enum(["Starter", "Business", "Pro"]),
 });
+
+const KENYAN_BANKS = [
+  "KCB Bank",
+  "Equity Bank",
+  "Co-operative Bank",
+  "NCBA Bank",
+  "Absa Bank Kenya",
+  "Standard Chartered",
+  "I&M Bank",
+  "Diamond Trust Bank (DTB)",
+  "Family Bank",
+  "Stanbic Bank",
+  "Prime Bank",
+  "Sidian Bank",
+  "Gulf African Bank",
+  "HF Group",
+  "Faulu Bank",
+  "Postbank",
+  "Other",
+];
 
 const CATEGORIES = [
   "Retail & Fashion",
@@ -65,7 +90,12 @@ export default function SignupPage() {
       email: "",
       password: "",
       paymentMethod: "mpesa",
+      mpesaType: "till",
       paybillNumber: "",
+      bankName: "",
+      bankAccountNumber: "",
+      bankAccountName: "",
+      bankBranch: "",
       buildingName: "",
       stallNumber: "",
       publicPhone: "",
@@ -75,6 +105,7 @@ export default function SignupPage() {
   });
 
   const paymentMethod = form.watch("paymentMethod");
+  const mpesaType     = form.watch("mpesaType");
 
   const onSubmit = (data: z.infer<typeof signupSchema>) => {
     signup.mutate({
@@ -84,6 +115,10 @@ export default function SignupPage() {
         email: data.email,
         password: data.password,
         paybillNumber: data.paymentMethod === "mpesa" ? data.paybillNumber : undefined,
+        bankName: data.paymentMethod === "bank" ? data.bankName : undefined,
+        bankAccountNumber: data.paymentMethod === "bank" ? data.bankAccountNumber : undefined,
+        bankAccountName: data.paymentMethod === "bank" ? data.bankAccountName : undefined,
+        bankBranch: data.paymentMethod === "bank" ? data.bankBranch : undefined,
         fullName: data.fullName,
         buildingName: data.buildingName,
         stallNumber: data.stallNumber,
@@ -206,7 +241,7 @@ export default function SignupPage() {
                                 <SelectValue placeholder="Select a category" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="max-h-52 overflow-y-auto">
                               {CATEGORIES.map((c) => (
                                 <SelectItem key={c} value={c}>{c}</SelectItem>
                               ))}
@@ -325,24 +360,140 @@ export default function SignupPage() {
                     )}
                   />
 
-                  {/* M-Pesa number (conditional) */}
+                  {/* M-Pesa fields */}
                   {paymentMethod === "mpesa" && (
-                    <FormField
-                      control={form.control}
-                      name="paybillNumber"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Your M-Pesa Till / Paybill Number</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g. 5557890 or 123456" {...field} />
-                          </FormControl>
-                          <FormDescription className="text-xs text-muted-foreground">
-                            Customers will pay to this number. Enter a Till Number or Paybill Number.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="space-y-4">
+                      {/* Till vs Paybill toggle */}
+                      <FormField
+                        control={form.control}
+                        name="mpesaType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>M-Pesa Number Type</FormLabel>
+                            <div className="grid grid-cols-2 gap-3">
+                              {[
+                                { value: "till",    label: "Till Number",    desc: "Lipa Na M-Pesa Buy Goods" },
+                                { value: "paybill", label: "Paybill Number", desc: "Lipa Na M-Pesa Pay Bill" },
+                              ].map(({ value, label, desc }) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() => field.onChange(value)}
+                                  className={`flex items-center gap-3 rounded-xl border-2 p-3 text-left transition-all ${
+                                    field.value === value
+                                      ? "border-primary bg-primary/5"
+                                      : "border-border bg-white hover:border-primary/40"
+                                  }`}
+                                >
+                                  <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                                    field.value === value ? "border-primary" : "border-muted-foreground/40"
+                                  }`}>
+                                    {field.value === value && <span className="h-2 w-2 rounded-full bg-primary" />}
+                                  </span>
+                                  <div>
+                                    <p className="font-semibold text-sm text-foreground">{label}</p>
+                                    <p className="text-xs text-muted-foreground">{desc}</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="paybillNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {mpesaType === "paybill" ? "Paybill Number" : "Till Number"}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder={mpesaType === "paybill" ? "e.g. 123456" : "e.g. 5557890"}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormDescription className="text-xs text-muted-foreground">
+                              Customers will send money to this number directly. Funds go straight to you.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  {/* Bank Account fields */}
+                  {paymentMethod === "bank" && (
+                    <div className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="bankName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Bank Name</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select your bank" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="max-h-52 overflow-y-auto">
+                                {KENYAN_BANKS.map((b) => (
+                                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="bankAccountNumber"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Account Number</FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g. 1234567890" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="bankAccountName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Account Holder Name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Name on the account" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="bankBranch"
+                          render={({ field }) => (
+                            <FormItem className="md:col-span-2">
+                              <FormLabel>Branch <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g. Westlands Branch" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+                        💡 Bank transfers may take 1–3 business days to reflect. M-Pesa is faster for instant payments.
+                      </p>
+                    </div>
                   )}
                 </div>
 
