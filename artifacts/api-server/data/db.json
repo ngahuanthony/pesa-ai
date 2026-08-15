@@ -1,6 +1,93 @@
 {
   "businesses": [
     {
+      "id": "65632bc3-b18a-4ea1-924c-3ffe8f01a862",
+      "name": "Test Shop",
+      "category": "Retail & Fashion",
+      "personaName": "Test Shop AI",
+      "paybillNumber": null,
+      "whatsappPhoneNumberId": null,
+      "whatsappVerifyToken": "cecda333439b66883227986a",
+      "buildingName": null,
+      "shopNumber": null,
+      "publicPhone": null,
+      "idOrKraPin": null,
+      "verifiedShop": false,
+      "createdAt": "2026-08-13T06:22:51.765Z"
+    },
+    {
+      "id": "3852cd7d-293d-47f9-9e80-850a43273020",
+      "name": "Demo Shop",
+      "category": "Retail & Fashion",
+      "phone": "",
+      "ownerName": "Demo Owner",
+      "personaName": "Demo Shop AI",
+      "personaInstructions": null,
+      "paymentMethod": null,
+      "bankName": null,
+      "bankAccountNumber": null,
+      "paybillNumber": null,
+      "whatsappPhoneNumberId": null,
+      "whatsappVerifyToken": "0fdad8993699d9af5aec06c9",
+      "whatsappRequestedPhone": null,
+      "whatsappWabaId": null,
+      "whatsappDisplayName": null,
+      "buildingName": null,
+      "shopNumber": null,
+      "publicPhone": null,
+      "idOrKraPin": null,
+      "verifiedShop": false,
+      "createdAt": "2026-08-15T00:54:15.091Z"
+    },
+    {
+      "id": "78d78765-e8f3-4632-a02b-74584585f896",
+      "name": "Test Shop",
+      "category": "Retail & Fashion",
+      "phone": "0722000001",
+      "ownerName": null,
+      "personaName": "Test Shop AI",
+      "personaInstructions": null,
+      "paymentMethod": null,
+      "bankName": null,
+      "bankAccountNumber": null,
+      "paybillNumber": null,
+      "whatsappPhoneNumberId": null,
+      "whatsappVerifyToken": "2c623ed91221b8f5ddf20462",
+      "whatsappRequestedPhone": null,
+      "whatsappWabaId": null,
+      "whatsappDisplayName": null,
+      "buildingName": null,
+      "shopNumber": null,
+      "publicPhone": null,
+      "idOrKraPin": null,
+      "verifiedShop": false,
+      "createdAt": "2026-08-15T03:29:01.128Z"
+    },
+    {
+      "id": "f5ce1129-7eb2-4711-8ce6-343984726b13",
+      "name": "Test",
+      "category": "Retail & Fashion",
+      "phone": "0733999000",
+      "ownerName": null,
+      "personaName": "Test AI",
+      "personaInstructions": null,
+      "paymentMethod": null,
+      "bankName": null,
+      "bankAccountNumber": null,
+      "paybillNumber": null,
+      "whatsappPhoneNumberId": null,
+      "whatsappVerifyToken": "e6ab29fe7b20e16d6cc5c21f",
+      "whatsappRequestedPhone": null,
+      "whatsappWabaId": null,
+      "whatsappDisplayName": null,
+      "buildingName": null,
+      "shopNumber": null,
+      "publicPhone": null,
+      "idOrKraPin": null,
+      "verifiedShop": false,
+      "createdAt": "2026-08-15T03:31:09.519Z"
+    },
+    {
       "id": "804f8668-2651-4bdc-8755-913ed7748e9e",
       "name": "Digital Nation Accessories",
       "category": "Mobile Phone Accessories",
@@ -162,6 +249,42 @@
   ],
   "accounts": [
     {
+      "id": "f16411fd-4619-414a-9055-982fa0b3b295",
+      "businessId": "65632bc3-b18a-4ea1-924c-3ffe8f01a862",
+      "email": "test@demo.com",
+      "passwordHash": "d6a5bf9239a673026b32d9930353889fec9e9049f7dc12fea7b6a6dc686b119800c7d9cc4f13fbbc114a1f4b30048886d0cbc1173d004f6f60cae47ca004c456",
+      "passwordSalt": "cecb3a6fe5a9a4a33929dac6903cedc0",
+      "consentedAt": "2026-08-13T06:22:51.765Z",
+      "createdAt": "2026-08-13T06:22:51.765Z"
+    },
+    {
+      "id": "d3fae5ce-14bb-401e-b6e0-23cb98502248",
+      "businessId": "3852cd7d-293d-47f9-9e80-850a43273020",
+      "email": "demo@pesaai.test",
+      "passwordHash": "1454afbdbbe01b11539770df0f798fc6497dd9f53472bd24023f5e6c00681f94a00db5504236419033a202c618773cdd4a5e6c1592b1c910d28c9eedb35cfc01",
+      "passwordSalt": "9863e96268c053f1598d2174f5e7b872",
+      "consentedAt": "2026-08-15T00:54:15.091Z",
+      "createdAt": "2026-08-15T00:54:15.091Z"
+    },
+    {
+      "id": "92e59b84-f2de-45e6-a7f2-226ed4b5d25d",
+      "businessId": "78d78765-e8f3-4632-a02b-74584585f896",
+      "email": "newtest@test.com",
+      "passwordHash": "57f57b5513800b33fe4fa684ac7d0f84fb6c4e95d0c33dca80cb31ebe25994644d339f09c384e35dbe34578f6f3c8753fa3841c265105a268248d793c36768f5",
+      "passwordSalt": "570fba46831ae5519fbcaad83e232aea",
+      "consentedAt": "2026-08-15T03:29:01.128Z",
+      "createdAt": "2026-08-15T03:29:01.128Z"
+    },
+    {
+      "id": "a109f2e1-fe97-4294-bd27-ad42eb7da60f",
+      "businessId": "f5ce1129-7eb2-4711-8ce6-343984726b13",
+      "email": "brand2@test.com",
+      "passwordHash": "d9b723b82399e55c6a6f93c16a3d7abc0054dda396cd232323c8857173628de9479cfaa4a261ad6e96908cc29045a3b9ad2869aae1c2175c0a61d20ade0d3103",
+      "passwordSalt": "1b094e1e2a1c88377f3916d9994e604b",
+      "consentedAt": "2026-08-15T03:31:09.519Z",
+      "createdAt": "2026-08-15T03:31:09.519Z"
+    },
+    {
       "id": "742b8b92-8ac5-45f9-90cd-137576c38117",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
       "email": "ngahuanthony@gmail.com",
@@ -172,6 +295,62 @@
     }
   ],
   "sessions": [
+    {
+      "token": "c18e09bfbff65851facb2c306b9c66d0ad8fe4183737ebe9d36ce675e775955a",
+      "accountId": "f16411fd-4619-414a-9055-982fa0b3b295",
+      "businessId": "65632bc3-b18a-4ea1-924c-3ffe8f01a862",
+      "isAdmin": false,
+      "createdAt": "2026-08-13T06:22:51.766Z",
+      "expiresAt": "2026-09-12T06:22:51.766Z"
+    },
+    {
+      "token": "41325410ff010e33d4130d610932d476ccfc50db10b6402f67efc238dd3dd164",
+      "accountId": "d3fae5ce-14bb-401e-b6e0-23cb98502248",
+      "businessId": "3852cd7d-293d-47f9-9e80-850a43273020",
+      "isAdmin": false,
+      "createdAt": "2026-08-15T00:54:15.092Z",
+      "expiresAt": "2026-09-14T00:54:15.092Z"
+    },
+    {
+      "token": "ececb810185433e8532a700b50ddfd113242d2f2a223adf566221fd406a75667",
+      "accountId": "92e59b84-f2de-45e6-a7f2-226ed4b5d25d",
+      "businessId": "78d78765-e8f3-4632-a02b-74584585f896",
+      "isAdmin": false,
+      "createdAt": "2026-08-15T03:29:01.134Z",
+      "expiresAt": "2026-09-14T03:29:01.134Z"
+    },
+    {
+      "token": "480c53e632c4effc1b4c204d8d8239e78cd4994aeb13b779a89af6b21fe17836",
+      "accountId": "92e59b84-f2de-45e6-a7f2-226ed4b5d25d",
+      "businessId": "78d78765-e8f3-4632-a02b-74584585f896",
+      "isAdmin": false,
+      "createdAt": "2026-08-15T03:29:09.252Z",
+      "expiresAt": "2026-09-14T03:29:09.252Z"
+    },
+    {
+      "token": "43e566147d6ba123323045b619f05d432ff7fd697bd901b04319639fe998045d",
+      "accountId": "92e59b84-f2de-45e6-a7f2-226ed4b5d25d",
+      "businessId": "78d78765-e8f3-4632-a02b-74584585f896",
+      "isAdmin": false,
+      "createdAt": "2026-08-15T03:30:08.542Z",
+      "expiresAt": "2026-09-14T03:30:08.542Z"
+    },
+    {
+      "token": "77b62faf3475b794d84d81b834d199598686dd92afba99716abc1690a51657d9",
+      "accountId": "a109f2e1-fe97-4294-bd27-ad42eb7da60f",
+      "businessId": "f5ce1129-7eb2-4711-8ce6-343984726b13",
+      "isAdmin": false,
+      "createdAt": "2026-08-15T03:31:09.522Z",
+      "expiresAt": "2026-09-14T03:31:09.522Z"
+    },
+    {
+      "token": "7a7d2f01590b622f035a450a1036bc8ec2bbe8af81f0f26f4edec75b1209d681",
+      "accountId": "a109f2e1-fe97-4294-bd27-ad42eb7da60f",
+      "businessId": "f5ce1129-7eb2-4711-8ce6-343984726b13",
+      "isAdmin": false,
+      "createdAt": "2026-08-15T03:31:09.566Z",
+      "expiresAt": "2026-09-14T03:31:09.566Z"
+    },
     {
       "token": "72c0b8561928802a2bb18f5e8e36955cb89e76a99840bc7423988ff5d61e2ef2",
       "accountId": null,
@@ -287,6 +466,50 @@
   ],
   "subscriptions": [
     {
+      "businessId": "65632bc3-b18a-4ea1-924c-3ffe8f01a862",
+      "plan": "starter",
+      "priceKES": 2999,
+      "status": "trialing",
+      "trialEndsAt": "2026-08-27T06:22:51.765Z",
+      "currentPeriodEnd": "2026-08-27T06:22:51.765Z",
+      "history": [],
+      "createdAt": "2026-08-13T06:22:51.765Z",
+      "updatedAt": "2026-08-13T06:22:51.765Z"
+    },
+    {
+      "businessId": "3852cd7d-293d-47f9-9e80-850a43273020",
+      "plan": "starter",
+      "priceKES": 2999,
+      "status": "trialing",
+      "trialEndsAt": "2026-08-29T00:54:15.091Z",
+      "currentPeriodEnd": "2026-08-29T00:54:15.091Z",
+      "history": [],
+      "createdAt": "2026-08-15T00:54:15.091Z",
+      "updatedAt": "2026-08-15T00:54:15.091Z"
+    },
+    {
+      "businessId": "78d78765-e8f3-4632-a02b-74584585f896",
+      "plan": "starter",
+      "priceKES": 2999,
+      "status": "trialing",
+      "trialEndsAt": "2026-08-29T03:29:01.128Z",
+      "currentPeriodEnd": "2026-08-29T03:29:01.128Z",
+      "history": [],
+      "createdAt": "2026-08-15T03:29:01.128Z",
+      "updatedAt": "2026-08-15T03:29:01.128Z"
+    },
+    {
+      "businessId": "f5ce1129-7eb2-4711-8ce6-343984726b13",
+      "plan": "starter",
+      "priceKES": 2999,
+      "status": "trialing",
+      "trialEndsAt": "2026-08-29T03:31:09.519Z",
+      "currentPeriodEnd": "2026-08-29T03:31:09.519Z",
+      "history": [],
+      "createdAt": "2026-08-15T03:31:09.519Z",
+      "updatedAt": "2026-08-15T03:31:09.519Z"
+    },
+    {
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
       "plan": "business",
       "priceKES": 4999,
@@ -298,7 +521,503 @@
       "updatedAt": "2026-08-15T04:00:10.052Z"
     }
   ],
-  "products": [],
+  "products": [
+    {
+      "id": "56f5e451-6f9f-4016-a352-e17f965bb440",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "iPhone 14 Pro Max USB-C Power Adapter",
+      "description": "Apple 20W USB-C power adapter with USB-C to Lightning cable for iPhone charging",
+      "price": 1300,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.782Z"
+    },
+    {
+      "id": "57226e27-7840-454e-8f29-744c23105b8d",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "LED Pocket Work Light",
+      "description": "Compact LED work light with multiple brightness levels in yellow and black packaging",
+      "price": 1500,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.782Z"
+    },
+    {
+      "id": "490e4c44-c42e-4b67-8956-61b0e7fd7f7d",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Wireless Headphones (Blue)",
+      "description": "Over-ear wireless headphones with blue and white color scheme",
+      "price": 1200,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.782Z"
+    },
+    {
+      "id": "2deb5510-a77b-4c44-95e6-8c98db0a22b7",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Desktop Microphone",
+      "description": "Black condenser microphone with stand for recording and streaming",
+      "price": 1500,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.782Z"
+    },
+    {
+      "id": "2f40e4d9-dceb-46d8-8ca4-23a474cba01b",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Bass Headphones (Green/White)",
+      "description": "Over-ear bass headphones with green accents and white padding",
+      "price": 2000,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.782Z"
+    },
+    {
+      "id": "bd52ec95-189f-4dfc-9d24-f3eb566caed3",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Gaming Headset with Microphone",
+      "description": "Black gaming headset with boom microphone for console and PC gaming",
+      "price": 2000,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.782Z"
+    },
+    {
+      "id": "ebb056a9-a7d7-4b52-b9c0-c2b72f510998",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Portable Power Bank 10000mAh",
+      "description": "Black portable power bank with multiple USB outputs for charging devices",
+      "price": 1300,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.782Z"
+    },
+    {
+      "id": "f031da89-cda2-444a-9326-594f9769b6e7",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Wireless Charger Pad",
+      "description": "White wireless charging pad for compatible smartphones",
+      "price": 1100,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.782Z"
+    },
+    {
+      "id": "524cdb08-8b36-4ab0-874b-510716c6f7c1",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "USB Data Cable (Multi-pack)",
+      "description": "Multi-colored USB cables in bundled packaging for various devices",
+      "price": 400,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.782Z"
+    },
+    {
+      "id": "4826f4c5-db89-4c16-9442-caada161877b",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "3D Audio Speaker System",
+      "description": "Blue compact speaker system with surround sound capability",
+      "price": 1800,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.783Z"
+    },
+    {
+      "id": "e25bbf52-deed-42de-9b29-e1c11d9ec5bf",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Car Phone Mount",
+      "description": "Black adjustable car phone mount with dashboard suction cup",
+      "price": 800,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.783Z"
+    },
+    {
+      "id": "6e8a7044-0053-4f3e-964a-707d34f2b22b",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Portable Speaker",
+      "description": "Black portable wireless Bluetooth speaker for outdoor use",
+      "price": 1800,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:13:44.783Z"
+    },
+    {
+      "id": "01383d3c-42a1-44d7-aa70-215d5e7985a3",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "iphone Phone Case - Neon Green",
+      "description": "Bright neon green protective phone case with textured back",
+      "price": 1000,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:17:53.004Z"
+    },
+    {
+      "id": "428109ca-df33-4bd2-b9cb-093895cfdde4",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Silicone Phone Case - Pink",
+      "description": "Pink protective phone case displayed in retail packaging",
+      "price": 350,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:17:53.004Z"
+    },
+    {
+      "id": "69f07212-e501-46a8-95e8-dafa74712eb2",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "IPhone Case - Black Mgasafe",
+      "description": "Black protective phone case with various designs",
+      "price": 1000,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:17:53.004Z"
+    },
+    {
+      "id": "4dc77263-03f6-41bc-9c9f-c47075163161",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Case - White",
+      "description": "White protective phone case in retail box",
+      "price": 600,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:17:53.004Z"
+    },
+    {
+      "id": "b443a8fb-03a7-4f7c-bc40-7a193ee6112c",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Case magsafe  - Purple",
+      "description": "Purple protective phone case in packaging",
+      "price": 1000,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:17:53.004Z"
+    },
+    {
+      "id": "210965c8-e2eb-4180-b1b8-57fe391396f7",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "I Phone Case Magsafe - Blue",
+      "description": "Blue protective phone case displayed on shelf",
+      "price": 1000,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:17:53.004Z"
+    },
+    {
+      "id": "a4f27e26-65ea-4588-9d1b-c117bfb718cd",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "i Phone Charger/Cable",
+      "description": "White and black USB charging cable in retail packaging",
+      "price": 350,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:17:53.004Z"
+    },
+    {
+      "id": "4972e2ef-d584-43ff-9a87-b251787112af",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Screen Protector privacy",
+      "description": "Clear protective screen film for mobile phones",
+      "price": 300,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:17:53.004Z"
+    },
+    {
+      "id": "c43a0d6e-1045-488a-93ac-b192fd217ce0",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "silicone Phone Case Collection",
+      "description": "Assorted multicolored phone cases in retail display stand",
+      "price": 350,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:17:53.004Z"
+    },
+    {
+      "id": "0712317b-64ce-48f6-88fd-3966c8a9cf2d",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "samsung fold Phone Case",
+      "description": "Protective clear phone case for various phone models",
+      "price": 2300,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:20:31.053Z"
+    },
+    {
+      "id": "753795b9-c5b2-46a9-8c8c-1ac2ce0dabb3",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "samsung Iphone  Glitter Design",
+      "description": "Decorative phone case with glitter or sparkle finish in various colors",
+      "price": 800,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:20:31.053Z"
+    },
+    {
+      "id": "cba1ac68-0d71-47e0-96ca-0759f6503bdf",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Case - Solid Color",
+      "description": "Solid colored protective phone case in pink, black, and other colors",
+      "price": 800,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:20:31.053Z"
+    },
+    {
+      "id": "e92c6b0a-1c97-4f2c-851d-92697783585e",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Case - Cat Design",
+      "description": "Phone case with black cat face design printed on clear background",
+      "price": 600,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:20:31.053Z"
+    },
+    {
+      "id": "3c84ec71-1ef4-45fe-85c8-03e11d6310e3",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "silicone Phone Case - Multi-pack Display",
+      "description": "Bulk display of assorted phone cases in multiple colors and designs",
+      "price": 350,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:20:31.053Z"
+    },
+    {
+      "id": "d9fef307-087f-41a0-9891-4eb16927e629",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Samsung Fold",
+      "description": "Phone case with raised stud or textured pattern design",
+      "price": 2300,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:20:31.053Z"
+    },
+    {
+      "id": "084a3e70-7ab5-490d-b5a3-d3bae53e5636",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "BASS Wireless Headphones",
+      "description": "Over-ear headphones with bass emphasis in white and grey color",
+      "price": 1800,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:21:48.421Z"
+    },
+    {
+      "id": "e12359db-ee02-4f9f-b5f9-36399f6aa689",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Headphones",
+      "description": "Blue portable Bluetooth speaker with colorful design",
+      "price": 1800,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:21:48.421Z"
+    },
+    {
+      "id": "47436070-9c84-479a-ba45-83cbfa2b2b7a",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Samsung 45W PD Adapter",
+      "description": "Fast charging power adapter with USB-C and multiple cable attachments",
+      "price": 1300,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:27:20.664Z"
+    },
+    {
+      "id": "00cd5783-320f-405d-b94d-03ec5190bf0a",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Samsung 25W PD Adapter",
+      "description": "PD fast charger with USB-C to USB-C cable included",
+      "price": 800,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:27:20.664Z"
+    },
+    {
+      "id": "ba9c35a7-d9df-470f-809b-55ff10dfb71e",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Fast Charging Cable",
+      "description": "65W USB charging cable in neon green packaging",
+      "price": 500,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:27:20.664Z"
+    },
+    {
+      "id": "2f8da7d3-cf63-4457-8e67-1ec29d5a048e",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Oraimo Ultra Durable Cable",
+      "description": "Ultra durable charging cable with extended lifespan in green packaging",
+      "price": 350,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:27:20.664Z"
+    },
+    {
+      "id": "11447137-a954-411f-81e2-ce3dc9268274",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Power Bank 10000MAH",
+      "description": "Portable charging device with multiple output ports in lime green box",
+      "price": 1300,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:27:20.664Z"
+    },
+    {
+      "id": "aae9fb71-2c05-46c9-b840-5d695401931b",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Oraimo Earphones",
+      "description": "Audio earphones with detailed specs in neon green packaging",
+      "price": 1900,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:27:20.664Z"
+    },
+    {
+      "id": "01f49dee-a233-44dd-baf8-45b313e542c4",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Vidvie Fast Charger 20W",
+      "description": "Fast charging adapter with orange branding and USB-C cable",
+      "price": 800,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:27:20.664Z"
+    },
+    {
+      "id": "930dfe47-2b4a-4f40-b65a-61ee7315653c",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Ampex 4 in 1 Fast Charging Cable",
+      "description": "Multi-connector charging cable supporting 120W in purple packaging",
+      "price": 500,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:27:20.664Z"
+    },
+    {
+      "id": "45bbbfe1-a9b3-45f6-b0b0-a0c257573089",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Case - Silicone (Pink)",
+      "description": "Pink silicone protective case for Samsung phones",
+      "price": 350,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:28:46.426Z"
+    },
+    {
+      "id": "efd7f72e-4a17-4dd1-915f-592013e638ec",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Case - Silicone (Blue)",
+      "description": "Blue silicone protective case for Samsung phones",
+      "price": 350,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:28:46.426Z"
+    },
+    {
+      "id": "2785bbb0-bb86-4f8c-8d71-7489f9e2e30d",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "iPhone Case - Hard Shell (Various Colors)",
+      "description": "Hard shell protective cases in multiple colors for various phone models",
+      "price": 900,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:28:46.426Z"
+    },
+    {
+      "id": "c818fe26-6806-4073-a4aa-54fd2b8f24a2",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Case - Original (Generic)",
+      "description": "Generic protective phone cases in various colors with packaging",
+      "price": 350,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:28:46.426Z"
+    },
+    {
+      "id": "b556d918-deb4-4ed0-95d9-e527ac055da8",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Case - A50 Silicone (Pink)",
+      "description": "Pink silicone case specifically for Samsung A50 model",
+      "price": 350,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:28:46.426Z"
+    },
+    {
+      "id": "c6fbf594-0c6a-4821-80f0-3db325603d3f",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Case - A50 Silicone (Green)",
+      "description": "Green silicone case specifically for Samsung A50 model",
+      "price": 450,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:28:46.426Z"
+    },
+    {
+      "id": "b5599a9e-7b36-448d-9ddc-5da3523d31a0",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Case - IP 13 Pro (Orange)",
+      "description": "Orange protective case designed for iPhone 13 Pro",
+      "price": 800,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:28:46.426Z"
+    },
+    {
+      "id": "4a0bd79f-2af3-4000-9618-c432d5d5eb12",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Phone Case - IP 13 Pro (Red)",
+      "description": "Red protective case designed for iPhone 13 Pro",
+      "price": 800,
+      "stockQty": 0,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-15T15:28:46.426Z"
+    }
+  ],
   "customers": [],
   "conversations": [],
   "messages": [],
@@ -308,7 +1027,7 @@
     {
       "id": "fdc5fdb3-3df3-4b16-8fa6-64488b57d491",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
-      "status": "done",
+      "status": "confirmed",
       "frames": 12,
       "productCount": 12,
       "productDrafts": [
@@ -404,7 +1123,7 @@
     {
       "id": "0d709bb6-6bcc-4b48-af54-41f277cf3bf1",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
-      "status": "done",
+      "status": "confirmed",
       "frames": 15,
       "productCount": 12,
       "productDrafts": [
@@ -500,7 +1219,7 @@
     {
       "id": "5bbb8e87-99e6-432d-a85f-33f47d13642f",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
-      "status": "done",
+      "status": "confirmed",
       "frames": 12,
       "productCount": 9,
       "productDrafts": [
@@ -687,7 +1406,7 @@
     {
       "id": "7d1bce5b-f719-4e09-8259-01c2d6c5de53",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
-      "status": "done",
+      "status": "confirmed",
       "frames": 11,
       "productCount": 10,
       "productDrafts": [
@@ -779,7 +1498,7 @@
     {
       "id": "545966f8-b6a1-4d8f-9173-70785de0e6f4",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
-      "status": "done",
+      "status": "confirmed",
       "frames": 11,
       "productCount": 9,
       "productDrafts": [
