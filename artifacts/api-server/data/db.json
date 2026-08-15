@@ -494,6 +494,102 @@
       "error": null,
       "createdAt": "2026-08-15T09:34:08.125Z",
       "processedAt": "2026-08-15T09:34:29.255Z"
+    },
+    {
+      "id": "0d709bb6-6bcc-4b48-af54-41f277cf3bf1",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "status": "done",
+      "frames": 15,
+      "productCount": 12,
+      "productDrafts": [
+        {
+          "draftId": "draft-0d709b-0",
+          "name": "Phone Case - Neon Green",
+          "price": null,
+          "description": "Bright neon green protective phone case with textured back",
+          "selected": true
+        },
+        {
+          "draftId": "draft-0d709b-1",
+          "name": "Phone Case - Pink",
+          "price": null,
+          "description": "Pink protective phone case displayed in retail packaging",
+          "selected": true
+        },
+        {
+          "draftId": "draft-0d709b-2",
+          "name": "Phone Case - Black",
+          "price": null,
+          "description": "Black protective phone case with various designs",
+          "selected": true
+        },
+        {
+          "draftId": "draft-0d709b-3",
+          "name": "Phone Case - White",
+          "price": null,
+          "description": "White protective phone case in retail box",
+          "selected": true
+        },
+        {
+          "draftId": "draft-0d709b-4",
+          "name": "Phone Case - Purple",
+          "price": null,
+          "description": "Purple protective phone case in packaging",
+          "selected": true
+        },
+        {
+          "draftId": "draft-0d709b-5",
+          "name": "Phone Case - Blue",
+          "price": null,
+          "description": "Blue protective phone case displayed on shelf",
+          "selected": true
+        },
+        {
+          "draftId": "draft-0d709b-6",
+          "name": "Phone Charger/Cable",
+          "price": null,
+          "description": "White and black USB charging cable in retail packaging",
+          "selected": true
+        },
+        {
+          "draftId": "draft-0d709b-7",
+          "name": "Phone Screen Protector",
+          "price": null,
+          "description": "Clear protective screen film for mobile phones",
+          "selected": true
+        },
+        {
+          "draftId": "draft-0d709b-8",
+          "name": "Storage Box - Neon Green",
+          "price": null,
+          "description": "Large bright green plastic storage container with lid",
+          "selected": true
+        },
+        {
+          "draftId": "draft-0d709b-9",
+          "name": "Storage Box - Yellow",
+          "price": null,
+          "description": "Bright yellow plastic storage organizer box",
+          "selected": true
+        },
+        {
+          "draftId": "draft-0d709b-10",
+          "name": "Tech Accessories Bundle",
+          "price": null,
+          "description": "Mixed package of phone accessories and cables",
+          "selected": true
+        },
+        {
+          "draftId": "draft-0d709b-11",
+          "name": "Phone Case Collection Display",
+          "price": null,
+          "description": "Assorted multicolored phone cases in retail display stand",
+          "selected": true
+        }
+      ],
+      "error": null,
+      "createdAt": "2026-08-15T09:41:27.594Z",
+      "processedAt": "2026-08-15T09:41:49.035Z"
     }
   ]
 }
