@@ -132,44 +132,6 @@
           "at": "2026-08-15T04:25:28.298Z"
         }
       ]
-    },
-    {
-      "id": "439e772c-8aaf-48ed-b654-0dd10ef59379",
-      "name": "Test Shop",
-      "category": "retail",
-      "phone": "0700000001",
-      "ownerName": null,
-      "personaName": "Shopi AI",
-      "personaInstructions": "Be friendly and speak Sheng sometimes",
-      "paymentMethod": null,
-      "mpesaType": null,
-      "bankName": null,
-      "bankAccountNumber": null,
-      "paybillNumber": null,
-      "paybillAccountNumber": null,
-      "whatsappPhoneNumberId": null,
-      "whatsappVerifyToken": "ff1ffeaa88679100058f043b",
-      "whatsappRequestedPhone": "0712345678",
-      "whatsappWabaId": null,
-      "whatsappDisplayName": null,
-      "buildingName": null,
-      "shopNumber": null,
-      "publicPhone": null,
-      "idOrKraPin": null,
-      "verifiedShop": false,
-      "createdAt": "2026-08-15T09:26:54.800Z",
-      "changeLog": [
-        {
-          "field": "personaName",
-          "changedBy": "3e478140-9a9b-44a6-a705-c7629f08d565",
-          "at": "2026-08-15T09:32:22.560Z"
-        },
-        {
-          "field": "personaInstructions",
-          "changedBy": "3e478140-9a9b-44a6-a705-c7629f08d565",
-          "at": "2026-08-15T09:32:22.560Z"
-        }
-      ]
     }
   ],
   "accounts": [
@@ -217,15 +179,6 @@
       "passwordSalt": "f3be27f88498ff0263a625ce3f5a4c47",
       "consentedAt": "2026-08-15T04:00:10.052Z",
       "createdAt": "2026-08-15T04:00:10.052Z"
-    },
-    {
-      "id": "3e478140-9a9b-44a6-a705-c7629f08d565",
-      "businessId": "439e772c-8aaf-48ed-b654-0dd10ef59379",
-      "email": "owner@test.com",
-      "passwordHash": "6deb3c82a673fea1774b24e20be52bac25e316317cd3ae559ab900a0761805bc5b2632421086c64170ae1abcbb1931efe681b10ce93c319e1390b3d174668233",
-      "passwordSalt": "7d1557cec6433f5d9399b1ed662667bc",
-      "consentedAt": "2026-08-15T09:26:54.800Z",
-      "createdAt": "2026-08-15T09:26:54.800Z"
     }
   ],
   "sessions": [
@@ -380,14 +333,6 @@
       "isAdmin": false,
       "createdAt": "2026-08-15T08:23:26.631Z",
       "expiresAt": "2026-09-14T08:23:26.631Z"
-    },
-    {
-      "token": "9e18c083a971b818c68e5001353995b4a7ca06dfd7bcde589da09c37ef6c110a",
-      "accountId": "3e478140-9a9b-44a6-a705-c7629f08d565",
-      "businessId": "439e772c-8aaf-48ed-b654-0dd10ef59379",
-      "isAdmin": false,
-      "createdAt": "2026-08-15T09:26:54.804Z",
-      "expiresAt": "2026-09-14T09:26:54.804Z"
     }
   ],
   "subscriptions": [
@@ -445,166 +390,110 @@
       "history": [],
       "createdAt": "2026-08-15T04:00:10.052Z",
       "updatedAt": "2026-08-15T04:00:10.052Z"
-    },
-    {
-      "businessId": "439e772c-8aaf-48ed-b654-0dd10ef59379",
-      "plan": "starter",
-      "priceKES": 2999,
-      "status": "trialing",
-      "trialEndsAt": "2026-08-29T09:26:54.800Z",
-      "currentPeriodEnd": "2026-08-29T09:26:54.800Z",
-      "history": [],
-      "createdAt": "2026-08-15T09:26:54.800Z",
-      "updatedAt": "2026-08-15T09:26:54.800Z"
     }
   ],
-  "products": [
-    {
-      "id": "47e3fd68-f4cc-4eeb-a1bc-4de298a74475",
-      "businessId": "439e772c-8aaf-48ed-b654-0dd10ef59379",
-      "name": "Red Shoes Size 39",
-      "description": "",
-      "price": 3500,
-      "stockQty": 9,
-      "imageUrl": null,
-      "active": true,
-      "createdAt": "2026-08-15T09:27:05.307Z"
-    }
-  ],
-  "customers": [
-    {
-      "id": "82282820-ae91-4e1a-8c6c-9a9e7844fd15",
-      "businessId": "439e772c-8aaf-48ed-b654-0dd10ef59379",
-      "phone": "254700000001",
-      "name": null,
-      "createdAt": "2026-08-15T09:28:07.080Z"
-    },
-    {
-      "id": "eeed11c7-2060-4d03-b2be-9e78dd882ba8",
-      "businessId": "439e772c-8aaf-48ed-b654-0dd10ef59379",
-      "phone": "254700000002",
-      "name": null,
-      "createdAt": "2026-08-15T09:32:22.569Z"
-    }
-  ],
-  "conversations": [
-    {
-      "id": "f5007352-dd7f-49ad-a061-8431ae2e993b",
-      "businessId": "439e772c-8aaf-48ed-b654-0dd10ef59379",
-      "customerId": "82282820-ae91-4e1a-8c6c-9a9e7844fd15",
-      "channel": "simulator",
-      "createdAt": "2026-08-15T09:28:07.080Z"
-    },
-    {
-      "id": "c0d655f2-97ab-4e42-be3b-50792329f2a8",
-      "businessId": "439e772c-8aaf-48ed-b654-0dd10ef59379",
-      "customerId": "eeed11c7-2060-4d03-b2be-9e78dd882ba8",
-      "channel": "simulator",
-      "createdAt": "2026-08-15T09:32:22.569Z"
-    }
-  ],
-  "messages": [
-    {
-      "id": "caf42ada-b771-486e-856a-f3ff6b1719aa",
-      "conversationId": "f5007352-dd7f-49ad-a061-8431ae2e993b",
-      "role": "customer",
-      "content": "Do you have red shoes in size 39?",
-      "createdAt": "2026-08-15T09:28:07.080Z"
-    },
-    {
-      "id": "0701e930-ea98-4575-a2e1-9e33d1300267",
-      "conversationId": "f5007352-dd7f-49ad-a061-8431ae2e993b",
-      "role": "assistant",
-      "content": "Hi! 😊\n\nYes, we have Red Shoes Size 39 at **KES 3,500**, but unfortunately they're currently **out of stock**. \n\nWould you like me to check if we have other shoes available, or is there something else I can help you find?",
-      "createdAt": "2026-08-15T09:28:11.469Z"
-    },
-    {
-      "id": "f5243f9e-158c-4c94-9f9e-5b2d985b6b96",
-      "conversationId": "f5007352-dd7f-49ad-a061-8431ae2e993b",
-      "role": "customer",
-      "content": "I want to buy the red shoes size 39",
-      "createdAt": "2026-08-15T09:28:39.087Z"
-    },
-    {
-      "id": "71c5b55e-1fdd-4428-ab47-19507069cb16",
-      "conversationId": "f5007352-dd7f-49ad-a061-8431ae2e993b",
-      "role": "assistant",
-      "content": "Great choice! 😊\n\nThe **Red Shoes Size 39** are available at **KES 3,500**. We have them in stock.\n\nHow many pairs would you like to order?",
-      "createdAt": "2026-08-15T09:28:42.393Z"
-    },
-    {
-      "id": "d4c41968-3461-47b2-8949-797d514d8f8d",
-      "conversationId": "f5007352-dd7f-49ad-a061-8431ae2e993b",
-      "role": "customer",
-      "content": "Yes please, how do I pay?",
-      "createdAt": "2026-08-15T09:28:42.403Z"
-    },
-    {
-      "id": "4207805a-a754-40cb-a154-d1740356029f",
-      "conversationId": "f5007352-dd7f-49ad-a061-8431ae2e993b",
-      "role": "assistant",
-      "content": "Perfect! Just to confirm — how many pairs of the Red Shoes Size 39 would you like? (1 pair, 2 pairs, etc.)\n\nOnce I place your order, our team will contact you separately with M-Pesa payment details to complete the purchase. 👍",
-      "createdAt": "2026-08-15T09:28:44.608Z"
-    },
-    {
-      "id": "8ca5b5f0-1d4d-4746-9d19-5d253c61b891",
-      "conversationId": "f5007352-dd7f-49ad-a061-8431ae2e993b",
-      "role": "customer",
-      "content": "1 pair please",
-      "createdAt": "2026-08-15T09:28:55.333Z"
-    },
-    {
-      "id": "002f476d-b709-4528-81e6-7690a52ce1d3",
-      "conversationId": "f5007352-dd7f-49ad-a061-8431ae2e993b",
-      "role": "assistant",
-      "content": "Perfect! ✅ Your order has been placed successfully!\n\n**Order Summary:**\n- 1 pair of Red Shoes Size 39\n- Total: **KES 3,500**\n- Order ID: cd74d604-bb58-4491-830f-0c801e46b681\n\nOur team will contact you shortly with M-Pesa payment details to complete your purchase. \n\nThank you for shopping with Test Shop! 🎉",
-      "createdAt": "2026-08-15T09:28:59.275Z"
-    },
-    {
-      "id": "5f3ad920-fbf9-4eda-b125-c924c63a9aca",
-      "conversationId": "c0d655f2-97ab-4e42-be3b-50792329f2a8",
-      "role": "customer",
-      "content": "Hi, niambie kuhusu viatu",
-      "createdAt": "2026-08-15T09:32:22.569Z"
-    },
-    {
-      "id": "22635bc7-eebc-47a9-a69b-ba398033eae6",
-      "conversationId": "c0d655f2-97ab-4e42-be3b-50792329f2a8",
-      "role": "assistant",
-      "content": "Tuna viatu vya rangi nyekundu, size 39! 👟\n\n**Red Shoes Size 39** - KES 3,500\n(Zipo 9 stock)\n\nJe, ungependa kuorder?",
-      "createdAt": "2026-08-15T09:32:29.939Z"
-    }
-  ],
-  "orders": [
-    {
-      "id": "cd74d604-bb58-4491-830f-0c801e46b681",
-      "businessId": "439e772c-8aaf-48ed-b654-0dd10ef59379",
-      "customerId": "82282820-ae91-4e1a-8c6c-9a9e7844fd15",
-      "status": "fulfilled",
-      "totalAmount": 3500,
-      "items": [
-        {
-          "productId": "47e3fd68-f4cc-4eeb-a1bc-4de298a74475",
-          "productName": "Red Shoes Size 39",
-          "quantity": 1,
-          "unitPrice": 3500
-        }
-      ],
-      "createdAt": "2026-08-15T09:28:56.703Z"
-    }
-  ],
+  "products": [],
+  "customers": [],
+  "conversations": [],
+  "messages": [],
+  "orders": [],
   "reports": [],
   "videoScans": [
     {
-      "id": "1f986bf7-6695-40c9-ba76-88f70c0fb8ad",
+      "id": "fdc5fdb3-3df3-4b16-8fa6-64488b57d491",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
-      "status": "error",
-      "frames": 15,
-      "productCount": 0,
-      "productDrafts": [],
-      "error": "Claude API error 404: {\"type\":\"error\",\"error\":{\"type\":\"not_found_error\",\"message\":\"model: claude-3-5-sonnet-20241022\"},\"request_id\":\"req_011Ce4Gp3Bw2oPRya4bu8Spn\"}",
-      "createdAt": "2026-08-15T09:09:46.563Z",
-      "processedAt": "2026-08-15T09:10:05.233Z"
+      "status": "done",
+      "frames": 12,
+      "productCount": 12,
+      "productDrafts": [
+        {
+          "draftId": "draft-fdc5fd-0",
+          "name": "iPhone 14 Pro Max USB-C Power Adapter",
+          "price": null,
+          "description": "Apple 20W USB-C power adapter with USB-C to Lightning cable for iPhone charging",
+          "selected": true
+        },
+        {
+          "draftId": "draft-fdc5fd-1",
+          "name": "LED Pocket Work Light",
+          "price": null,
+          "description": "Compact LED work light with multiple brightness levels in yellow and black packaging",
+          "selected": true
+        },
+        {
+          "draftId": "draft-fdc5fd-2",
+          "name": "Wireless Headphones (Blue)",
+          "price": null,
+          "description": "Over-ear wireless headphones with blue and white color scheme",
+          "selected": true
+        },
+        {
+          "draftId": "draft-fdc5fd-3",
+          "name": "Desktop Microphone",
+          "price": null,
+          "description": "Black condenser microphone with stand for recording and streaming",
+          "selected": true
+        },
+        {
+          "draftId": "draft-fdc5fd-4",
+          "name": "Bass Headphones (Green/White)",
+          "price": null,
+          "description": "Over-ear bass headphones with green accents and white padding",
+          "selected": true
+        },
+        {
+          "draftId": "draft-fdc5fd-5",
+          "name": "Gaming Headset with Microphone",
+          "price": null,
+          "description": "Black gaming headset with boom microphone for console and PC gaming",
+          "selected": true
+        },
+        {
+          "draftId": "draft-fdc5fd-6",
+          "name": "Portable Power Bank 9000mAh",
+          "price": null,
+          "description": "Black portable power bank with multiple USB outputs for charging devices",
+          "selected": true
+        },
+        {
+          "draftId": "draft-fdc5fd-7",
+          "name": "Wireless Charger Pad",
+          "price": null,
+          "description": "White wireless charging pad for compatible smartphones",
+          "selected": true
+        },
+        {
+          "draftId": "draft-fdc5fd-8",
+          "name": "USB Data Cable (Multi-pack)",
+          "price": null,
+          "description": "Multi-colored USB cables in bundled packaging for various devices",
+          "selected": true
+        },
+        {
+          "draftId": "draft-fdc5fd-9",
+          "name": "3D Audio Speaker System",
+          "price": null,
+          "description": "Blue compact speaker system with surround sound capability",
+          "selected": true
+        },
+        {
+          "draftId": "draft-fdc5fd-10",
+          "name": "Car Phone Mount",
+          "price": null,
+          "description": "Black adjustable car phone mount with dashboard suction cup",
+          "selected": true
+        },
+        {
+          "draftId": "draft-fdc5fd-11",
+          "name": "Portable Speaker",
+          "price": null,
+          "description": "Black portable wireless Bluetooth speaker for outdoor use",
+          "selected": true
+        }
+      ],
+      "error": null,
+      "createdAt": "2026-08-15T09:34:08.125Z",
+      "processedAt": "2026-08-15T09:34:29.255Z"
     }
   ]
 }

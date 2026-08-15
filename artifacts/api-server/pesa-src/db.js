@@ -1076,7 +1076,7 @@ function createVideoScan(businessId) {
     // Purge scans older than 30 days — keeps db.json lean automatically
     const cutoff = Date.now() - SCAN_RETENTION_MS;
     const before = state.videoScans.length;
-    state.videoScans = state.videoScans.filter((s) => s.createdAt > cutoff);
+    state.videoScans = state.videoScans.filter((s) => new Date(s.createdAt).getTime() > cutoff);
     const purged = before - state.videoScans.length;
     if (purged > 0) console.log(`[db] Purged ${purged} video scan record(s) older than 30 days`);
 
