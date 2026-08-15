@@ -21,6 +21,8 @@ const salesRoutes = require("./pesa-src/routes/sales");
 const mpesaSettingsRoutes = require("./pesa-src/routes/mpesaSettings");
 const adminRoutes = require("./pesa-src/routes/admin");
 const reportsRoutes = require("./pesa-src/routes/reports");
+const videoScanRoutes = require("./pesa-src/routes/video-scan");
+const videoProcessor = require("./pesa-src/video-processor");
 const whatsapp = require("./pesa-src/whatsapp");
 const mpesa = require("./pesa-src/mpesa");
 
@@ -73,6 +75,10 @@ router.post("/api/businesses/:businessId/mpesa/connect", mpesaSettingsRoutes.con
 router.post("/api/businesses/:businessId/mpesa/disconnect", mpesaSettingsRoutes.disconnect);
 
 router.get("/api/businesses/:businessId/sales/summary", salesRoutes.summary);
+
+router.get("/api/businesses/:businessId/video-scan",            videoScanRoutes.listScans);
+router.get("/api/businesses/:businessId/video-scan/:scanId",     videoScanRoutes.getScan);
+router.post("/api/businesses/:businessId/video-scan/:scanId/confirm", videoScanRoutes.confirmScan);
 
 router.post("/api/businesses/:businessId/chat", chatRoutes.send);
 // Note: chat history uses path param (not query) to avoid codegen type collision
@@ -183,6 +189,54 @@ function parseQuery(queryString) {
 const server = http.createServer(async (req, res) => {
   const parsed   = url.parse(req.url);
   const pathname = parsed.pathname;
+
+  // ── Video upload ──────────────────────────────────────────────────────
+  // Handled before the generic router so we can read raw binary bytes
+  // (the generic readBody() only handles JSON).
+  const videoUploadMatch = req.method === "POST" &&
+    pathname.match(/^\/api\/businesses\/([^/]+)\/video-scan\/upload$/);
+  if (videoUploadMatch) {
+    const businessId = videoUploadMatch[1];
+    try {
+      const session = auth.resolveSession(req);
+      if (!session) { sendJson(res, 401, { error: "Not authenticated" }); return; }
+      if (session.businessId !== businessId) { sendJson(res, 403, { error: "Not authorized for this business" }); return; }
+
+      // Read raw video bytes (allow up to 200 MB)
+      const chunks = [];
+      let total = 0;
+      await new Promise((resolve, reject) => {
+        req.on("data", (c) => {
+          const buf = Buffer.isBuffer(c) ? c : Buffer.from(c);
+          total += buf.length;
+          if (total > 200 * 1024 * 1024) {
+            reject(db.httpError(413, "Video must be under 200 MB"));
+            req.destroy();
+            return;
+          }
+          chunks.push(buf);
+        });
+        req.on("end", resolve);
+        req.on("error", reject);
+      });
+      const videoBuffer = Buffer.concat(chunks);
+      if (videoBuffer.length === 0) { sendJson(res, 400, { error: "Empty video body" }); return; }
+
+      // Create the scan record and kick off processing in the background
+      const scan = db.createVideoScan(businessId);
+      setImmediate(() => {
+        videoProcessor.processVideoScan(db, scan.id, businessId, videoBuffer)
+          .catch((err) => console.error("[video-upload] Background processing error:", err));
+      });
+
+      sendJson(res, 200, { scanId: scan.id });
+    } catch (err) {
+      const status = err.statusCode || 500;
+      if (status >= 500) console.error(err);
+      sendJson(res, status, { error: err.message || "Internal server error" });
+    }
+    return;
+  }
 
   // ── WhatsApp POST webhook ─────────────────────────────────────────────
   // Handled here (before the generic router) so we can validate the raw

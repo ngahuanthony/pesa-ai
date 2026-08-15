@@ -33,6 +33,8 @@ const signupSchema = z.object({
 const CATEGORIES = [
   "Retail & Fashion",
   "Electronics & Gadgets",
+  "Mobile Phone Accessories",
+  "Computers & Laptops",
   "Beauty & Cosmetics",
   "Food & Beverages",
   "Home & Furniture",

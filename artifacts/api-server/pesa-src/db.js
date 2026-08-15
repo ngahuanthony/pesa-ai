@@ -34,6 +34,7 @@ function emptyState() {
     messages: [],
     orders: [],
     reports: [],
+    videoScans: [],
   };
 }
 
@@ -1041,4 +1042,63 @@ module.exports = {
   suspendBusiness,
   unsuspendBusiness,
   getAdminStats,
+  createVideoScan,
+  getVideoScan,
+  updateVideoScan,
+  listVideoScans,
 };
+
+// ── Video Scan ──────────────────────────────────────────────────────────────
+
+function createVideoScan(businessId) {
+  return mutate((state) => {
+    if (!state.businesses.some((b) => b.id === businessId)) {
+      throw httpError(404, "Business not found");
+    }
+    if (!state.videoScans) state.videoScans = [];
+    const scan = {
+      id: id(),
+      businessId,
+      status: "pending",   // pending | processing | done | error | confirmed
+      frames: 0,
+      productCount: 0,
+      productDrafts: [],
+      error: null,
+      createdAt: now(),
+      processedAt: null,
+    };
+    state.videoScans.push(scan);
+    return scan;
+  });
+}
+
+function getVideoScan(scanId) {
+  const state = load();
+  if (!state.videoScans) return undefined;
+  return state.videoScans.find((s) => s.id === scanId);
+}
+
+function updateVideoScan(scanId, patch) {
+  return mutate((state) => {
+    if (!state.videoScans) state.videoScans = [];
+    const idx = state.videoScans.findIndex((s) => s.id === scanId);
+    if (idx === -1) throw httpError(404, "Scan not found");
+    const allowed = ["status", "frames", "productCount", "productDrafts", "error", "processedAt"];
+    for (const key of allowed) {
+      if (patch[key] !== undefined) state.videoScans[idx][key] = patch[key];
+    }
+    if (patch.status === "done" || patch.status === "error") {
+      state.videoScans[idx].processedAt = now();
+    }
+    return state.videoScans[idx];
+  });
+}
+
+function listVideoScans(businessId) {
+  const state = load();
+  if (!state.videoScans) return [];
+  return state.videoScans
+    .filter((s) => s.businessId === businessId)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 20);
+}
