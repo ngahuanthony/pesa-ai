@@ -325,6 +325,14 @@
       "isAdmin": false,
       "createdAt": "2026-08-15T08:11:01.569Z",
       "expiresAt": "2026-09-14T08:11:01.569Z"
+    },
+    {
+      "token": "b6d6ad310f969ddcd77a3053b00f79bed66326c691471b8dc6d75fcfdd81a529",
+      "accountId": "742b8b92-8ac5-45f9-90cd-137576c38117",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "isAdmin": false,
+      "createdAt": "2026-08-15T08:23:26.631Z",
+      "expiresAt": "2026-09-14T08:23:26.631Z"
     }
   ],
   "subscriptions": [
@@ -392,15 +400,15 @@
   "reports": [],
   "videoScans": [
     {
-      "id": "ebcaede7-147d-4a40-a8e2-1ccf3a958c17",
+      "id": "23ba0b5a-cbbc-4952-9cc2-958ceb3a655c",
       "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
       "status": "error",
-      "frames": 0,
+      "frames": 15,
       "productCount": 0,
       "productDrafts": [],
-      "error": "Both ffmpeg passes failed — cannot extract frames",
-      "createdAt": "2026-08-15T07:58:29.846Z",
-      "processedAt": "2026-08-15T07:58:29.918Z"
+      "error": "Claude API error 404: {\"type\":\"error\",\"error\":{\"type\":\"not_found_error\",\"message\":\"model: claude-haiku-3-5-20241022\"},\"request_id\":\"req_011Ce4FXQWzAJKtjtE3CgFrz\"}",
+      "createdAt": "2026-08-15T08:53:02.720Z",
+      "processedAt": "2026-08-15T08:53:15.144Z"
     }
   ]
 }
