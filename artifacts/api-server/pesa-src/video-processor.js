@@ -18,7 +18,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 // claude-haiku-3-5 is ~3-5x faster and ~10x cheaper than Sonnet for product detection.
 // Override with ANTHROPIC_MODEL env var if you want to test Sonnet.
-const MODEL      = process.env.ANTHROPIC_MODEL || "claude-3-haiku-20240307";
+const MODEL      = process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022";
 const MAX_FRAMES = 15;   // 15 frames covers a 90-second shop walk well
 const MAX_RETRIES = 2;   // retry Claude calls on transient errors
 
