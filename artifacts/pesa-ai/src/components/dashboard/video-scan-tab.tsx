@@ -322,19 +322,32 @@ function RecordView({ onFile, onBack }: { onFile: (f: File) => void; onBack: () 
     setPhase("init");
     setErrorMsg("");
     try {
-      // 640×480 @ 10 fps is plenty for AI frame extraction and keeps uploads small (~3 MB for 90s)
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", frameRate: { ideal: 10, max: 15 } },
-        audio: false,
-      });
+      // Try rear camera first, fall back to any camera — most compatible across
+      // Android/iOS without strict constraints that cause black feeds or failures.
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+      } catch {
+        // Rear camera failed — try any camera
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+        videoRef.current.play().catch(() => {});
       }
       setPhase("ready");
     } catch (err: any) {
-      setErrorMsg(err.message || "Could not access camera. Please allow camera permission and try again.");
+      const name = (err as DOMException).name;
+      const msg = name === "NotAllowedError"
+        ? "Camera permission denied. Please allow camera access in your browser settings and try again."
+        : name === "NotFoundError"
+        ? "No camera found on this device."
+        : err.message || "Could not access camera. Please allow camera permission and try again.";
+      setErrorMsg(msg);
       setPhase("error");
     }
   }, []);
