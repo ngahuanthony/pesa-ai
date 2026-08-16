@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useGetMe } from "@workspace/api-client-react";
-import { Wifi, CheckCircle2, Clock, AlertCircle, Phone, RefreshCw, Copy, Check } from "lucide-react";
+import { Wifi, CheckCircle2, Clock, AlertCircle, Phone, RefreshCw, Copy, Check, Pencil, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 export function WhatsAppAccountTab() {
@@ -14,6 +14,9 @@ export function WhatsAppAccountTab() {
   const [error, setError]             = useState("");
   const [regenerating, setRegenerating] = useState(false);
   const [copied, setCopied]           = useState(false);
+  const [editing, setEditing]         = useState(false);
+  const [draft, setDraft]             = useState("");
+  const [saving, setSaving]           = useState(false);
 
   const load = async () => {
     if (!businessId) return;
@@ -50,8 +53,30 @@ export function WhatsAppAccountTab() {
       if (res.ok) {
         const { welcomeMessage } = await res.json();
         setStatus((s: any) => ({ ...s, welcomeMessage }));
+        setDraft(welcomeMessage);
       }
     } finally { setRegenerating(false); }
+  };
+
+  const handleEdit = () => {
+    setDraft(status?.welcomeMessage || "");
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/businesses/${businessId}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ welcomeMessage: draft }),
+      });
+      if (res.ok) {
+        setStatus((s: any) => ({ ...s, welcomeMessage: draft }));
+        setEditing(false);
+      }
+    } finally { setSaving(false); }
   };
 
   const handleCopy = () => {
@@ -123,51 +148,90 @@ export function WhatsAppAccountTab() {
           </div>
         </div>
 
-        {/* ── Welcome Message Preview ── */}
+        {/* ── Welcome Message ── */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-foreground">🎉 Customer Welcome Message</p>
-              <p className="text-xs text-muted-foreground">Sent automatically to every new customer who messages you.</p>
-            </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">🎉 Customer Welcome Message</p>
+            <p className="text-xs text-muted-foreground">Sent automatically to every new customer who messages you.</p>
           </div>
 
-          {status.welcomeMessage ? (
-            <div className="relative rounded-2xl border border-border bg-[#e9fbe9] p-4">
-              {/* WhatsApp-style chat bubble */}
-              <div className="rounded-xl bg-white shadow-sm p-3.5 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-[system-ui]">
-                {status.welcomeMessage}
+          {editing ? (
+            /* ── Edit mode ── */
+            <div className="space-y-2">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                rows={10}
+                className="w-full rounded-xl border border-primary/40 bg-white px-3.5 py-3 text-sm text-gray-800 leading-relaxed font-[system-ui] resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <div className="flex items-center justify-between">
+                <span className={`text-xs ${draft.length > 1000 ? "text-destructive" : "text-muted-foreground"}`}>
+                  {draft.length} characters
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditing(false)}
+                    className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-foreground hover:bg-gray-50 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" /> Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || !draft.trim()}
+                    className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {saving ? "Saving…" : "Save Message"}
+                  </button>
+                </div>
               </div>
-              <p className="text-[10px] text-gray-400 text-right mt-1.5 pr-1">WhatsApp preview</p>
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-border bg-gray-50 p-4 text-center text-sm text-muted-foreground">
-              No welcome message yet. Click Regenerate to create one from your shop details.
-            </div>
-          )}
+            /* ── Preview mode ── */
+            <>
+              {status.welcomeMessage ? (
+                <div className="rounded-2xl border border-border bg-[#e9fbe9] p-4">
+                  <div className="rounded-xl bg-white shadow-sm p-3.5 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-[system-ui]">
+                    {status.welcomeMessage}
+                  </div>
+                  <p className="text-[10px] text-gray-400 text-right mt-1.5 pr-1">WhatsApp preview</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border bg-gray-50 p-4 text-center text-sm text-muted-foreground">
+                  No welcome message yet. Click Regenerate to create one, or write your own.
+                </div>
+              )}
 
-          <div className="flex gap-2">
-            <button
-              onClick={handleRegenerate}
-              disabled={regenerating}
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-foreground hover:bg-gray-50 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${regenerating ? "animate-spin" : ""}`} />
-              {regenerating ? "Regenerating…" : "Regenerate"}
-            </button>
-            {status.welcomeMessage && (
-              <button
-                onClick={handleCopy}
-                className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-foreground hover:bg-gray-50 transition-colors"
-              >
-                {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                {copied ? "Copied!" : "Copy"}
-              </button>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            💡 Update your location and delivery areas in <strong>Settings</strong> to personalise this message.
-          </p>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={handleEdit}
+                  className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-foreground hover:bg-gray-50 transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </button>
+                <button
+                  onClick={handleRegenerate}
+                  disabled={regenerating}
+                  className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-foreground hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${regenerating ? "animate-spin" : ""}`} />
+                  {regenerating ? "Regenerating…" : "Regenerate"}
+                </button>
+                {status.welcomeMessage && (
+                  <button
+                    onClick={handleCopy}
+                    className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-foreground hover:bg-gray-50 transition-colors"
+                  >
+                    {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                💡 Update your location and delivery areas in <strong>Settings</strong> to personalise the auto-generated message.
+              </p>
+            </>
+          )}
         </div>
 
         {/* Verify token */}
