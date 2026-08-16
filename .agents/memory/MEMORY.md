@@ -1,3 +1,4 @@
 - [Pesa AI backend setup](pesa-ai-backend.md) — plain JS/HTTP server, route files must export handler functions not Express routers, all secrets now set
 - [Pesa AI product architecture](pesa-ai-product.md) — business/admin split, what each user type can configure, deployment URL
 - [Pesa AI OpenAPI quirks](pesa-ai-openapi-quirks.md) — codegen collision fix: query params must be path params, inline object+nullable uses looseObject (bad)
+- [Railway deployment](railway-deployment.md) — production on Railway, pesaai.africa DNS set, custom domain SSL/routing pending Railway propagation
