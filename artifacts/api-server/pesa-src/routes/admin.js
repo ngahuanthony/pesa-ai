@@ -7,6 +7,30 @@ const db = require("../db");
 const auth = require("../auth");
 const mpesa = require("../mpesa");
 const fieldCrypto = require("../crypto");
+const fs = require("fs");
+const path = require("path");
+
+// One-shot data import endpoint — lets you restore db.json from another
+// environment (e.g. Replit → Railway). Admin-only. Overwrites the live db.json
+// in place so the running process picks up the data immediately.
+function importDb({ body, session }) {
+  auth.requireAdmin(session);
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw db.httpError(400, "Body must be the full db JSON object");
+  }
+  const dataFile = db.DATA_FILE;
+  // Ensure data directory exists (important on fresh Railway volume)
+  const dataDir = path.dirname(dataFile);
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+  // Write atomically via a temp file then rename
+  const tmpFile = dataFile + ".import.tmp";
+  fs.writeFileSync(tmpFile, JSON.stringify(body, null, 2), "utf8");
+  fs.renameSync(tmpFile, dataFile);
+  // db.js calls load() fresh on every request — no in-memory reload needed.
+  // Count businesses directly from the written file to confirm.
+  const written = JSON.parse(fs.readFileSync(dataFile, "utf8"));
+  return { ok: true, imported: true, businesses: Object.keys(written.businesses || {}).length };
+}
 
 function login({ body }) {
   const password = process.env.ADMIN_PASSWORD;
@@ -112,6 +136,7 @@ function resetPassword({ params, body, session }) {
 }
 
 module.exports = {
+  importDb,
   login, listBusinesses, chargeSubscription, suspendBusiness, unsuspendBusiness,
   getStats, getPlatformDefaults, setWhatsAppCredentials, getWhatsAppStatus,
   setMpesaCredentials, getMpesaStatus, disconnectMpesa, resetPassword,

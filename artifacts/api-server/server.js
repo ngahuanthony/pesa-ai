@@ -96,6 +96,7 @@ router.post("/api/admin/businesses/:businessId/suspend", adminRoutes.suspendBusi
 router.post("/api/admin/businesses/:businessId/unsuspend", adminRoutes.unsuspendBusiness);
 router.get("/api/admin/stats", adminRoutes.getStats);
 router.get("/api/admin/platform-defaults",                adminRoutes.getPlatformDefaults);
+router.post("/api/admin/import-db",                       adminRoutes.importDb);
 router.post("/api/admin/businesses/:businessId/whatsapp", adminRoutes.setWhatsAppCredentials);
 router.get("/api/admin/businesses/:businessId/whatsapp",  adminRoutes.getWhatsAppStatus);
 router.post("/api/admin/businesses/:businessId/mpesa", adminRoutes.setMpesaCredentials);
