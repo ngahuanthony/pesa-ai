@@ -1,0 +1,11 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install --frozen-lockfile && PORT=3000 BASE_PATH=/ NODE_ENV=production pnpm --filter @workspace/pesa-ai run build"
+
+[deploy]
+startCommand = "node artifacts/api-server/server.js"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+[environments.production.deploy]
+numReplicas = 1

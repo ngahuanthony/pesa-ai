@@ -3,7 +3,10 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
+// @replit/vite-plugin-runtime-error-modal is a dev-only overlay — import it
+// lazily so Railway / Hetzner builds succeed without the Replit environment.
+let runtimeErrorOverlay: () => any = () => null;
+try { runtimeErrorOverlay = (await import('@replit/vite-plugin-runtime-error-modal')).default; } catch { /* not in Replit env */ }
 
 const rawPort = process.env.PORT;
 

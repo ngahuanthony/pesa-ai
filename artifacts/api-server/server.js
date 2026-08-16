@@ -7,6 +7,60 @@ const http = require("http");
 const path = require("path");
 const url = require("url");
 const crypto = require("crypto");
+const fs = require("fs");
+
+// In production (Railway / Hetzner) serve the built React frontend from the
+// same Node process — no separate nginx needed for a single-server deploy.
+const STATIC_DIR = path.join(__dirname, "..", "pesa-ai", "dist", "public");
+const STATIC_CONTENT_TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".js":   "application/javascript",
+  ".mjs":  "application/javascript",
+  ".css":  "text/css",
+  ".json": "application/json",
+  ".png":  "image/png",
+  ".jpg":  "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif":  "image/gif",
+  ".svg":  "image/svg+xml",
+  ".ico":  "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2":"font/woff2",
+  ".ttf":  "font/ttf",
+  ".webp": "image/webp",
+};
+
+function serveStatic(res, pathname) {
+  try {
+    // Prevent path traversal
+    const safe     = path.normalize(pathname).replace(/^(\.\.[/\\])+/, "");
+    let   filePath = path.join(STATIC_DIR, safe);
+
+    // If the path is a directory or the file doesn't exist, fall back to
+    // index.html so React Router handles client-side navigation.
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+      filePath = path.join(STATIC_DIR, "index.html");
+    }
+
+    const ext         = path.extname(filePath).toLowerCase();
+    const contentType = STATIC_CONTENT_TYPES[ext] || "application/octet-stream";
+    const content     = fs.readFileSync(filePath);
+
+    // Cache static assets (hashed filenames) for a year; HTML never cached.
+    const cacheHeader = ext === ".html"
+      ? "no-cache"
+      : "public, max-age=31536000, immutable";
+
+    res.writeHead(200, {
+      "content-type":  contentType,
+      "cache-control": cacheHeader,
+    });
+    res.end(content);
+  } catch (err) {
+    res.writeHead(500, { "content-type": "text/plain" });
+    res.end("Static file error: " + err.message);
+  }
+}
 const persistence = require("./pesa-src/persistence");
 const router = require("./pesa-src/router");
 const db = require("./pesa-src/db");
@@ -299,7 +353,13 @@ const server = http.createServer(async (req, res) => {
   const match = router.match(req.method, pathname);
 
   if (!match) {
-    sendJson(res, 404, { error: "Not found" });
+    // In production serve the React SPA — Railway/Hetzner don't have a
+    // separate nginx, so the Node server handles static assets too.
+    if (process.env.NODE_ENV === "production" && fs.existsSync(STATIC_DIR)) {
+      serveStatic(res, pathname);
+    } else {
+      sendJson(res, 404, { error: "Not found" });
+    }
     return;
   }
 
