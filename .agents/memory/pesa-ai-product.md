@@ -1,30 +1,43 @@
 ---
 name: Pesa AI product architecture
-description: What the product is, who the users are, and how the business/admin split works
+description: Business/admin split, user types, deployment info, Railway config
 ---
 
-Pesa AI (pesaai.africa) is a WhatsApp shop SaaS for Kenyan SMEs, built by Adplay Media Ltd.
+## Deployment
+- **Railway live URL:** https://pesa-ai-production.up.railway.app
+- **Railway project ID:** dc16955c-794f-4c30-a235-1997aee1f9e0
+- **Railway service ID:** c603f4a6-d13d-4edd-bcda-b769dc70967b
+- **Railway environment ID:** f956e490-8413-414b-a62b-655053a6d0c4
+- **GitHub remote:** https://github.com/ngahuanthony/pesa-ai (push with token embedded in URL)
+- **Domain target:** pesaai.africa (DNS CNAME → pesa-ai-production.up.railway.app, not yet set)
 
-**Two user types:**
-1. **Business owners** — sign up, manage their shop (products, orders, billing, settings). Simple dashboard, no technical config.
-2. **Platform admins (Adplay Media staff)** — access `/admin`, configure everything technical per business.
+## Railway Build Config (nixpacks.toml)
+```toml
+[phases.setup]
+nixPkgs = ["nodejs_22", "nodePackages.pnpm"]
 
-**Admin controls (business owners never touch):**
-- WhatsApp Meta API: Phone Number ID, Access Token, Webhook URL, Verify Token
-- M-Pesa Daraja API: Consumer Key, Consumer Secret, Passkey, Shortcode — all encrypted at rest via ENCRYPTION_KEY
+[phases.install]
+cmds = ["pnpm install --no-frozen-lockfile"]
+```
+**Why:** Railway's default Node is 18; Vite 7 requires 20+. Must pin Node 22 via nixPkgs and use --no-frozen-lockfile because Railway's pnpm version differs from Replit's.
 
-**Business settings — 4 clean sections only:**
-1. Shop Info (name, owner name, category)
-2. Your Location (building, stall number, public phone — optional)
-3. Your Assistant (name + plain-English personality description)
-4. How You Get Paid (M-Pesa till/paybill number OR bank account)
+## railway.toml build/start
+- build: `PORT=3000 BASE_PATH=/ NODE_ENV=production pnpm --filter @workspace/pesa-ai run build`
+- start: `node artifacts/api-server/server.js`
+- Do NOT include `pnpm install` in buildCommand — nixpacks handles it separately
 
-**Business signup fields:** fullName, buildingName, stallNumber, publicPhone, nationalId. businessPhone is optional.
+## Static file serving (production)
+- server.js serves `artifacts/pesa-ai/dist/public` as static files when NODE_ENV=production
+- Falls back to index.html for unknown paths (React Router SPA)
+- Triggered by `!match` handler checking `fs.existsSync(STATIC_DIR)`
 
-**Dashboard routes:** `/dashboard`, `/dashboard/products`, `/dashboard/orders`, `/dashboard/chat`, `/dashboard/billing`, `/dashboard/settings` — sidebar nav, each a separate URL.
+## User types
+- **Platform admin** — uses `ADMIN_PASSWORD` env var, manages all businesses
+- **Business owner** — registered per business, manages their own products/orders/settings
+- **Customer** — interacts via WhatsApp, no web login
 
-**Admin panel:** `/admin` — dark navy sidebar (#080d1a), white main content. Sections: Businesses (per-business WhatsApp + M-Pesa config buttons), WhatsApp tab, Reports tab.
-
-**Billing plans:** Starter KES 2,999 / Business KES 4,999 / Pro KES 9,999/month.
-
-**Deployment:** Live at `https://sme-ai-connect.replit.app`. Custom domain `pesaai.africa` pending user DNS setup (add CNAME/A record from Replit Domains pane).
+## Key product facts
+- Multi-tenant: each business has isolated products, orders, WhatsApp config, M-Pesa config
+- AI scanner: video upload → frame extraction → Claude vision → product drafts with thumbnails
+- WhatsApp: per-business phone number via shared WABA (platform token)
+- M-Pesa: STK push per business (each needs own credentials)
