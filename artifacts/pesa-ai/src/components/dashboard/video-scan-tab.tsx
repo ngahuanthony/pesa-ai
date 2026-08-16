@@ -26,6 +26,15 @@ interface VideoScan {
   createdAt?: string | number; // ISO string from db.now()
 }
 
+// How long (ms) before a queued/processing scan is considered stuck
+const STUCK_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+function isStuck(scan: VideoScan) {
+  if (scan.status !== "pending" && scan.status !== "processing") return false;
+  const ms = typeof scan.createdAt === "string" ? new Date(scan.createdAt).getTime() : (scan.createdAt ?? 0);
+  return Date.now() - ms > STUCK_THRESHOLD_MS;
+}
+
 // ── API helpers ───────────────────────────────────────────────────────────────
 
 const UPLOAD_CANCELLED = "UPLOAD_CANCELLED";
@@ -114,6 +123,7 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
   const [dismissing, setDismissing] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const data = await fetchScans(businessId);
@@ -134,6 +144,21 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
     }
   };
 
+  const handleCancel = async (scanId: string) => {
+    setCancelling(scanId);
+    try {
+      await fetch(`/api/businesses/${businessId}/video-scan/${scanId}/cancel`, {
+        method: "POST",
+        credentials: "include",
+      });
+      // Refresh — scan will now show as error/cancelled
+      const data = await fetchScans(businessId);
+      setScans(data);
+    } catch { /* ignore */ } finally {
+      setCancelling(null);
+    }
+  };
+
   useEffect(() => {
     load();
     // Re-poll while any scan is still processing
@@ -151,17 +176,22 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
   if (loading || visible.length === 0) return null;
 
   const statusBadge = (scan: VideoScan) => {
+    const stuck = isStuck(scan);
     switch (scan.status) {
       case "pending":
-        return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5"><Loader2 className="h-3 w-3 animate-spin" /> Queued</span>;
+        return stuck
+          ? <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5"><AlertCircle className="h-3 w-3" /> Stuck</span>
+          : <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5"><Loader2 className="h-3 w-3 animate-spin" /> Queued</span>;
       case "processing":
-        return <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5"><Loader2 className="h-3 w-3 animate-spin" /> Scanning…</span>;
+        return stuck
+          ? <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5"><AlertCircle className="h-3 w-3" /> Stuck</span>
+          : <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5"><Loader2 className="h-3 w-3 animate-spin" /> Scanning…</span>;
       case "done":
         return <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 border border-green-200 rounded-full px-2 py-0.5"><CheckCircle2 className="h-3 w-3" /> Ready to review</span>;
       case "confirmed":
         return <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5"><CheckCircle2 className="h-3 w-3" /> Added to inventory</span>;
       case "error":
-        return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5"><AlertCircle className="h-3 w-3" /> Failed</span>;
+        return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5"><AlertCircle className="h-3 w-3" /> {scan.error === "Cancelled by vendor" ? "Cancelled" : "Failed"}</span>;
       default:
         return null;
     }
@@ -208,9 +238,23 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {(scan.status === "pending" || scan.status === "processing") && (
-                  <Button size="sm" variant="outline" onClick={() => onResumeProcessing(scan.id)}>
-                    View progress
-                  </Button>
+                  <>
+                    {!isStuck(scan) && (
+                      <Button size="sm" variant="outline" onClick={() => onResumeProcessing(scan.id)}>
+                        View progress
+                      </Button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleCancel(scan.id)}
+                      disabled={cancelling === scan.id}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 disabled:opacity-40 transition-colors"
+                      title="Cancel this scan"
+                    >
+                      {cancelling === scan.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                      Cancel
+                    </button>
+                  </>
                 )}
                 {scan.status === "done" && (
                   <Button size="sm" onClick={() => onReviewDone(scan)}>

@@ -138,6 +138,7 @@ router.get("/api/businesses/:businessId/sales/summary", salesRoutes.summary);
 router.get("/api/businesses/:businessId/video-scan",                  videoScanRoutes.listScans);
 router.get("/api/businesses/:businessId/video-scan/:scanId",           videoScanRoutes.getScan);
 router.post("/api/businesses/:businessId/video-scan/:scanId/confirm",  videoScanRoutes.confirmScan);
+router.post("/api/businesses/:businessId/video-scan/:scanId/cancel",   videoScanRoutes.cancelScan);
 router.delete("/api/businesses/:businessId/video-scan/:scanId",        videoScanRoutes.deleteScan);
 
 router.post("/api/businesses/:businessId/chat", chatRoutes.send);

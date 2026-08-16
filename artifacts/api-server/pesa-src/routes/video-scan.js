@@ -60,6 +60,21 @@ function confirmScan({ params, body, session }) {
   return result;
 }
 
+// POST /api/businesses/:businessId/video-scan/:scanId/cancel
+// Cancels a queued or in-progress scan that is stuck.
+function cancelScan({ params, session }) {
+  auth.requireOwnBusiness(session, params.businessId);
+  const scan = db.getVideoScan(params.scanId);
+  if (!scan || scan.businessId !== params.businessId) {
+    throw db.httpError(404, "Scan not found");
+  }
+  if (scan.status !== "pending" && scan.status !== "processing") {
+    throw db.httpError(400, "Only queued or processing scans can be cancelled");
+  }
+  db.updateVideoScan(params.scanId, { status: "error", error: "Cancelled by vendor" });
+  return { cancelled: true };
+}
+
 // DELETE /api/businesses/:businessId/video-scan/:scanId
 // Lets a vendor remove a failed or unwanted scan from their history.
 function deleteScan({ params, session }) {
@@ -72,4 +87,4 @@ function deleteScan({ params, session }) {
   return { deleted: true };
 }
 
-module.exports = { listScans, getScan, confirmScan, deleteScan };
+module.exports = { listScans, getScan, confirmScan, cancelScan, deleteScan };
