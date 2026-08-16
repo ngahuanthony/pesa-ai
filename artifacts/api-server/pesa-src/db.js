@@ -1147,7 +1147,7 @@ module.exports = {
 
 const SCAN_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-function createVideoScan(businessId) {
+function createVideoScan(businessId, { name } = {}) {
   return mutate((state) => {
     if (!state.businesses.some((b) => b.id === businessId)) {
       throw httpError(404, "Business not found");
@@ -1164,6 +1164,7 @@ function createVideoScan(businessId) {
     const scan = {
       id: id(),
       businessId,
+      name: name ? String(name).trim().slice(0, 80) : null, // optional label, e.g. "Speakers"
       status: "pending",   // pending | processing | done | error | confirmed
       frames: 0,
       productCount: 0,

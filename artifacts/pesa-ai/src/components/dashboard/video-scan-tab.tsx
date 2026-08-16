@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useGetMe } from "@workspace/api-client-react";
-import { Upload, Camera, CheckCircle2, AlertCircle, Loader2, Video, Trash2, Plus, RefreshCw, History, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Upload, Camera, CheckCircle2, AlertCircle, Loader2, Video, Trash2, Plus, RefreshCw, History, ChevronDown, ChevronUp, X, Pencil, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -18,12 +18,13 @@ interface ProductDraft {
 
 interface VideoScan {
   id: string;
+  name?: string | null;
   status: "pending" | "processing" | "done" | "error" | "confirmed";
   frames: number;
   productCount: number;
   productDrafts: ProductDraft[];
   error?: string;
-  createdAt?: string | number; // ISO string from db.now()
+  createdAt?: string | number;
 }
 
 // How long (ms) before a queued/processing scan is considered stuck
@@ -39,7 +40,7 @@ function isStuck(scan: VideoScan) {
 
 const UPLOAD_CANCELLED = "UPLOAD_CANCELLED";
 
-function startUpload(businessId: string, file: File, onProgress?: (pct: number) => void): {
+function startUpload(businessId: string, file: File, onProgress?: (pct: number) => void, scanName?: string): {
   promise: Promise<{ scanId: string }>;
   abort: () => void;
 } {
@@ -48,6 +49,7 @@ function startUpload(businessId: string, file: File, onProgress?: (pct: number) 
     xhr = new XMLHttpRequest();
     xhr.open("POST", `/api/businesses/${businessId}/video-scan/upload`);
     xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
+    if (scanName) xhr.setRequestHeader("X-Scan-Name", encodeURIComponent(scanName.trim()));
     xhr.withCredentials = true;
     if (onProgress) {
       xhr.upload.onprogress = (e) => {
@@ -81,6 +83,15 @@ async function fetchScans(businessId: string): Promise<VideoScan[]> {
   if (!res.ok) return [];
   const data = await res.json();
   return data.scans ?? [];
+}
+
+async function renameScan(businessId: string, scanId: string, name: string): Promise<void> {
+  await fetch(`/api/businesses/${businessId}/video-scan/${scanId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name.trim() }),
+  });
 }
 
 async function confirmScan(businessId: string, scanId: string, products: ProductDraft[]): Promise<void> {
@@ -124,6 +135,8 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
   const [collapsed, setCollapsed] = useState(false);
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const load = useCallback(async () => {
     const data = await fetchScans(businessId);
@@ -142,6 +155,17 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
     } catch { /* ignore */ } finally {
       setDismissing(null);
     }
+  };
+
+  const startRename = (scan: VideoScan) => {
+    setRenamingId(scan.id);
+    setRenameValue(scan.name || "");
+  };
+
+  const commitRename = async (scanId: string) => {
+    await renameScan(businessId, scanId, renameValue);
+    setScans((prev) => prev.map((s) => s.id === scanId ? { ...s, name: renameValue.trim() || null } : s));
+    setRenamingId(null);
   };
 
   const handleCancel = async (scanId: string) => {
@@ -219,6 +243,33 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
           {visible.map((scan) => (
             <div key={scan.id} className="flex items-center justify-between px-4 py-3 gap-3">
               <div className="min-w-0 flex-1 space-y-1">
+                {/* Scan name — editable inline */}
+                {renamingId === scan.id ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") commitRename(scan.id); if (e.key === "Escape") setRenamingId(null); }}
+                      className="text-sm font-semibold border border-primary/40 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary/30 min-w-0 flex-1"
+                      placeholder="e.g. Speakers, Phone Covers…"
+                      maxLength={80}
+                    />
+                    <button onClick={() => commitRename(scan.id)} className="text-primary hover:text-primary/80"><Check className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => setRenamingId(null)} className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => startRename(scan)}
+                    className="group flex items-center gap-1 text-left"
+                    title="Click to name this scan"
+                  >
+                    <span className={`text-sm font-semibold ${scan.name ? "text-foreground" : "text-muted-foreground italic"}`}>
+                      {scan.name || "Untitled scan"}
+                    </span>
+                    <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                  </button>
+                )}
                 <div className="flex items-center gap-2 flex-wrap">
                   {statusBadge(scan)}
                   <span className="text-xs text-muted-foreground">{timeAgo(scan.createdAt)}</span>
@@ -283,7 +334,12 @@ function ScanHistory({ businessId, activeScanId, onResumeProcessing, onReviewDon
 
 // ── Mode Selector ─────────────────────────────────────────────────────────────
 
-function ModeSelector({ onRecord, onUpload }: { onRecord: () => void; onUpload: () => void }) {
+function ModeSelector({ onRecord, onUpload, scanName, onScanNameChange }: {
+  onRecord: () => void;
+  onUpload: () => void;
+  scanName: string;
+  onScanNameChange: (v: string) => void;
+}) {
   return (
     <div className="space-y-6">
       {/* Tips */}
@@ -298,6 +354,20 @@ function ModeSelector({ onRecord, onUpload }: { onRecord: () => void; onUpload: 
             <li>60–90 seconds is plenty; no need to be perfect</li>
           </ul>
         </div>
+      </div>
+
+      {/* Scan name input */}
+      <div className="space-y-1.5">
+        <label className="text-sm font-semibold text-foreground">Name this scan <span className="text-muted-foreground font-normal">(optional)</span></label>
+        <input
+          type="text"
+          value={scanName}
+          onChange={(e) => onScanNameChange(e.target.value)}
+          placeholder="e.g. Speakers, Phone Covers, Screen Protectors…"
+          maxLength={80}
+          className="w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        <p className="text-xs text-muted-foreground">Helps you identify which batch failed if a scan doesn't complete.</p>
       </div>
 
       {/* Two mode cards */}
@@ -702,9 +772,10 @@ function UploadFileView({ onFile, onBack }: { onFile: (f: File) => void; onBack:
 
 // ── Upload-with-progress (shared after both paths) ────────────────────────────
 
-function UploadingView({ businessId, file, onUploaded, onBack }: {
+function UploadingView({ businessId, file, scanName, onUploaded, onBack }: {
   businessId: string;
   file: File;
+  scanName?: string;
   onUploaded: (scanId: string) => void;
   onBack: () => void;
 }) {
@@ -716,7 +787,7 @@ function UploadingView({ businessId, file, onUploaded, onBack }: {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    const { promise, abort } = startUpload(businessId, file, setProgress);
+    const { promise, abort } = startUpload(businessId, file, setProgress, scanName);
     abortRef.current = abort;
     promise
       .then(({ scanId }) => onUploaded(scanId))
@@ -992,6 +1063,7 @@ export function VideoScanTab() {
   const [scanId, setScanId]         = useState<string | null>(null);
   const [scan, setScan]             = useState<VideoScan | null>(null);
   const [confirmedCount, setConfirmedCount] = useState(0);
+  const [scanName, setScanName]     = useState("");
 
   const handleFile = (f: File) => {
     setPendingFile(f);
@@ -1017,6 +1089,7 @@ export function VideoScanTab() {
     setScanId(null);
     setScan(null);
     setPendingFile(null);
+    setScanName("");
     setView("choose");
   };
 
@@ -1048,10 +1121,10 @@ export function VideoScanTab() {
           onReviewDone={handleReviewDone}
         />
       )}
-      {view === "choose"     && <ModeSelector onRecord={() => setView("record")} onUpload={() => setView("upload")} />}
+      {view === "choose"     && <ModeSelector onRecord={() => setView("record")} onUpload={() => setView("upload")} scanName={scanName} onScanNameChange={setScanName} />}
       {view === "record"     && <RecordView onFile={handleFile} onBack={handleBack} />}
       {view === "upload"     && <UploadFileView onFile={handleFile} onBack={handleBack} />}
-      {view === "uploading"  && pendingFile && businessId && <UploadingView businessId={businessId} file={pendingFile} onUploaded={handleUploaded} onBack={handleBack} />}
+      {view === "uploading"  && pendingFile && businessId && <UploadingView businessId={businessId} file={pendingFile} scanName={scanName} onUploaded={handleUploaded} onBack={handleBack} />}
       {view === "processing" && scanId && <ProcessingView businessId={businessId} scanId={scanId} onDone={handleDone} />}
       {view === "review"     && scan && scanId && <ReviewView businessId={businessId} scanId={scanId} initialDrafts={scan.productDrafts} onConfirmed={handleConfirmed} onBack={handleBack} />}
       {view === "success"    && <SuccessView count={confirmedCount} onScanAgain={handleBack} />}

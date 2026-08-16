@@ -75,6 +75,19 @@ function cancelScan({ params, session }) {
   return { cancelled: true };
 }
 
+// PATCH /api/businesses/:businessId/video-scan/:scanId
+// Rename a scan — lets vendors label their scans after the fact.
+function renameScan({ params, body, session }) {
+  auth.requireOwnBusiness(session, params.businessId);
+  const scan = db.getVideoScan(params.scanId);
+  if (!scan || scan.businessId !== params.businessId) {
+    throw db.httpError(404, "Scan not found");
+  }
+  const name = body && body.name != null ? String(body.name).trim().slice(0, 80) : null;
+  db.updateVideoScan(params.scanId, { name });
+  return { ok: true, name };
+}
+
 // DELETE /api/businesses/:businessId/video-scan/:scanId
 // Lets a vendor remove a failed or unwanted scan from their history.
 function deleteScan({ params, session }) {
@@ -87,4 +100,4 @@ function deleteScan({ params, session }) {
   return { deleted: true };
 }
 
-module.exports = { listScans, getScan, confirmScan, cancelScan, deleteScan };
+module.exports = { listScans, getScan, confirmScan, cancelScan, renameScan, deleteScan };

@@ -140,6 +140,7 @@ router.get("/api/businesses/:businessId/video-scan",                  videoScanR
 router.get("/api/businesses/:businessId/video-scan/:scanId",           videoScanRoutes.getScan);
 router.post("/api/businesses/:businessId/video-scan/:scanId/confirm",  videoScanRoutes.confirmScan);
 router.post("/api/businesses/:businessId/video-scan/:scanId/cancel",   videoScanRoutes.cancelScan);
+router.patch("/api/businesses/:businessId/video-scan/:scanId",         videoScanRoutes.renameScan);
 router.delete("/api/businesses/:businessId/video-scan/:scanId",        videoScanRoutes.deleteScan);
 
 router.post("/api/businesses/:businessId/chat", chatRoutes.send);
@@ -311,8 +312,11 @@ const server = http.createServer(async (req, res) => {
 
       console.log(`[video-upload] received ${(videoBuffer.length / 1024 / 1024).toFixed(1)} MB for business ${businessId}`);
 
+      // Optional scan name passed by the client as a request header
+      const scanName = req.headers["x-scan-name"] ? decodeURIComponent(req.headers["x-scan-name"]) : null;
+
       // Create the scan record and kick off processing in the background
-      const scan = db.createVideoScan(businessId);
+      const scan = db.createVideoScan(businessId, { name: scanName });
       setImmediate(() => {
         videoProcessor.processVideoScan(db, scan.id, businessId, videoBuffer)
           .catch((err) => console.error("[video-upload] Background processing error:", err));
