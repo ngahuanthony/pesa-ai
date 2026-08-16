@@ -22,6 +22,7 @@ const signupSchema = z.object({
   // Payment
   paymentMethod: z.enum(["mpesa", "bank"]),
   paybillNumber: z.string().optional(),
+  paybillAccountNumber: z.string().optional(),
   mpesaType: z.enum(["till", "paybill"]).optional(),
   bankName: z.string().optional(),
   bankAccountNumber: z.string().optional(),
@@ -94,6 +95,7 @@ export default function SignupPage() {
       paymentMethod: "mpesa",
       mpesaType: "till",
       paybillNumber: "",
+      paybillAccountNumber: "",
       bankName: "",
       bankAccountNumber: "",
       bankAccountName: "",
@@ -118,6 +120,8 @@ export default function SignupPage() {
         email: data.email,
         password: data.password,
         paybillNumber: data.paymentMethod === "mpesa" ? data.paybillNumber : undefined,
+        paybillAccountNumber: data.paymentMethod === "mpesa" && data.mpesaType === "paybill" ? data.paybillAccountNumber : undefined,
+        mpesaType: data.paymentMethod === "mpesa" ? data.mpesaType : undefined,
         bankName: data.paymentMethod === "bank" ? data.bankName : undefined,
         bankAccountNumber: data.paymentMethod === "bank" ? data.bankAccountNumber : undefined,
         bankAccountName: data.paymentMethod === "bank" ? data.bankAccountName : undefined,
@@ -365,17 +369,39 @@ export default function SignupPage() {
                             </FormLabel>
                             <FormControl>
                               <Input
-                                placeholder={mpesaType === "paybill" ? "e.g. 123456" : "e.g. 5557890"}
+                                placeholder={mpesaType === "paybill" ? "e.g. 247247" : "e.g. 5557890"}
                                 {...field}
                               />
                             </FormControl>
                             <FormDescription className="text-xs text-muted-foreground">
-                              Customers will send money to this number directly. Funds go straight to you.
+                              {mpesaType === "paybill"
+                                ? "The Paybill number customers enter on M-Pesa."
+                                : "Customers will send money to this Till number directly. Funds go straight to you."}
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+
+                      {/* Account Number — only for Paybill */}
+                      {mpesaType === "paybill" && (
+                        <FormField
+                          control={form.control}
+                          name="paybillAccountNumber"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Account Number</FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g. your phone number or shop code" {...field} />
+                              </FormControl>
+                              <FormDescription className="text-xs text-muted-foreground">
+                                Customers enter this as the account number when paying via Paybill. Leave blank if you don't use a fixed account number.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
                     </div>
                   )}
 
