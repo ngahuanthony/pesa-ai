@@ -137,4 +137,63 @@ async function sendMessage(phoneNumberId, to, text, accessToken) {
   }
 }
 
-module.exports = { verifyWebhook, handleIncomingWebhook, sendMessage };
+// Maps Pesa AI business categories to WhatsApp vertical codes
+function getWhatsAppVertical(category) {
+  if (!category) return "OTHER";
+  const c = category.toLowerCase();
+  if (c.includes("fashion") || c.includes("cloth") || c.includes("apparel")) return "CLOTHING_AND_APPAREL";
+  if (c.includes("phone") || c.includes("mobile") || c.includes("electronic") || c.includes("gadget") || c.includes("computer")) return "SHOPPING_AND_RETAIL";
+  if (c.includes("beauty") || c.includes("cosmet") || c.includes("spa") || c.includes("salon")) return "BEAUTY_SPA_AND_SALON";
+  if (c.includes("food") || c.includes("beverag") || c.includes("grocery")) return "FOOD_AND_GROCERY";
+  if (c.includes("restaurant")) return "RESTAURANT";
+  if (c.includes("health") || c.includes("pharma") || c.includes("medical")) return "MEDICAL_AND_HEALTH";
+  if (c.includes("hotel") || c.includes("lodg") || c.includes("accommodation")) return "HOTEL_AND_LODGING";
+  if (c.includes("travel") || c.includes("transport") || c.includes("logistics")) return "TRAVEL_AND_TRANSPORTATION";
+  if (c.includes("finance") || c.includes("bank") || c.includes("insurance")) return "FINANCE_AND_BANKING";
+  if (c.includes("education") || c.includes("school") || c.includes("training")) return "EDUCATION";
+  if (c.includes("home") || c.includes("furnitur") || c.includes("interior")) return "SHOPPING_AND_RETAIL";
+  if (c.includes("agricult") || c.includes("produce") || c.includes("farm")) return "FOOD_AND_GROCERY";
+  return "SHOPPING_AND_RETAIL";
+}
+
+// Push the business profile to Meta so customers see the business name,
+// description, and category when they view the WhatsApp contact.
+// Non-fatal: errors are logged but don't block the credential save.
+async function updateWhatsAppBusinessProfile(business, phoneNumberId, accessToken) {
+  if (!phoneNumberId || !accessToken) return;
+
+  const vertical = getWhatsAppVertical(business.category);
+  const locationParts = [business.location, business.buildingName, business.shopNumber].filter(Boolean);
+  const address = locationParts.join(", ") || undefined;
+
+  const profileData = {
+    about: "AI-powered WhatsApp shop — browse, order & pay instantly 🛍️",
+    description: `${business.name} — ${business.category || "Shop"} in Kenya. Chat with us to browse products, place orders & pay via M-Pesa.`,
+    vertical,
+    ...(address ? { address } : {}),
+  };
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/whatsapp_business_profile`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ messaging_product: "whatsapp", ...profileData }),
+      }
+    );
+    if (res.ok) {
+      console.log(`[whatsapp] Business profile updated for ${business.name} (${phoneNumberId})`);
+    } else {
+      const err = await res.text().catch(() => "");
+      console.warn(`[whatsapp] Profile update failed (${res.status}): ${err.slice(0, 200)}`);
+    }
+  } catch (err) {
+    console.warn(`[whatsapp] Profile update error: ${err.message}`);
+  }
+}
+
+module.exports = { verifyWebhook, handleIncomingWebhook, sendMessage, updateWhatsAppBusinessProfile };

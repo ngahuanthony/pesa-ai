@@ -7,6 +7,7 @@ const db = require("../db");
 const auth = require("../auth");
 const mpesa = require("../mpesa");
 const fieldCrypto = require("../crypto");
+const whatsapp = require("../whatsapp");
 const fs = require("fs");
 const path = require("path");
 
@@ -84,18 +85,35 @@ function getPlatformDefaults({ session }) {
   };
 }
 
-function setWhatsAppCredentials({ params, body, session }) {
+async function setWhatsAppCredentials({ params, body, session }) {
   auth.requireAdmin(session);
   let { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone } = body || {};
-  // If admin left token blank, fall back to the platform-level system user token.
+
+  // Fall back to platform-level credentials if admin left them blank
   if (!accessToken && process.env.WHATSAPP_PLATFORM_TOKEN) {
     accessToken = process.env.WHATSAPP_PLATFORM_TOKEN;
   }
-  // If admin left WABA ID blank, fall back to platform default.
   if (!wabaId && process.env.WHATSAPP_PLATFORM_WABA_ID) {
     wabaId = process.env.WHATSAPP_PLATFORM_WABA_ID;
   }
-  return db.setWhatsAppCredentials(params.businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone });
+
+  // Auto-derive display name from business name if admin didn't set one
+  if (!displayName) {
+    const business = db.getBusiness(params.businessId);
+    displayName = business.name;
+  }
+
+  const result = db.setWhatsAppCredentials(params.businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone });
+
+  // After credentials are saved, push the business profile to Meta so
+  // customers see the correct name, category and description on WhatsApp.
+  // Do this in the background — don't let a Meta API hiccup block the response.
+  if (result.connected && phoneNumberId && accessToken) {
+    const business = db.getBusiness(params.businessId);
+    whatsapp.updateWhatsAppBusinessProfile(business, phoneNumberId, accessToken).catch(() => {});
+  }
+
+  return result;
 }
 
 function getWhatsAppStatus({ params, session }) {

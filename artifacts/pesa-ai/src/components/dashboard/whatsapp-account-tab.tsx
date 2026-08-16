@@ -84,17 +84,43 @@ export function WhatsAppAccountTab() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            <span className="text-sm font-semibold text-emerald-700">Active &amp; Live</span>
+        {/* Active status */}
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+          <span className="text-sm font-semibold text-emerald-700">Active &amp; Live — accepting customer messages</span>
+        </div>
+
+        {/* How customers see you */}
+        <div className="rounded-xl border border-border bg-white overflow-hidden">
+          <div className="px-4 py-2.5 bg-gray-50 border-b border-border">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">How customers see you on WhatsApp</p>
           </div>
-          {status.displayName && (
-            <p className="text-sm text-emerald-700"><span className="font-medium">Display name: </span>{status.displayName}</p>
-          )}
-          {status.requestedPhone && (
-            <p className="text-sm text-emerald-700"><span className="font-medium">Phone: </span>{status.requestedPhone}</p>
-          )}
+          {/* WhatsApp contact card preview */}
+          <div className="p-4 flex items-center gap-4">
+            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-xl font-bold text-primary select-none">
+              {(status.displayName || "?").charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-base font-bold text-foreground leading-tight truncate">
+                {status.displayName || "Your Business Name"}
+              </p>
+              {status.requestedPhone && (
+                <a
+                  href={`tel:${status.requestedPhone.replace(/\s/g, "")}`}
+                  className="text-sm text-primary hover:underline mt-0.5 flex items-center gap-1"
+                >
+                  <Phone className="h-3.5 w-3.5" />
+                  {status.requestedPhone}
+                </a>
+              )}
+              <p className="text-xs text-muted-foreground mt-0.5">WhatsApp Business</p>
+            </div>
+          </div>
+          <div className="px-4 pb-3">
+            <p className="text-xs text-muted-foreground">
+              This is what customers see when they message or save your contact. The name is set by your WhatsApp Business registration — contact the Pesa AI team to update it.
+            </p>
+          </div>
         </div>
 
         {/* ── Welcome Message Preview ── */}
