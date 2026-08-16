@@ -25,6 +25,7 @@
 // Adplay's own single Daraja app via MPESA_* env vars.
 
 const db = require("./db");
+const whatsapp = require("./whatsapp");
 
 const DARAJA_BASE =
   process.env.MPESA_ENV === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke";
@@ -169,4 +170,127 @@ async function initiateSubscriptionStkPush({ businessId, phone }) {
   };
 }
 
-module.exports = { initiateStkPush, handleStkCallback, initiateSubscriptionStkPush };
+// ── C2B (Customer to Business) ─────────────────────────────────────────────
+//
+// Called by admin after saving M-Pesa credentials for a business.
+// Registers our webhook URLs with Safaricom so they POST to us whenever a
+// customer manually pays to that business's paybill or till.
+async function registerC2BUrls(businessId, credentials, baseUrl) {
+  if (!credentials || !credentials.consumerKey || !credentials.consumerSecret || !credentials.shortcode) {
+    console.warn(`[mpesa c2b] Skipping URL registration for ${businessId} — incomplete credentials`);
+    return { ok: false, error: "Incomplete credentials" };
+  }
+  const base = (baseUrl || process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
+  if (!base) {
+    console.warn(`[mpesa c2b] No PUBLIC_BASE_URL set — cannot register C2B URLs`);
+    return { ok: false, error: "No public base URL configured" };
+  }
+  try {
+    const accessToken = await getAccessToken(credentials.consumerKey, credentials.consumerSecret);
+    const res = await fetch(`${DARAJA_BASE}/mpesa/c2b/v1/registerurl`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        ShortCode: credentials.shortcode,
+        ResponseType: "Completed", // accept all payments without extra validation round-trip
+        ConfirmationURL: `${base}/webhook/mpesa/c2b/confirm`,
+        ValidationURL:   `${base}/webhook/mpesa/c2b/validate`,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || (data.ResponseCode !== undefined && data.ResponseCode !== "0")) {
+      console.warn(`[mpesa c2b] Registration failed for ${businessId}:`, JSON.stringify(data));
+      return { ok: false, error: data.errorMessage || data.ResponseDescription || "Registration failed" };
+    }
+    console.log(`[mpesa c2b] URLs registered for ${businessId} (shortcode ${credentials.shortcode}): ${data.ResponseDescription || "ok"}`);
+    return { ok: true };
+  } catch (err) {
+    console.warn(`[mpesa c2b] Registration error for ${businessId}: ${err.message}`);
+    return { ok: false, error: err.message };
+  }
+}
+
+// Handles Safaricom's C2B confirmation callback.
+// Safaricom POSTs here when a customer manually pays to the business's
+// paybill or till.  We:
+//   1. Identify the business by BusinessShortCode
+//   2. Try to match the payment to an open order (by phone+amount, or BillRefNumber)
+//   3. Mark the order paid
+//   4. Send a WhatsApp confirmation message back to the customer
+async function handleC2BConfirmation(payload) {
+  const { BusinessShortCode, TransAmount, MSISDN, BillRefNumber, TransID, FirstName, LastName } = payload || {};
+  console.log(`[mpesa c2b] Confirm: shortcode=${BusinessShortCode} amount=${TransAmount} from=${MSISDN} ref=${BillRefNumber} txn=${TransID}`);
+
+  // 1. Find the business
+  const business = db.getBusinessByShortcode(BusinessShortCode);
+  if (!business) {
+    console.warn(`[mpesa c2b] No business found for shortcode ${BusinessShortCode}`);
+    return;
+  }
+
+  const amount        = parseFloat(TransAmount) || 0;
+  const customerPhone = normalizeMsisdn(MSISDN || "");
+  const ref           = (BillRefNumber || "").trim().toLowerCase();
+  const customerName  = [FirstName, LastName].filter(Boolean).join(" ") || "Customer";
+
+  // 2. Match to an open order ────────────────────────────────────────────────
+  const pending = db.getPendingOrdersForBusiness(business.id);
+  let matched = null;
+
+  // Priority 1: account reference contains an order-ID prefix
+  if (ref) {
+    matched = pending.find((o) =>
+      o.id.toLowerCase().startsWith(ref) || ref.startsWith(o.id.slice(0, 8).toLowerCase())
+    );
+  }
+
+  // Priority 2: same customer phone + exact amount (±KES 5 tolerance)
+  if (!matched && customerPhone) {
+    matched = pending.find((o) => {
+      if (!o.customerPhone) return false;
+      return normalizeMsisdn(o.customerPhone) === customerPhone &&
+             Math.abs((o.totalAmount || 0) - amount) <= 5;
+    });
+  }
+
+  // Priority 3: only one pending order from that customer (unambiguous)
+  if (!matched && customerPhone) {
+    const byPhone = pending.filter((o) => o.customerPhone && normalizeMsisdn(o.customerPhone) === customerPhone);
+    if (byPhone.length === 1) matched = byPhone[0];
+  }
+
+  // 3. Update order ──────────────────────────────────────────────────────────
+  if (matched) {
+    db.updateOrderStatus(matched.id, "paid");
+    console.log(`[mpesa c2b] Order ${matched.id} → paid (KES ${amount} from ${customerPhone})`);
+  } else {
+    console.log(`[mpesa c2b] No matching order for shortcode=${BusinessShortCode} amount=${amount} phone=${customerPhone} ref=${ref}`);
+  }
+
+  // 4. WhatsApp reply to customer ────────────────────────────────────────────
+  if (business.whatsappPhoneNumberId) {
+    const accessToken = whatsapp.resolveAccessToken(business);
+    if (accessToken && customerPhone) {
+      let msg;
+      if (matched) {
+        msg =
+          `✅ *Payment Confirmed!*\n\n` +
+          `Thank you, ${customerName}! We've received your M-Pesa payment of *KES ${amount.toLocaleString("en-KE")}* ` +
+          `(Ref: ${TransID || "N/A"}).\n\n` +
+          `Your order is confirmed and being prepared. We'll update you once it's ready. 🙏\n\n` +
+          `— ${business.name}`;
+      } else {
+        msg =
+          `✅ *Payment Received — KES ${amount.toLocaleString("en-KE")}*\n\n` +
+          `Hi ${customerName}, we received your M-Pesa payment (Ref: ${TransID || "N/A"}).\n\n` +
+          `We couldn't automatically match it to an order. Please send us a message and we'll sort it out right away! 📲\n\n` +
+          `— ${business.name}`;
+      }
+      await whatsapp.sendMessage(business.whatsappPhoneNumberId, customerPhone, msg, accessToken).catch((err) => {
+        console.warn(`[mpesa c2b] WhatsApp notify failed: ${err.message}`);
+      });
+    }
+  }
+}
+
+module.exports = { initiateStkPush, handleStkCallback, initiateSubscriptionStkPush, registerC2BUrls, handleC2BConfirmation };

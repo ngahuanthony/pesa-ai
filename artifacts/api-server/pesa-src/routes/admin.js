@@ -121,7 +121,7 @@ function getWhatsAppStatus({ params, session }) {
   return db.getWhatsAppStatus(params.businessId);
 }
 
-function setMpesaCredentials({ params, body, session }) {
+async function setMpesaCredentials({ params, body, session }) {
   auth.requireAdmin(session);
   if (!fieldCrypto.isConfigured()) {
     throw db.httpError(503, "ENCRYPTION_KEY is not set on the server — add it in environment secrets before saving M-Pesa credentials.");
@@ -130,7 +130,20 @@ function setMpesaCredentials({ params, body, session }) {
   if (!consumerKey || !consumerSecret || !passkey || !shortcode) {
     throw db.httpError(400, "consumerKey, consumerSecret, passkey and shortcode are all required");
   }
-  return db.setMpesaCredentials(params.businessId, { consumerKey, consumerSecret, passkey, shortcode }, "admin");
+  const result = db.setMpesaCredentials(params.businessId, { consumerKey, consumerSecret, passkey, shortcode }, "admin");
+
+  // Register C2B webhook URLs with Safaricom in the background so we're
+  // notified whenever a customer manually pays to this business's paybill/till.
+  if (result.connected) {
+    const credentials = db.getMpesaCredentialsDecrypted(params.businessId);
+    if (credentials) {
+      mpesa.registerC2BUrls(params.businessId, credentials, process.env.PUBLIC_BASE_URL).catch((err) => {
+        console.warn(`[admin] C2B registration error for ${params.businessId}: ${err.message}`);
+      });
+    }
+  }
+
+  return result;
 }
 
 function getMpesaStatus({ params, session }) {

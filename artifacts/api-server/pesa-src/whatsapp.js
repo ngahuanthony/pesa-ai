@@ -196,4 +196,4 @@ async function updateWhatsAppBusinessProfile(business, phoneNumberId, accessToke
   }
 }
 
-module.exports = { verifyWebhook, handleIncomingWebhook, sendMessage, updateWhatsAppBusinessProfile };
+module.exports = { verifyWebhook, handleIncomingWebhook, sendMessage, resolveAccessToken, updateWhatsAppBusinessProfile };

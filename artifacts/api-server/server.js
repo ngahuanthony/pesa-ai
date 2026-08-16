@@ -127,7 +127,8 @@ router.delete("/api/businesses/:businessId/products/:productId", productRoutes.r
 
 router.get("/api/businesses/:businessId/orders", orderRoutes.list);
 router.put("/api/businesses/:businessId/orders/:orderId/status", orderRoutes.updateStatus);
-router.post("/api/businesses/:businessId/orders/:orderId/mpesa", orderRoutes.payWithMpesa);
+router.post("/api/businesses/:businessId/orders/:orderId/mpesa",      orderRoutes.payWithMpesa);
+router.post("/api/businesses/:businessId/orders/:orderId/mark-paid",  orderRoutes.markPaid);
 
 router.get("/api/businesses/:businessId/mpesa/status", mpesaSettingsRoutes.status);
 router.post("/api/businesses/:businessId/mpesa/connect", mpesaSettingsRoutes.connect);
@@ -158,6 +159,19 @@ router.get("/webhook/whatsapp", ({ query }) => {
   return { status: 403, data: { error: "verification failed" } };
 });
 // POST handled directly in the HTTP handler below (needs raw body for HMAC)
+
+// ── M-Pesa C2B webhooks (manual paybill/till payments from customers) ────────
+// Safaricom first calls ValidationURL — we always accept.
+router.post("/webhook/mpesa/c2b/validate", () => {
+  return { ResultCode: 0, ResultDesc: "Accepted" };
+});
+// Safaricom calls ConfirmationURL after the payment clears — we process it.
+router.post("/webhook/mpesa/c2b/confirm", async ({ body }) => {
+  await mpesa.handleC2BConfirmation(body).catch((err) =>
+    console.error("[c2b confirm] unhandled error:", err.message)
+  );
+  return { ResultCode: 0, ResultDesc: "Accepted" };
+});
 
 router.post("/webhook/mpesa", ({ body }) => {
   try {

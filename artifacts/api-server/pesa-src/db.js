@@ -927,6 +927,29 @@ function attachMpesaCheckoutRequest(orderId, checkoutRequestId) {
   });
 }
 
+// Find a business by its Safaricom shortcode (paybill or till number).
+// Used by the C2B webhook to route incoming payments to the right business.
+function getBusinessByShortcode(shortcode) {
+  const code = String(shortcode || "").trim();
+  if (!code) return null;
+  return load().businesses.find(
+    (b) =>
+      (b.mpesaCredentials && b.mpesaCredentials.shortcode === code) ||
+      b.paybillNumber === code
+  ) || null;
+}
+
+// Returns pending/confirmed orders for a business, enriched with customerPhone.
+function getPendingOrdersForBusiness(businessId) {
+  const state = load();
+  return (state.orders || [])
+    .filter((o) => o.businessId === businessId && (o.status === "pending" || o.status === "confirmed"))
+    .map((o) => {
+      const customer = (state.customers || []).find((c) => c.id === o.customerId);
+      return { ...o, customerPhone: customer ? customer.phone : null, customerName: customer ? customer.name : null };
+    });
+}
+
 function getOrderByCheckoutRequestId(checkoutRequestId) {
   return load().orders.find((o) => o.mpesaCheckoutRequestId === checkoutRequestId);
 }
@@ -1104,6 +1127,8 @@ module.exports = {
   updateOrderStatus,
   attachMpesaCheckoutRequest,
   getOrderByCheckoutRequestId,
+  getBusinessByShortcode,
+  getPendingOrdersForBusiness,
   getSalesSummary,
   createReport,
   getReportsGroupedByBusiness,
