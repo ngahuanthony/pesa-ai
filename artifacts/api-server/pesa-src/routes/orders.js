@@ -37,16 +37,11 @@ function markPaid({ params, body, session }) {
   if (order.status === "paid" || order.status === "fulfilled") {
     throw db.httpError(400, "Order is already paid or fulfilled");
   }
-  const updated = db.updateOrderStatus(params.orderId, "paid");
-  const note = (body && body.note) ? String(body.note).trim() : null;
-  if (note) {
-    // Attach an optional vendor note (e.g. "Bank ref: ABC123")
-    db.mutate((state) => {
-      const o = (state.orders || []).find((x) => x.id === params.orderId);
-      if (o) o.paymentNote = note;
-    });
-  }
-  return updated;
+  const paymentRef = (body && body.paymentRef) ? String(body.paymentRef).trim() : null;
+  return db.updateOrderStatus(params.orderId, "paid", {
+    paymentMethod: "manual",
+    paymentRef:    paymentRef || null,
+  });
 }
 
 module.exports = { list, updateStatus, payWithMpesa, markPaid };

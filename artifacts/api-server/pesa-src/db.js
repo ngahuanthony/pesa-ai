@@ -904,11 +904,16 @@ function getOrder(orderId) {
   return load().orders.find((o) => o.id === orderId);
 }
 
-function updateOrderStatus(orderId, status) {
+// paymentMeta: optional object saved onto the order for reconciliation,
+// e.g. { mpesaTxnId, mpesaAmount, mpesaPhone, paymentMethod, paymentRef }
+function updateOrderStatus(orderId, status, paymentMeta = null) {
   return mutate((state) => {
     const o = state.orders.find((o) => o.id === orderId);
     if (!o) throw httpError(404, "Order not found");
     o.status = status;
+    if (paymentMeta && typeof paymentMeta === "object") {
+      o.paymentMeta = { ...paymentMeta, paidAt: now() };
+    }
     return o;
   });
 }

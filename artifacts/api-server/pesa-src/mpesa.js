@@ -141,7 +141,15 @@ function handleStkCallback(payload) {
   }
 
   if (Number(stkCallback.ResultCode) === 0) {
-    db.updateOrderStatus(order.id, "paid");
+    // Extract transaction details from Safaricom's CallbackMetadata
+    const meta = { paymentMethod: "mpesa-stk" };
+    const items = (stkCallback.CallbackMetadata && stkCallback.CallbackMetadata.Item) || [];
+    items.forEach(({ Name, Value }) => {
+      if (Name === "Amount")              meta.mpesaAmount  = Number(Value);
+      if (Name === "MpesaReceiptNumber")  meta.mpesaTxnId   = String(Value);
+      if (Name === "PhoneNumber")         meta.mpesaPhone   = String(Value);
+    });
+    db.updateOrderStatus(order.id, "paid", meta);
   } else {
     // Customer cancelled, entered the wrong PIN, insufficient funds, etc.
     // Leave the order as-is (not "cancelled") so the business can see it
@@ -261,7 +269,12 @@ async function handleC2BConfirmation(payload) {
 
   // 3. Update order ──────────────────────────────────────────────────────────
   if (matched) {
-    db.updateOrderStatus(matched.id, "paid");
+    db.updateOrderStatus(matched.id, "paid", {
+      paymentMethod: "mpesa-c2b",
+      mpesaTxnId:    TransID  || null,
+      mpesaAmount:   amount,
+      mpesaPhone:    customerPhone || null,
+    });
     console.log(`[mpesa c2b] Order ${matched.id} → paid (KES ${amount} from ${customerPhone})`);
   } else {
     console.log(`[mpesa c2b] No matching order for shortcode=${BusinessShortCode} amount=${amount} phone=${customerPhone} ref=${ref}`);
