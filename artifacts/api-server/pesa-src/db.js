@@ -191,9 +191,53 @@ function derivePersonaName(name, category) {
   return `${name} AI`;
 }
 
+// ---------------------------------------------------------------------------
+// Welcome message helpers
+// ---------------------------------------------------------------------------
+
+function getCategoryEmoji(category) {
+  if (!category) return "🛍️";
+  const c = category.toLowerCase();
+  if (c.includes("fashion") || c.includes("cloth") || c.includes("apparel")) return "👗";
+  if (c.includes("phone") || c.includes("mobile") || c.includes("accessory") || c.includes("accessories")) return "📱";
+  if (c.includes("electronic") || c.includes("gadget") || c.includes("computer") || c.includes("laptop")) return "💻";
+  if (c.includes("beauty") || c.includes("cosmet") || c.includes("skincare")) return "💄";
+  if (c.includes("food") || c.includes("beverag") || c.includes("restaurant") || c.includes("grocery")) return "🍽️";
+  if (c.includes("home") || c.includes("furnitur") || c.includes("interior")) return "🏠";
+  if (c.includes("agricult") || c.includes("produce") || c.includes("farm")) return "🌾";
+  if (c.includes("sport") || c.includes("fitness") || c.includes("gym")) return "🏋️";
+  if (c.includes("health") || c.includes("pharma") || c.includes("medical")) return "🏥";
+  return "🛍️";
+}
+
+function generateWelcomeMessage(business) {
+  const emoji = getCategoryEmoji(business.category);
+  const name = business.name || "Our Shop";
+
+  // Build optional location/delivery lines
+  const locationLine = business.location ? `\n📍 ${business.location}` : "";
+  const deliveryLine = business.deliveryAreas ? `\n🚚 ${business.deliveryAreas}` : "";
+  const extraLines = locationLine || deliveryLine ? `${locationLine}${deliveryLine}\n` : "";
+
+  return (
+    `👋 Welcome to ${name} WhatsApp Shop! ${emoji}📲\n` +
+    `We're here to make shopping quick, easy & hassle-free. 😊\n` +
+    `\n` +
+    `💬 Tell us what you're looking for — we'll help you with:\n` +
+    `• 📱 Products & prices\n` +
+    `• 📦 Stock availability\n` +
+    `• 🛒 How to place your order\n` +
+    `• 📍 Delivery & location details\n` +
+    (extraLines ? `\n${extraLines}` : `\n`) +
+    `Ready to shop? Just tell us what you need and let's get started! 🚀\n` +
+    `\n` +
+    `WhatsApp. Shop. Sell. Grow. 🇰🇪💚`
+  );
+}
+
 function createBusiness(
   state,
-  { name, category, phone, paybillNumber, plan, buildingName, shopNumber, publicPhone, idOrKraPin, ownerName, personaInstructions }
+  { name, category, phone, paybillNumber, plan, buildingName, shopNumber, publicPhone, idOrKraPin, ownerName, personaInstructions, location, deliveryAreas }
 ) {
   if (state.businesses.some((b) => b.phone === phone)) {
     throw httpError(409, "A business with this phone number already exists");
@@ -230,6 +274,11 @@ function createBusiness(
     publicPhone: publicPhone || null,
     idOrKraPin: idOrKraPin || null,
     verifiedShop: false,
+
+    // Delivery & discovery
+    location: location || null,           // e.g. "Nairobi CBD, Tom Mboya St"
+    deliveryAreas: deliveryAreas || null, // e.g. "Nairobi & nationwide delivery"
+    welcomeMessage: null,                 // auto-generated when WhatsApp connects
 
     createdAt: now(),
   };
@@ -358,7 +407,12 @@ function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verify
     if (accessToken !== undefined) {
       b.whatsappAccessTokenEnc = accessToken ? fieldCrypto.encrypt(accessToken) : null;
     }
-    return { ok: true, connected: !!(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc) };
+    // Auto-generate the customer welcome message on first connection
+    const isNowConnected = !!(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc);
+    if (isNowConnected && !b.welcomeMessage) {
+      b.welcomeMessage = generateWelcomeMessage(b);
+    }
+    return { ok: true, connected: isNowConnected };
   });
 }
 
@@ -386,6 +440,7 @@ function getVendorWhatsAppStatus(businessId) {
     wabaId: b.whatsappWabaId || null,
     displayName: b.whatsappDisplayName || null,
     verifyToken: b.whatsappVerifyToken || null,
+    welcomeMessage: b.welcomeMessage || null,
   };
 }
 
@@ -1009,6 +1064,7 @@ module.exports = {
   planHasFeature,
   SESSION_COOKIE_NAME,
   derivePersonaName,
+  generateWelcomeMessage,
   createBusiness,
   listBusinesses,
   getBusiness,

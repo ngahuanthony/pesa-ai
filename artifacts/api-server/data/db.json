@@ -240,11 +240,22 @@
           "field": "bankAccountNumber",
           "changedBy": "742b8b92-8ac5-45f9-90cd-137576c38117",
           "at": "2026-08-15T11:30:47.898Z"
+        },
+        {
+          "field": "welcomeMessage",
+          "changedBy": "admin",
+          "at": "2026-08-16T10:12:46.378Z"
+        },
+        {
+          "field": "welcomeMessage",
+          "changedBy": "admin",
+          "at": "2026-08-16T10:12:46.438Z"
         }
       ],
       "mpesaType": "paybill",
       "paybillAccountNumber": "542811",
-      "whatsappAccessTokenEnc": "bc16b61f221ddc3fdb1e06a7:1816047073171b51f6e7234482618f6a:150ae81fa436c82ea2258ade709be8b76d86f5132ca30e15bb4f3200524e7da4907643498d1f6f7a9396c79d7c468972c784301fd6114d95036ee53e50a7c95a9ff9cca91124eced2b19b5d02df5c63bd5a01f793cf91295164ff2c613791fda3cf6a5b0cc8193fc40ee7a84d0da1c731ca0fd1312140577dd9f127eca8945df9b435772cf4f9c1c52a8926d93400c236638d10ca5c4323214323241e4f7d38d0c4878dcaba46f2f6be462845d1ccff8271c2b1e8fbb14944b4b6ada8a4f6f3e9b18cb7140d6e2d742aed6e1632106"
+      "whatsappAccessTokenEnc": "bc16b61f221ddc3fdb1e06a7:1816047073171b51f6e7234482618f6a:150ae81fa436c82ea2258ade709be8b76d86f5132ca30e15bb4f3200524e7da4907643498d1f6f7a9396c79d7c468972c784301fd6114d95036ee53e50a7c95a9ff9cca91124eced2b19b5d02df5c63bd5a01f793cf91295164ff2c613791fda3cf6a5b0cc8193fc40ee7a84d0da1c731ca0fd1312140577dd9f127eca8945df9b435772cf4f9c1c52a8926d93400c236638d10ca5c4323214323241e4f7d38d0c4878dcaba46f2f6be462845d1ccff8271c2b1e8fbb14944b4b6ada8a4f6f3e9b18cb7140d6e2d742aed6e1632106",
+      "welcomeMessage": "👋 Welcome to Digital Nation Accessories WhatsApp Shop! 📱📲\nWe're here to make shopping quick, easy & hassle-free. 😊\n\n💬 Tell us what you're looking for — we'll help you with:\n• 📱 Products & prices\n• 📦 Stock availability\n• 🛒 How to place your order\n• 📍 Delivery & location details\n\nReady to shop? Just tell us what you need and let's get started! 🚀\n\nWhatsApp. Shop. Sell. Grow. 🇰🇪💚"
     }
   ],
   "accounts": [
@@ -462,6 +473,30 @@
       "isAdmin": false,
       "createdAt": "2026-08-15T14:06:39.932Z",
       "expiresAt": "2026-09-14T14:06:39.932Z"
+    },
+    {
+      "token": "008dfde0de0f6fe8bb2e5c231c1df4cdcdd98af834b74ccfe5e5845aabee8d51",
+      "accountId": null,
+      "businessId": null,
+      "isAdmin": true,
+      "createdAt": "2026-08-16T08:19:35.915Z",
+      "expiresAt": "2026-09-15T08:19:35.915Z"
+    },
+    {
+      "token": "fcceefb757785a9b6dd65a59f04d336ce1795c7c0e626eb88761e3f719fb019c",
+      "accountId": null,
+      "businessId": null,
+      "isAdmin": true,
+      "createdAt": "2026-08-16T10:12:02.520Z",
+      "expiresAt": "2026-09-15T10:12:02.520Z"
+    },
+    {
+      "token": "2eb7bf22a4fb67f1d5d4c01424d57eb1ec41a69792fb07fb4a3a9ed3db070d83",
+      "accountId": null,
+      "businessId": null,
+      "isAdmin": true,
+      "createdAt": "2026-08-16T10:12:46.279Z",
+      "expiresAt": "2026-09-15T10:12:46.279Z"
     }
   ],
   "subscriptions": [

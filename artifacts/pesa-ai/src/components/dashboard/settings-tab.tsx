@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Store, Bot, CreditCard, CheckCircle2, Headphones } from "lucide-react";
+import { Store, Bot, CreditCard, CheckCircle2, Headphones, MapPin } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const CATEGORIES = [
@@ -89,6 +89,9 @@ export function SettingsTab() {
   const [personaName,         setPersonaName]         = useState("");
   const [personaInstructions, setPersonaInstructions] = useState("");
 
+  const [location,     setLocation]     = useState("");
+  const [deliveryAreas,setDeliveryAreas]= useState("");
+
   const [buildingName, setBuildingName] = useState("");
   const [shopNumber,   setShopNumber]   = useState("");
   const [publicPhone,  setPublicPhone]  = useState("");
@@ -108,6 +111,8 @@ export function SettingsTab() {
       setCategory(business.category || "");
       setPersonaName(business.personaName || "");
       setPersonaInstructions(business.personaInstructions || "");
+      setLocation((business as any).location || "");
+      setDeliveryAreas((business as any).deliveryAreas || "");
       setBuildingName(business.buildingName || "");
       setShopNumber(business.shopNumber || "");
       setPublicPhone(business.publicPhone || "");
@@ -134,7 +139,7 @@ export function SettingsTab() {
     });
 
   const saveShop = () =>
-    updateBiz.mutate({ id: businessId, data: { buildingName, shopNumber, publicPhone } as any }, {
+    updateBiz.mutate({ id: businessId, data: { location, deliveryAreas, buildingName, shopNumber, publicPhone } as any }, {
       onSuccess: () => { refetch(); toast({ title: "Location saved!" }); },
     });
 
@@ -214,20 +219,30 @@ export function SettingsTab() {
         <SaveButton onClick={saveProfile} isPending={updateBiz.isPending} />
       </Section>
 
-      {/* 2. Your Location */}
-      <Section icon={Store} title="Your Location" sub="Optional — shows customers where to find your physical shop.">
-        <div className="grid sm:grid-cols-2 gap-4">
+      {/* 2. Your Location & Delivery */}
+      <Section icon={MapPin} title="Location & Delivery" sub="Helps customers know where you are and how you deliver — used in your welcome message.">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground">Business Location</label>
+          <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Nairobi CBD, Tom Mboya St" />
+          <p className="text-xs text-muted-foreground">Where customers can find you, e.g. "Nairobi CBD" or "Mombasa Road, Imara Daima".</p>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground">Delivery Areas</label>
+          <Input value={deliveryAreas} onChange={(e) => setDeliveryAreas(e.target.value)} placeholder="e.g. Nairobi & nationwide delivery" />
+          <p className="text-xs text-muted-foreground">Where you deliver to, e.g. "Nairobi CBD" or "Nairobi & nationwide via G4S".</p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4 pt-1">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Building / Mall</label>
+            <label className="text-sm font-medium text-foreground">Building / Mall <span className="text-muted-foreground font-normal">(optional)</span></label>
             <Input value={buildingName} onChange={(e) => setBuildingName(e.target.value)} placeholder="e.g. Westgate Shopping Mall" />
           </div>
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Shop / Stall Number</label>
+            <label className="text-sm font-medium text-foreground">Shop / Stall No. <span className="text-muted-foreground font-normal">(optional)</span></label>
             <Input value={shopNumber} onChange={(e) => setShopNumber(e.target.value)} placeholder="e.g. Ground Floor, G14" />
           </div>
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">Public Phone Number</label>
+          <label className="text-sm font-medium text-foreground">Public Phone Number <span className="text-muted-foreground font-normal">(optional)</span></label>
           <Input value={publicPhone} onChange={(e) => setPublicPhone(e.target.value)} placeholder="e.g. 0722 542 810" type="tel" />
         </div>
         <SaveButton onClick={saveShop} isPending={updateBiz.isPending} label="Save Location" />

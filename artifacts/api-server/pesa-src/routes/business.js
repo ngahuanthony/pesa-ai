@@ -14,7 +14,7 @@ function get({ params, session }) {
 
 function update({ params, body, session }) {
   auth.requireOwnBusiness(session, params.id);
-  const allowed = ["name", "category", "ownerName", "personaName", "personaInstructions", "paymentMethod", "mpesaType", "paybillNumber", "paybillAccountNumber", "whatsappPhoneNumberId", "bankName", "bankAccountNumber", "whatsappPhone", "buildingName", "shopNumber", "publicPhone"];
+  const allowed = ["name", "category", "ownerName", "personaName", "personaInstructions", "paymentMethod", "mpesaType", "paybillNumber", "paybillAccountNumber", "whatsappPhoneNumberId", "bankName", "bankAccountNumber", "whatsappPhone", "buildingName", "shopNumber", "publicPhone", "location", "deliveryAreas", "welcomeMessage"];
   const patch = {};
   for (const key of allowed) {
     if (body[key] !== undefined) patch[key] = body[key];
@@ -46,4 +46,13 @@ function getWhatsAppStatus({ params, session }) {
   return db.getVendorWhatsAppStatus(params.businessId);
 }
 
-module.exports = { get, update, requestWhatsApp, getWhatsAppStatus };
+// Regenerate the welcome message from current business data
+function regenerateWelcomeMessage({ params, session }) {
+  auth.requireOwnBusiness(session, params.businessId);
+  const business = db.getBusiness(params.businessId);
+  const welcomeMessage = db.generateWelcomeMessage(business);
+  db.updateBusiness(params.businessId, { welcomeMessage }, session.accountId || "vendor");
+  return { ok: true, welcomeMessage };
+}
+
+module.exports = { get, update, requestWhatsApp, getWhatsAppStatus, regenerateWelcomeMessage };

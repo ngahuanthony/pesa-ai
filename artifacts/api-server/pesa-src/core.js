@@ -17,6 +17,15 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
   // history includes the message we just added — drop it, the assistant gets it as userText
   const priorHistory = history.slice(0, -1);
 
+  // First-ever message from this customer → send welcome message instead of running AI.
+  // The customer can then ask their question and the AI will respond naturally from message 2.
+  if (priorHistory.length === 0 && business.welcomeMessage) {
+    db.mutate((state) => {
+      db.addMessage(state, conversation.id, "assistant", business.welcomeMessage);
+    });
+    return { replyText: business.welcomeMessage, order: null, customer, conversation };
+  }
+
   const { replyText, order } = await getAssistantReply(business, customer.id, priorHistory, text);
 
   db.mutate((state) => {

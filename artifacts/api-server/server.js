@@ -103,6 +103,7 @@ router.post("/api/admin/businesses/:businessId/mpesa", adminRoutes.setMpesaCrede
 router.get("/api/admin/businesses/:businessId/mpesa", adminRoutes.getMpesaStatus);
 router.delete("/api/admin/businesses/:businessId/mpesa", adminRoutes.disconnectMpesa);
 router.post("/api/admin/businesses/:businessId/reset-password", adminRoutes.resetPassword);
+router.post("/api/admin/businesses/:businessId/welcome-message", adminRoutes.regenerateWelcomeMessage);
 
 router.post("/api/reports", reportsRoutes.create);
 router.get("/api/admin/reports", reportsRoutes.list);
@@ -112,6 +113,7 @@ router.get("/api/businesses/:id", businessRoutes.get);
 router.put("/api/businesses/:id", businessRoutes.update);
 router.get("/api/businesses/:businessId/whatsapp/status", businessRoutes.getWhatsAppStatus);
 router.post("/api/businesses/:businessId/whatsapp/request", businessRoutes.requestWhatsApp);
+router.post("/api/businesses/:businessId/welcome-message/regenerate", businessRoutes.regenerateWelcomeMessage);
 
 router.get("/api/businesses/:businessId/subscription", subscriptionRoutes.get);
 router.post("/api/businesses/:businessId/subscription/charge", subscriptionRoutes.charge);

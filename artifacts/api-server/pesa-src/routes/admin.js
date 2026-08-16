@@ -125,6 +125,15 @@ function disconnectMpesa({ params, session }) {
   return db.clearMpesaCredentials(params.businessId, "admin");
 }
 
+// Regenerate (or backfill) the welcome message for a business using its current data
+function regenerateWelcomeMessage({ params, session }) {
+  auth.requireAdmin(session);
+  const business = db.getBusiness(params.businessId);
+  const welcomeMessage = db.generateWelcomeMessage(business);
+  db.updateBusiness(params.businessId, { welcomeMessage }, "admin");
+  return { ok: true, welcomeMessage };
+}
+
 function resetPassword({ params, body, session }) {
   auth.requireAdmin(session);
   const { newPassword } = body || {};
@@ -140,4 +149,5 @@ module.exports = {
   login, listBusinesses, chargeSubscription, suspendBusiness, unsuspendBusiness,
   getStats, getPlatformDefaults, setWhatsAppCredentials, getWhatsAppStatus,
   setMpesaCredentials, getMpesaStatus, disconnectMpesa, resetPassword,
+  regenerateWelcomeMessage,
 };

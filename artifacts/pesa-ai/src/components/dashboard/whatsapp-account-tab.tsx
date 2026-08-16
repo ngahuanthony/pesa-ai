@@ -1,18 +1,19 @@
 import { useState, useEffect } from "react";
 import { useGetMe } from "@workspace/api-client-react";
-import { Wifi, CheckCircle2, Clock, AlertCircle, Phone } from "lucide-react";
+import { Wifi, CheckCircle2, Clock, AlertCircle, Phone, RefreshCw, Copy, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 export function WhatsAppAccountTab() {
   const { data: me } = useGetMe();
   const businessId = me?.business?.id;
 
-  const [status, setStatus]       = useState<any>(null);
-  const [loading, setLoading]     = useState(true);
-  const [phone, setPhone]         = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError]         = useState("");
-  const [success, setSuccess]     = useState(false);
+  const [status, setStatus]           = useState<any>(null);
+  const [loading, setLoading]         = useState(true);
+  const [phone, setPhone]             = useState("");
+  const [submitting, setSubmitting]   = useState(false);
+  const [error, setError]             = useState("");
+  const [regenerating, setRegenerating] = useState(false);
+  const [copied, setCopied]           = useState(false);
 
   const load = async () => {
     if (!businessId) return;
@@ -35,9 +36,30 @@ export function WhatsAppAccountTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: phone.trim() }),
       });
-      if (res.ok) { setSuccess(true); await load(); }
+      if (res.ok) { await load(); }
       else { const e = await res.json(); setError(e.error || "Failed to submit request."); }
     } finally { setSubmitting(false); }
+  };
+
+  const handleRegenerate = async () => {
+    setRegenerating(true);
+    try {
+      const res = await fetch(`/api/businesses/${businessId}/welcome-message/regenerate`, {
+        method: "POST", credentials: "include",
+      });
+      if (res.ok) {
+        const { welcomeMessage } = await res.json();
+        setStatus((s: any) => ({ ...s, welcomeMessage }));
+      }
+    } finally { setRegenerating(false); }
+  };
+
+  const handleCopy = () => {
+    if (status?.welcomeMessage) {
+      navigator.clipboard.writeText(status.welcomeMessage);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   if (loading) {
@@ -47,36 +69,84 @@ export function WhatsAppAccountTab() {
   // ── Connected ──────────────────────────────────────────────────────────────
   if (status?.connected) {
     return (
-      <div className="flex flex-col items-center pt-8 pb-4 text-center space-y-6 max-w-md mx-auto">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-          <Wifi className="h-8 w-8 text-primary" />
+      <div className="flex flex-col pt-6 pb-4 space-y-5 max-w-lg mx-auto">
+
+        {/* Status card */}
+        <div className="flex flex-col items-center text-center space-y-3">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+            <Wifi className="h-7 w-7 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">WhatsApp Connected</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Your shop is live and accepting customer messages.
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-bold text-foreground">WhatsApp Connected</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Your WhatsApp Business number is live and accepting customer messages.
-          </p>
-        </div>
-        <div className="w-full rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-left space-y-3">
+
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             <span className="text-sm font-semibold text-emerald-700">Active &amp; Live</span>
           </div>
           {status.displayName && (
-            <div className="text-sm text-emerald-700">
-              <span className="font-medium">Display name: </span>{status.displayName}
-            </div>
+            <p className="text-sm text-emerald-700"><span className="font-medium">Display name: </span>{status.displayName}</p>
           )}
           {status.requestedPhone && (
-            <div className="text-sm text-emerald-700">
-              <span className="font-medium">Phone: </span>{status.requestedPhone}
-            </div>
+            <p className="text-sm text-emerald-700"><span className="font-medium">Phone: </span>{status.requestedPhone}</p>
           )}
         </div>
 
-        {/* Verify token — safe to show to vendor */}
+        {/* ── Welcome Message Preview ── */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">🎉 Customer Welcome Message</p>
+              <p className="text-xs text-muted-foreground">Sent automatically to every new customer who messages you.</p>
+            </div>
+          </div>
+
+          {status.welcomeMessage ? (
+            <div className="relative rounded-2xl border border-border bg-[#e9fbe9] p-4">
+              {/* WhatsApp-style chat bubble */}
+              <div className="rounded-xl bg-white shadow-sm p-3.5 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-[system-ui]">
+                {status.welcomeMessage}
+              </div>
+              <p className="text-[10px] text-gray-400 text-right mt-1.5 pr-1">WhatsApp preview</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border bg-gray-50 p-4 text-center text-sm text-muted-foreground">
+              No welcome message yet. Click Regenerate to create one from your shop details.
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleRegenerate}
+              disabled={regenerating}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-foreground hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${regenerating ? "animate-spin" : ""}`} />
+              {regenerating ? "Regenerating…" : "Regenerate"}
+            </button>
+            {status.welcomeMessage && (
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-foreground hover:bg-gray-50 transition-colors"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            💡 Update your location and delivery areas in <strong>Settings</strong> to personalise this message.
+          </p>
+        </div>
+
+        {/* Verify token */}
         {status.verifyToken && (
-          <div className="w-full rounded-xl border border-border bg-gray-50 p-4 text-left space-y-1">
+          <div className="rounded-xl border border-border bg-gray-50 p-4 space-y-1">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Webhook Verify Token</p>
             <p className="text-xs font-mono text-gray-700 break-all">{status.verifyToken}</p>
             <p className="text-[11px] text-gray-400">Only the Pesa AI team needs this. Your account is already configured.</p>
@@ -177,6 +247,7 @@ export function WhatsAppAccountTab() {
         <p className="text-xs font-semibold text-gray-600">What happens next?</p>
         <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
           <li>Our team connects your number to Pesa AI via Meta Business Manager</li>
+          <li>Your personalised welcome message is auto-generated from your shop details</li>
           <li>Customers can then WhatsApp your number to browse and buy from your shop</li>
           <li>You'll see orders arrive in real time in your Orders tab</li>
         </ul>
