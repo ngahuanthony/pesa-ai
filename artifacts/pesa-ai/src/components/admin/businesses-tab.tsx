@@ -451,6 +451,16 @@ export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
     });
   };
 
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Permanently delete "${name}"? This removes all their products, orders, customers and conversations and cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/admin/businesses/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) { toast({ title: "Delete failed", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: getAdminListBusinessesQueryKey() });
+      toast({ title: `${name} deleted` });
+    } catch { toast({ title: "Delete failed", variant: "destructive" }); }
+  };
+
   const filtered = (businesses || []).filter((b) =>
     b.name.toLowerCase().includes(search.toLowerCase()) ||
     b.phone.includes(search) ||
@@ -637,6 +647,14 @@ export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
                         <Ban className="h-3.5 w-3.5" /> Suspend
                       </button>
                     )}
+
+                    <button
+                      onClick={() => handleDelete(b.id, b.name)}
+                      title="Permanently delete this business"
+                      className="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </button>
                   </div>
                 </div>
               );

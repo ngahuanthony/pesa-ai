@@ -57,6 +57,23 @@ async function chargeSubscription({ params, body, session }) {
   return mpesa.initiateSubscriptionStkPush({ businessId: params.businessId, phone });
 }
 
+function deleteBusiness({ params, session }) {
+  auth.requireAdmin(session);
+  db.mutate((state) => {
+    const idx = state.businesses.findIndex(b => b.id === params.businessId);
+    if (idx === -1) throw db.httpError(404, "Business not found");
+    state.businesses.splice(idx, 1);
+    // Cascade: remove all related data
+    const bid = params.businessId;
+    state.customers     = (state.customers     || []).filter(c => c.businessId !== bid);
+    state.orders        = (state.orders        || []).filter(o => o.businessId !== bid);
+    state.products      = (state.products      || []).filter(p => p.businessId !== bid);
+    state.conversations = (state.conversations || []).filter(c => c.businessId !== bid);
+    state.sessions      = (state.sessions      || []).filter(s => s.businessId !== bid);
+  });
+  return { ok: true };
+}
+
 function suspendBusiness({ params, session }) {
   auth.requireAdmin(session);
   db.suspendBusiness(params.businessId);
@@ -177,7 +194,7 @@ function resetPassword({ params, body, session }) {
 
 module.exports = {
   importDb,
-  login, listBusinesses, chargeSubscription, suspendBusiness, unsuspendBusiness,
+  login, listBusinesses, chargeSubscription, deleteBusiness, suspendBusiness, unsuspendBusiness,
   getStats, getPlatformDefaults, setWhatsAppCredentials, getWhatsAppStatus,
   setMpesaCredentials, getMpesaStatus, disconnectMpesa, resetPassword,
   regenerateWelcomeMessage,

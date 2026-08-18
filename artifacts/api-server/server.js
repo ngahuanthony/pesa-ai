@@ -93,6 +93,7 @@ router.get("/api/auth/me", authRoutes.me);
 router.post("/api/admin/login", adminRoutes.login);
 router.get("/api/admin/businesses", adminRoutes.listBusinesses);
 router.post("/api/admin/businesses/:businessId/subscription/charge", adminRoutes.chargeSubscription);
+router.delete("/api/admin/businesses/:businessId", adminRoutes.deleteBusiness);
 router.post("/api/admin/businesses/:businessId/suspend", adminRoutes.suspendBusiness);
 router.post("/api/admin/businesses/:businessId/unsuspend", adminRoutes.unsuspendBusiness);
 router.get("/api/admin/stats", adminRoutes.getStats);
