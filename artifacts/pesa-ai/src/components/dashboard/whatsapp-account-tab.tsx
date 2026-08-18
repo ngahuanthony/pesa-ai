@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useGetMe } from "@workspace/api-client-react";
-import { Wifi, CheckCircle2, Clock, AlertCircle, Phone, RefreshCw, Copy, Check, Pencil, X } from "lucide-react";
+import { Wifi, CheckCircle2, Clock, AlertCircle, Phone, RefreshCw, Copy, Check, Pencil, X, Share2, Download, QrCode } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import QRCode from "qrcode";
 
 export function WhatsAppAccountTab() {
   const { data: me } = useGetMe();
@@ -17,6 +18,8 @@ export function WhatsAppAccountTab() {
   const [editing, setEditing]         = useState(false);
   const [draft, setDraft]             = useState("");
   const [saving, setSaving]           = useState(false);
+  const [qrDataUrl, setQrDataUrl]     = useState<string>("");
+  const [linkCopied, setLinkCopied]   = useState(false);
 
   const load = async () => {
     if (!businessId) return;
@@ -28,6 +31,19 @@ export function WhatsAppAccountTab() {
   };
 
   useEffect(() => { load(); }, [businessId]);
+
+  // Build wa.me shop URL and generate QR whenever status changes
+  useEffect(() => {
+    if (!status?.requestedPhone) return;
+    const digits = status.requestedPhone
+      .replace(/[\s\-\(\)]/g, "")
+      .replace(/^\+/, "")
+      .replace(/^0/, "254");
+    const url = `https://wa.me/${digits}?text=Hi%2C%20I%27d%20like%20to%20shop`;
+    QRCode.toDataURL(url, { width: 220, margin: 2, color: { dark: "#0d3d26", light: "#ffffff" } })
+      .then(setQrDataUrl)
+      .catch(() => {});
+  }, [status?.requestedPhone]);
 
   const handleRequest = async () => {
     if (!phone.trim()) { setError("Please enter your WhatsApp Business phone number."); return; }
@@ -147,6 +163,67 @@ export function WhatsAppAccountTab() {
             </p>
           </div>
         </div>
+
+        {/* ── Share your shop ── */}
+        {status.requestedPhone && (() => {
+          const digits = status.requestedPhone.replace(/[\s\-\(\)]/g, "").replace(/^\+/, "").replace(/^0/, "254");
+          const shopUrl = `https://wa.me/${digits}?text=Hi%2C%20I%27d%20like%20to%20shop`;
+          return (
+            <div className="rounded-xl border border-border bg-white overflow-hidden">
+              <div className="px-4 py-2.5 bg-gray-50 border-b border-border flex items-center gap-2">
+                <QrCode className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Share Your Shop</p>
+              </div>
+              <div className="p-4 flex flex-col sm:flex-row items-center gap-5">
+                {/* QR Code */}
+                {qrDataUrl ? (
+                  <div className="flex-shrink-0 rounded-xl border border-border p-2 bg-white shadow-sm">
+                    <img src={qrDataUrl} alt="Shop QR code" className="w-[110px] h-[110px] rounded-lg" />
+                  </div>
+                ) : (
+                  <div className="w-[126px] h-[126px] rounded-xl bg-muted animate-pulse flex-shrink-0" />
+                )}
+                {/* Link + actions */}
+                <div className="flex-1 space-y-3 min-w-0 w-full">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Customer shop link</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Share this link anywhere — WhatsApp, Instagram, packaging, receipts. Customers tap it and start shopping instantly.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 min-w-0">
+                    <span className="text-xs text-muted-foreground truncate flex-1 font-mono">{shopUrl}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(shopUrl); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-gray-50 transition-colors"
+                    >
+                      {linkCopied ? <><Check className="h-3.5 w-3.5 text-emerald-600" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy link</>}
+                    </button>
+                    {qrDataUrl && (
+                      <a
+                        href={qrDataUrl}
+                        download={`${status.displayName || "shop"}-qr.png`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-gray-50 transition-colors"
+                      >
+                        <Download className="h-3.5 w-3.5" /> Download QR
+                      </a>
+                    )}
+                    <a
+                      href={shopUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1ebe5d] transition-colors"
+                    >
+                      <Share2 className="h-3.5 w-3.5" /> Open in WhatsApp
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Welcome Message ── */}
         <div className="space-y-3">

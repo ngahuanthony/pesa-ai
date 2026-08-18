@@ -75,7 +75,8 @@ const salesRoutes = require("./pesa-src/routes/sales");
 const mpesaSettingsRoutes = require("./pesa-src/routes/mpesaSettings");
 const adminRoutes = require("./pesa-src/routes/admin");
 const reportsRoutes = require("./pesa-src/routes/reports");
-const videoScanRoutes = require("./pesa-src/routes/video-scan");
+const videoScanRoutes    = require("./pesa-src/routes/video-scan");
+const conversationRoutes = require("./pesa-src/routes/conversations");
 const videoProcessor = require("./pesa-src/video-processor");
 const whatsapp = require("./pesa-src/whatsapp");
 const mpesa = require("./pesa-src/mpesa");
@@ -141,6 +142,8 @@ router.get("/api/businesses/:businessId/video-scan/:scanId",           videoScan
 router.post("/api/businesses/:businessId/video-scan/:scanId/confirm",  videoScanRoutes.confirmScan);
 router.post("/api/businesses/:businessId/video-scan/:scanId/cancel",   videoScanRoutes.cancelScan);
 router.patch("/api/businesses/:businessId/video-scan/:scanId",         videoScanRoutes.renameScan);
+router.get("/api/businesses/:businessId/conversations",                              conversationRoutes.listHandover);
+router.post("/api/businesses/:businessId/conversations/:customerId/resume-ai",       conversationRoutes.resumeAI);
 router.delete("/api/businesses/:businessId/video-scan/:scanId",        videoScanRoutes.deleteScan);
 
 router.post("/api/businesses/:businessId/chat", chatRoutes.send);

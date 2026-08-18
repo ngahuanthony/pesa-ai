@@ -87,7 +87,8 @@ async function handleIncomingWebhook(body) {
 
   // Resolve the access token for THIS business (per-business, decrypted)
   const accessToken = resolveAccessToken(business);
-  await sendMessage(phoneNumberId, from, replyText, accessToken);
+  // replyText is null when AI is paused (human handover active) — skip sending
+  if (replyText) await sendMessage(phoneNumberId, from, replyText, accessToken);
 }
 
 // Decrypt and return the per-business WhatsApp access token.

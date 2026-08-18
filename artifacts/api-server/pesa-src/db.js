@@ -836,10 +836,43 @@ function findOrCreateConversation(state, businessId, customerId, channel) {
     (c) => c.businessId === businessId && c.customerId === customerId
   );
   if (!convo) {
-    convo = { id: id(), businessId, customerId, channel, createdAt: now() };
+    convo = { id: id(), businessId, customerId, channel, createdAt: now(), humanHandover: false };
     state.conversations.push(convo);
   }
   return convo;
+}
+
+// Set or clear the human-handover flag on a conversation.
+// When true: AI stops auto-replying so the vendor can take over manually.
+function setConversationHandover(businessId, customerPhone, active) {
+  return mutate((state) => {
+    const customer = state.customers.find((c) => c.businessId === businessId && c.phone === customerPhone);
+    if (!customer) return null;
+    const convo = state.conversations.find((c) => c.businessId === businessId && c.customerId === customer.id);
+    if (!convo) return null;
+    convo.humanHandover = !!active;
+    convo.handoverAt    = active ? now() : null;
+    return convo;
+  });
+}
+
+// Returns conversations where humanHandover is true, enriched with customer info.
+function getHandoverConversations(businessId) {
+  const state = load();
+  return (state.conversations || [])
+    .filter((c) => c.businessId === businessId && c.humanHandover)
+    .map((c) => {
+      const customer = (state.customers || []).find((cu) => cu.id === c.customerId);
+      const lastMsg  = (state.messages || []).filter((m) => m.conversationId === c.id).slice(-1)[0];
+      return {
+        conversationId: c.id,
+        customerId: c.customerId,
+        customerPhone:  customer ? customer.phone : null,
+        customerName:   customer ? customer.name  : null,
+        handoverAt:     c.handoverAt || null,
+        lastMessage:    lastMsg ? lastMsg.content : null,
+      };
+    });
 }
 
 function addMessage(state, conversationId, role, content) {
@@ -1134,6 +1167,8 @@ module.exports = {
   getOrderByCheckoutRequestId,
   getBusinessByShortcode,
   getPendingOrdersForBusiness,
+  setConversationHandover,
+  getHandoverConversations,
   getSalesSummary,
   createReport,
   getReportsGroupedByBusiness,

@@ -1,15 +1,59 @@
 import { useGetMe, useListOrders, useListProducts, useGetSalesSummary, getListOrdersQueryKey, getListProductsQueryKey, getGetSalesSummaryQueryKey } from "@workspace/api-client-react";
-import { ShoppingCart, DollarSign, Package, MessageSquare, Bot } from "lucide-react";
+import { ShoppingCart, DollarSign, Package, MessageSquare, Bot, UserCheck, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
+import { useState, useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
+
+interface HandoverConvo {
+  conversationId: string;
+  customerId: string;
+  customerPhone: string | null;
+  customerName: string | null;
+  handoverAt: string | null;
+  lastMessage: string | null;
+}
 
 export function OverviewTab() {
   const { data: me } = useGetMe();
   const businessId  = (me as any)?.business?.id || "";
   const businessName = (me as any)?.business?.name || "your shop";
+  const { toast } = useToast();
 
   const { data: ordersData }   = useListOrders(businessId,   { query: { enabled: !!businessId, queryKey: getListOrdersQueryKey(businessId) } });
   const { data: productsData } = useListProducts(businessId, { query: { enabled: !!businessId, queryKey: getListProductsQueryKey(businessId) } });
   const { data: salesData }    = useGetSalesSummary(businessId, { query: { enabled: !!businessId, queryKey: getGetSalesSummaryQueryKey(businessId) } });
+
+  const [handoverConvos, setHandoverConvos] = useState<HandoverConvo[]>([]);
+  const [resumingId, setResumingId]         = useState<string | null>(null);
+
+  const fetchHandover = async () => {
+    if (!businessId) return;
+    try {
+      const res = await fetch(`/api/businesses/${businessId}/conversations`, { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setHandoverConvos(data.conversations || []);
+      }
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => { fetchHandover(); }, [businessId]);
+
+  const handleResumeAI = async (customerPhone: string) => {
+    setResumingId(customerPhone);
+    try {
+      await fetch(`/api/businesses/${businessId}/conversations/${encodeURIComponent(customerPhone)}/resume-ai`, {
+        method: "POST",
+        credentials: "include",
+      });
+      toast({ title: "AI resumed for this customer" });
+      await fetchHandover();
+    } catch {
+      toast({ title: "Failed to resume AI", variant: "destructive" });
+    } finally {
+      setResumingId(null);
+    }
+  };
 
   const orders       = (ordersData   as any)?.orders   || [];
   const products     = (productsData as any)?.products || [];
@@ -42,12 +86,12 @@ export function OverviewTab() {
       iconColor: "text-green-600",
     },
     {
-      label: "Active Chats",
-      value: "0",
-      link: { label: "View conversations", href: "/dashboard/chat" },
-      icon: MessageSquare,
-      iconBg: "bg-blue-100",
-      iconColor: "text-blue-500",
+      label: "Need Attention",
+      value: String(handoverConvos.length),
+      link: { label: handoverConvos.length > 0 ? "See below ↓" : "All good", href: "#handover" },
+      icon: handoverConvos.length > 0 ? AlertTriangle : UserCheck,
+      iconBg: handoverConvos.length > 0 ? "bg-amber-100" : "bg-blue-100",
+      iconColor: handoverConvos.length > 0 ? "text-amber-600" : "text-blue-500",
     },
   ];
 
@@ -79,12 +123,54 @@ export function OverviewTab() {
             </div>
             <p className="text-xs text-muted-foreground font-medium">{label}</p>
             <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
-            <Link href={link.href} className="text-xs font-medium text-primary hover:underline mt-1 inline-block">
-              {link.label}
-            </Link>
+            {link.href.startsWith("#") ? (
+              <span className="text-xs font-medium text-primary mt-1 inline-block">{link.label}</span>
+            ) : (
+              <Link href={link.href} className="text-xs font-medium text-primary hover:underline mt-1 inline-block">
+                {link.label}
+              </Link>
+            )}
           </div>
         ))}
       </div>
+
+      {/* ── Human handover alert ── */}
+      {handoverConvos.length > 0 && (
+        <div id="handover" className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-200 bg-amber-100/60">
+            <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+            <h2 className="font-semibold text-amber-800 text-sm">
+              {handoverConvos.length} customer{handoverConvos.length !== 1 ? "s" : ""} waiting for you
+            </h2>
+            <span className="ml-auto text-xs text-amber-600">AI is paused for these chats</span>
+          </div>
+          <div className="divide-y divide-amber-100">
+            {handoverConvos.map((c) => (
+              <div key={c.conversationId} className="flex items-center justify-between px-5 py-3 gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground">{c.customerName || c.customerPhone || "Customer"}</p>
+                  {c.customerName && <p className="text-xs text-muted-foreground">{c.customerPhone}</p>}
+                  {c.lastMessage && (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-xs">"{c.lastMessage}"</p>
+                  )}
+                  {c.handoverAt && (
+                    <p className="text-[11px] text-amber-600 mt-0.5">
+                      Requested {new Date(c.handoverAt).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleResumeAI(c.customerPhone || c.customerId)}
+                  disabled={resumingId === (c.customerPhone || c.customerId)}
+                  className="flex-shrink-0 rounded-lg bg-white border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-50 transition-colors"
+                >
+                  {resumingId === (c.customerPhone || c.customerId) ? "Resuming…" : "Resume AI →"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Bottom row ── */}
       <div className="grid lg:grid-cols-[1fr_320px] gap-4">
