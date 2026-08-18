@@ -341,10 +341,15 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && pathname === "/webhook/whatsapp") {
     try {
       const rawBody = await readRawBody(req);
-      if (!validateWhatsAppSignature(rawBody, req.headers["x-hub-signature-256"])) {
+      const sigHeader = req.headers["x-hub-signature-256"];
+      const appSecret = process.env.WHATSAPP_APP_SECRET;
+      console.log(`[webhook] POST /webhook/whatsapp — sig=${sigHeader ? sigHeader.slice(0,20)+"…" : "NONE"} secret=${appSecret ? "SET("+appSecret.length+"chars)" : "NOT_SET"} bodyLen=${rawBody.length}`);
+      if (!validateWhatsAppSignature(rawBody, sigHeader)) {
+        console.log("[webhook] Signature validation FAILED — returning 403");
         sendJson(res, 403, { error: "Invalid webhook signature" });
         return;
       }
+      console.log("[webhook] Signature OK — processing message");
       let body = {};
       if (rawBody.length > 0) {
         try { body = JSON.parse(rawBody.toString("utf8")); }
