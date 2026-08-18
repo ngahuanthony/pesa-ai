@@ -65,16 +65,33 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
 
   if (isFirstMessage) {
     if (isShopLinkEntry) {
-      // Customer tapped the QR / shop link — run AI immediately with an instruction
-      // to greet them AND show the catalog right away, no second message needed.
-      const { replyText, order } = await getAssistantReply(
+      // Customer tapped the QR / shop link.
+      // 1. Send the welcome message instantly (if one is configured).
+      // 2. Then run the AI to fetch and present the live catalog as a second message.
+      // Both land in sequence — greeting first, products right behind it.
+      const welcomeReply = business.welcomeMessage || null;
+      if (welcomeReply) {
+        db.mutate((state) => {
+          db.addMessage(state, conversation.id, "assistant", welcomeReply);
+        });
+      }
+
+      const { replyText: catalogReply, order } = await getAssistantReply(
         business, customer.id, [], text,
         { shopEntry: true }
       );
       db.mutate((state) => {
-        db.addMessage(state, conversation.id, "assistant", replyText);
+        db.addMessage(state, conversation.id, "assistant", catalogReply);
       });
-      return { replyText, order, customer, conversation };
+
+      // Return both so the WhatsApp sender can send them in order.
+      return {
+        replyText:    welcomeReply,   // sent first (null = skip)
+        extraReplies: [catalogReply], // sent immediately after
+        order,
+        customer,
+        conversation,
+      };
     }
 
     // Normal first message → send static welcome so the vendor's custom greeting

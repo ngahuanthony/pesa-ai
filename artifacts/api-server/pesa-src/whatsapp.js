@@ -77,7 +77,7 @@ async function handleIncomingWebhook(body) {
 
   const contactName = value.contacts?.[0]?.profile?.name;
 
-  const { replyText } = await handleCustomerMessage({
+  const { replyText, extraReplies } = await handleCustomerMessage({
     business,
     customerPhone: from,
     customerName:  contactName,
@@ -87,8 +87,16 @@ async function handleIncomingWebhook(body) {
 
   // Resolve the access token for THIS business (per-business, decrypted)
   const accessToken = resolveAccessToken(business);
+
   // replyText is null when AI is paused (human handover active) — skip sending
   if (replyText) await sendMessage(phoneNumberId, from, replyText, accessToken);
+
+  // Shop-link entry: send the catalog message immediately after the welcome
+  if (extraReplies && extraReplies.length) {
+    for (const extra of extraReplies) {
+      if (extra) await sendMessage(phoneNumberId, from, extra, accessToken);
+    }
+  }
 }
 
 // Decrypt and return the per-business WhatsApp access token.
