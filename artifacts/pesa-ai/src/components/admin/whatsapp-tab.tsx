@@ -6,7 +6,7 @@ import { Copy, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Wifi } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const WEBHOOK_URL = "https://pesaai.africa/api/webhook/whatsapp";
+const WEBHOOK_URL = "https://pesaai.africa/webhook/whatsapp";
 
 export function AdminWhatsAppTab() {
   const { data: businesses, isLoading } = useAdminListBusinesses();
