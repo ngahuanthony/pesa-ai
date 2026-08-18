@@ -5,6 +5,11 @@
 const db = require("./db");
 const { getAssistantReply } = require("./ai");
 
+// The pre-filled text baked into the shop QR / wa.me link.
+// When a customer taps the link, WhatsApp sends exactly this message.
+// We detect it to trigger an instant, catalog-aware shop greeting.
+const SHOP_LINK_TRIGGER = "hi, i'd like to shop";
+
 // Keywords that signal a customer wants to speak to a human.
 // Covers English, Kiswahili, and common Sheng phrasing.
 const HANDOVER_TRIGGERS = [
@@ -54,13 +59,32 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
   // history includes the message we just added — drop it, the assistant gets it as userText
   const priorHistory = history.slice(0, -1);
 
-  // First-ever message from this customer → send welcome message instead of running AI.
-  // The customer can then ask their question and the AI will respond naturally from message 2.
-  if (priorHistory.length === 0 && business.welcomeMessage) {
-    db.mutate((state) => {
-      db.addMessage(state, conversation.id, "assistant", business.welcomeMessage);
-    });
-    return { replyText: business.welcomeMessage, order: null, customer, conversation };
+  // First-ever message from this customer
+  const isFirstMessage = priorHistory.length === 0;
+  const isShopLinkEntry = text.trim().toLowerCase() === SHOP_LINK_TRIGGER;
+
+  if (isFirstMessage) {
+    if (isShopLinkEntry) {
+      // Customer tapped the QR / shop link — run AI immediately with an instruction
+      // to greet them AND show the catalog right away, no second message needed.
+      const { replyText, order } = await getAssistantReply(
+        business, customer.id, [], text,
+        { shopEntry: true }
+      );
+      db.mutate((state) => {
+        db.addMessage(state, conversation.id, "assistant", replyText);
+      });
+      return { replyText, order, customer, conversation };
+    }
+
+    // Normal first message → send static welcome so the vendor's custom greeting
+    // always lands first, then AI takes over from message 2.
+    if (business.welcomeMessage) {
+      db.mutate((state) => {
+        db.addMessage(state, conversation.id, "assistant", business.welcomeMessage);
+      });
+      return { replyText: business.welcomeMessage, order: null, customer, conversation };
+    }
   }
 
   const { replyText, order } = await getAssistantReply(business, customer.id, priorHistory, text);

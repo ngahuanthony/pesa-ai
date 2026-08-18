@@ -132,9 +132,19 @@ function executeTool(business, customerId, toolName, toolInput) {
 
 // Runs the Claude tool-use loop for one customer turn and returns
 // { replyText, order } — order is set if create_order was called.
-async function runClaudeAssistant(business, customerId, history, userText) {
+async function runClaudeAssistant(business, customerId, history, userText, opts = {}) {
   const products = db.listProducts(business.id);
-  const system = systemPrompt(business, products);
+  let system = systemPrompt(business, products);
+
+  // When the customer arrives via the shop QR / wa.me link, add a one-time
+  // instruction so the AI immediately greets them AND presents the catalog.
+  if (opts.shopEntry) {
+    system +=
+      "\n\nSPECIAL INSTRUCTION (first message via shop link): The customer just tapped your shop link. " +
+      "Give them a warm, short welcome greeting, then immediately call search_products (empty query) " +
+      "to list what's available, and present the top products with names and prices in a clear, " +
+      "scannable format. Do this in ONE reply — don't ask them what they're looking for first."
+  }
 
   const messages = [
     ...history.map((m) => ({
@@ -197,7 +207,7 @@ function placeOrderFromToolCall(business, customerId, requestedItems) {
 
 // --- mock fallback (no API key) ------------------------------------------
 
-function runMockAssistant(business, customerId, history, userText) {
+function runMockAssistant(business, customerId, history, userText, opts = {}) {
   const products = db.listProducts(business.id, { activeOnly: true });
   const text = userText.toLowerCase();
 
@@ -241,11 +251,11 @@ function runMockAssistant(business, customerId, history, userText) {
   };
 }
 
-async function getAssistantReply(business, customerId, history, userText) {
+async function getAssistantReply(business, customerId, history, userText, opts = {}) {
   if (ANTHROPIC_API_KEY) {
-    return runClaudeAssistant(business, customerId, history, userText);
+    return runClaudeAssistant(business, customerId, history, userText, opts);
   }
-  return runMockAssistant(business, customerId, history, userText);
+  return runMockAssistant(business, customerId, history, userText, opts);
 }
 
 module.exports = { getAssistantReply };
