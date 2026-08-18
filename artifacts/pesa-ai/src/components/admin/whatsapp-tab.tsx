@@ -14,6 +14,7 @@ export function AdminWhatsAppTab() {
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [accessToken, setAccessToken]     = useState("");
   const [verifyToken, setVerifyToken]     = useState("");
+  const [waPhone, setWaPhone]             = useState("");
   const [saving, setSaving]               = useState(false);
   const [status, setStatus]               = useState<"connected" | "not_connected" | null>(null);
   const { toast } = useToast();
@@ -23,6 +24,7 @@ export function AdminWhatsAppTab() {
     setSelectedId(id);
     setPhoneNumberId("");
     setAccessToken("");
+    setWaPhone("");
     setStatus(null);
     try {
       const res = await fetch(`/api/admin/businesses/${id}/whatsapp`, {
@@ -32,6 +34,7 @@ export function AdminWhatsAppTab() {
         const data = await res.json();
         setPhoneNumberId(data.phoneNumberId || "");
         setVerifyToken(data.verifyToken || "");
+        setWaPhone(data.requestedPhone || "");
         setStatus(data.connected ? "connected" : "not_connected");
       }
     } catch { /* ignore */ }
@@ -45,7 +48,7 @@ export function AdminWhatsAppTab() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumberId, accessToken: accessToken || undefined, verifyToken }),
+        body: JSON.stringify({ phoneNumberId, accessToken: accessToken || undefined, verifyToken, waPhone: waPhone || undefined }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -163,6 +166,16 @@ export function AdminWhatsAppTab() {
                       className="bg-zinc-900 border-zinc-600 text-zinc-100 placeholder:text-zinc-500"
                     />
                     <p className="text-[10px] text-zinc-500">Create a permanent System User token</p>
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="text-xs font-medium text-zinc-300">WhatsApp Business Phone Number <span className="text-zinc-500">(what customers message)</span></label>
+                    <Input
+                      value={waPhone}
+                      onChange={(e) => setWaPhone(e.target.value)}
+                      placeholder="e.g. 15556733757 or 254722000000"
+                      className="bg-zinc-900 border-zinc-600 text-zinc-100 placeholder:text-zinc-500"
+                    />
+                    <p className="text-[10px] text-zinc-500">International format, no + or spaces. Used for the shop QR code and share link.</p>
                   </div>
                 </div>
               </div>
