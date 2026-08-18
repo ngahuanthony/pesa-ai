@@ -1,0 +1,186 @@
+
+
+
+Once a vendor is created , you can shop into the shop with qr code/ or make the shop link shareable easily.
+
+for businesses with a website add URL to pesa ai for the inventory to be added to pesa ai system.
+PDF price list
+Product photos
+Existing catalogue
+Website URL
+
+in a very easy and straight forward manner
+
+
+
+very simplified cart order for those ordering on WhatsApp shop
+
+Simple Shopping Cart
+
+This should be very lightweight.
+
+Customer:
+
+“Add 2 of those.”
+
+Pesa AI:
+
+Your order
+
+2 × Type-C Cable — KSh 1,000
+1 × 20W Charger — KSh 1,500
+
+Total: KSh 2,500
+
+[Confirm Order]
+
+
+6. 📦 Order Tracking
+
+Keep it extremely simple.
+
+Customer:
+
+Where is my order?
+
+Pesa AI:
+
+📦 Order #PA1045
+
+Status: Out for delivery 🚚
+
+Expected today between 2–5 PM.
+
+
+Human handover for ai hands to human for complicated issues:
+7. 👤 Human Handover
+
+This is essential.
+
+AI should not try to answer everything.
+
+Add:
+
+👨‍💼 Talk to a human
+
+Then the conversation moves to the business.
+
+Your dashboard could show:
+
+AI conversations
+
+127
+
+Orders
+
+18
+
+Human assistance
+
+7
+
+Sales
+
+KSh 84,500
+
+This makes businesses comfortable adopting AI.
+
+Business insights
+
+8. 🔥 Automatic Follow-Up
+
+This could be a huge revenue feature.
+
+Someone asks:
+
+“Do you have Samsung S25 covers?”
+
+Pesa AI answers.
+
+Customer doesn't buy.
+
+Pesa AI can later follow up appropriately:
+
+Hi James 👋 You were asking about Samsung S25 covers earlier. We now have new designs available. Would you like to see them?
+
+10. 🇰🇪 English + Kiswahili + Sheng
+
+This could be very powerful for Africa.
+
+Customer:
+
+“Bei ya hii ni how much?”
+
+Pesa AI understands.
+
+Customer:
+
+“Iko stock?”
+
+Understands.
+
+Customer:
+
+“Nitumie mbili.”
+
+Understands.
+
+Then respond naturally.
+
+You don't necessarily need to advertise it as “AI multilingual technology.”
+
+Just say:
+
+Talk to your customers the way they talk to you.
+
+That is much more compelling.
+
+
+
+
+
+
+14. 🏪 Multi-Branch Support
+
+This is where you start attracting larger businesses.
+
+A company might have:
+
+Nairobi CBD
+Westlands
+Mombasa
+Kisumu
+
+Customer:
+
+“Where can I find this?”
+
+Pesa AI:
+
+📍 Available at:
+
+Westlands — 4 units
+
+CBD — 8 units
+
+Mombasa — 0
+
+Which branch would you like?
+
+This makes Pesa AI interesting to chains and franchises.
+
+19. ⭐ Reviews
+
+After an order:
+
+Thank you for shopping with Digital Nation 🙏
+
+How was your experience?
+
+⭐ ⭐ ⭐ ⭐ ⭐
+
+Then Pesa AI can show the business:
+
+Customer rating: 4.8 ⭐
+
+Eventually this becomes a trust layer.
