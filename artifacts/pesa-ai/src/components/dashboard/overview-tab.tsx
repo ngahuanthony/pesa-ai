@@ -1,8 +1,9 @@
 import { useGetMe, useListOrders, useListProducts, useGetSalesSummary, getListOrdersQueryKey, getListProductsQueryKey, getGetSalesSummaryQueryKey } from "@workspace/api-client-react";
-import { ShoppingCart, DollarSign, Package, Bot, AlertTriangle, CheckCircle2, Circle, ExternalLink, Copy, Check, Wifi } from "lucide-react";
+import { ShoppingCart, DollarSign, Package, Bot, AlertTriangle, CheckCircle2, Circle, ExternalLink, Copy, Check, Wifi, QrCode } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { ShopQRCard } from "@/components/dashboard/shop-qr-card";
 
 interface HandoverConvo {
   conversationId: string;
@@ -201,6 +202,55 @@ export function OverviewTab() {
                 {!step.done && <span className="text-xs text-primary font-semibold">Do this →</span>}
               </Link>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── WhatsApp Shop QR Code ── */}
+      {waStatus?.requestedPhone && (
+        <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border bg-muted/20">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+              <QrCode className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground text-sm">Your WhatsApp Shop QR Code</h3>
+              <p className="text-xs text-muted-foreground">Auto-generated · Print and stick at your shop</p>
+            </div>
+          </div>
+
+          <div className="p-5 flex flex-col sm:flex-row gap-6 items-start">
+            {/* QR card preview + download */}
+            <div className="flex-shrink-0 w-full sm:w-auto flex justify-center">
+              <ShopQRCard businessName={businessName} phone={waStatus.requestedPhone} />
+            </div>
+
+            {/* Instructions */}
+            <div className="flex-1 min-w-0">
+              <div className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-700 text-[11px] font-semibold px-2.5 py-0.5 mb-3">
+                📲 Print &amp; Stick
+              </div>
+              <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
+                Customers scan this code at your shop to open WhatsApp and start browsing.
+                Download the print-ready card and put it wherever your customers will see it.
+              </p>
+              <div className="space-y-3">
+                {[
+                  { n: 1, text: "Download the PNG — high-resolution, ready for A5 print" },
+                  { n: 2, text: "Print at any print shop or on your own printer" },
+                  { n: 3, text: "Stick on your counter, packaging, or share on social media" },
+                  { n: 4, text: "Customers scan → AI answers → orders come in automatically" },
+                ].map(({ n, text }) => (
+                  <div key={n} className="flex items-start gap-2.5">
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-[11px] font-bold flex-shrink-0 mt-0.5">
+                      {n}
+                    </span>
+                    <span className="text-sm text-foreground leading-snug">{text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
