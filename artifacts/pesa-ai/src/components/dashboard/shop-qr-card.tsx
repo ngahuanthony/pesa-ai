@@ -185,7 +185,7 @@ export function ShopQRCard({ businessName, phone }: ShopQRCardProps) {
     const pfSize = Math.round(W * 0.025);
     ctx.font = `${pfSize}px Arial`;
     ctx.fillStyle = "#9ca3af";
-    ctx.fillText("Powered by Pesa AI", W / 2, H - Math.round(H * 0.04));
+    ctx.fillText("WhatsApp Shop  ·  Pesa AI", W / 2, H - Math.round(H * 0.04));
 
     // Border
     ctx.strokeStyle = "#25D366";
