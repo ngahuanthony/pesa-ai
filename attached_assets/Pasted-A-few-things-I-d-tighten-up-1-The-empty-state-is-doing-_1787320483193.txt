@@ -1,0 +1,20 @@
+A few things I'd tighten up:
+
+1. The empty state is doing double duty badly
+Right now "Connect WhatsApp to start" is the only CTA, but the vendor also has 0 products. Chicken-and-egg: they can't sell without products, and they can't get value without WhatsApp connected. Consider a single progress checklist at the top instead of scattered "Add products" / "Connect WhatsApp" links — e.g. "① Add your first product → ② Connect WhatsApp → ③ Go live" with a progress bar. That turns 4 disconnected zero-states into one guided path, which matters a lot for a vendor who might otherwise just close the tab confused about what to do first.
+
+2. "Need Attention: 0 / All good" is dead weight right now
+For a brand-new shop with nothing set up, "All good" reads oddly next to "0 products, 0 orders." I'd either hide that card until there's real activity to monitor, or repurpose it during onboarding to show setup completion (e.g. "2 of 4 steps done").
+
+3. Give "Connect WhatsApp to start" more visual weight
+It's the single most important action on this whole page but it's buried at the bottom of the Recent Orders card. I'd pull it into the hero banner itself as a big button — since without WhatsApp connected, literally nothing else on this dashboard can produce value.
+
+4. AI Activity Feed is a great trust-building idea — lean into it
+Once WhatsApp is live, this is where a vendor sees "the AI actually did something" (answered a customer, took an order). That's the moment of magic for a nontechnical vendor. I'd make sure early activity items are very human-readable, e.g. "🤖 Answered a question about iPhone 13 case pricing" rather than generic logs.
+
+5. Consider a tiny personal touch
+"Welcome to Digital Nation Accessories!" is good — using their actual shop name builds trust. You could extend that pattern: once products exist, show something like "Your shop link: wa.me/2547XXXXXXXX" front and center on the dashboard, since that's the actual sellable asset they'll share with customers.
+
+6. Make a printable qr code that can be downloaded so that the shops can stick at the premises for customers to scan when they visit the shop and look up for updates orders in future.
+
+7. We can also have a scan to sign up, and make this sign up even ueasy with a mobile phone.
