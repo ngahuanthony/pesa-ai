@@ -169,6 +169,35 @@
       "paybillAccountNumber": "542811",
       "whatsappAccessTokenEnc": "bc16b61f221ddc3fdb1e06a7:1816047073171b51f6e7234482618f6a:150ae81fa436c82ea2258ade709be8b76d86f5132ca30e15bb4f3200524e7da4907643498d1f6f7a9396c79d7c468972c784301fd6114d95036ee53e50a7c95a9ff9cca91124eced2b19b5d02df5c63bd5a01f793cf91295164ff2c613791fda3cf6a5b0cc8193fc40ee7a84d0da1c731ca0fd1312140577dd9f127eca8945df9b435772cf4f9c1c52a8926d93400c236638d10ca5c4323214323241e4f7d38d0c4878dcaba46f2f6be462845d1ccff8271c2b1e8fbb14944b4b6ada8a4f6f3e9b18cb7140d6e2d742aed6e1632106",
       "welcomeMessage": "👋 Welcome to Digital Nation Accessories WhatsApp Shop! 📱📲\nWe're here to make shopping quick, easy & hassle-free. 😊\n\n💬 Tell us what you're looking for — we'll help you with:\n• 📱 Products & prices\n• 📦 Stock availability\n• 🛒 How to place your order\n• 📍 Delivery & location details\n\nReady to shop? Just tell us what you need and let's get started! 🚀\n\nWhatsApp. Shop. Sell. Grow. 🇰🇪💚"
+    },
+    {
+      "id": "a288ca9b-c1bb-401c-b70f-0d4c13694702",
+      "name": "Shop-KmWtDL",
+      "category": "Other",
+      "phone": "0712345678",
+      "ownerName": "Test Vendor",
+      "personaName": "Shop-KmWtDL AI",
+      "personaInstructions": null,
+      "paymentMethod": null,
+      "mpesaType": null,
+      "bankName": null,
+      "bankAccountNumber": null,
+      "paybillNumber": null,
+      "paybillAccountNumber": null,
+      "whatsappPhoneNumberId": null,
+      "whatsappVerifyToken": "fd5298462c84f0b80c7fb97e",
+      "whatsappRequestedPhone": null,
+      "whatsappWabaId": null,
+      "whatsappDisplayName": null,
+      "buildingName": null,
+      "shopNumber": null,
+      "publicPhone": null,
+      "idOrKraPin": null,
+      "verifiedShop": false,
+      "location": null,
+      "deliveryAreas": null,
+      "welcomeMessage": null,
+      "createdAt": "2026-08-21T14:41:43.860Z"
     }
   ],
   "accounts": [
@@ -216,6 +245,24 @@
       "passwordSalt": "f3be27f88498ff0263a625ce3f5a4c47",
       "consentedAt": "2026-08-15T04:00:10.052Z",
       "createdAt": "2026-08-15T04:00:10.052Z"
+    },
+    {
+      "id": "c1ecca4b-8472-4342-8414-fef1c5b5e8db",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "email": "demo@digitalnation.co.ke",
+      "passwordHash": "364b3fb2e79bd3e917aca31045dd48efcbe60b253f16af3e6d4ad103e9691b20782e834cd5aeb6b365ce3ceb9e6f68f90cf020325156e65ef265362224d63c86",
+      "passwordSalt": "e51dd09e79528d5466ad6cf3883a630b",
+      "consentedAt": "2026-08-21T14:30:29.841Z",
+      "createdAt": "2026-08-21T14:30:29.841Z"
+    },
+    {
+      "id": "4631ccf6-fdc8-452f-8661-1284f9c206bc",
+      "businessId": "a288ca9b-c1bb-401c-b70f-0d4c13694702",
+      "email": "ovpvpk@test.com",
+      "passwordHash": "8278de21ae36e24a2d79d00f696f1de03af4f12985c9b703abbb489324f74927d4a72ae8e438ed2d45dfd325b6b2f3d1dc234986f22a521dbd961fdc907f46de",
+      "passwordSalt": "2039b59cb3f259104825e2620ed959a3",
+      "consentedAt": "2026-08-21T14:41:43.860Z",
+      "createdAt": "2026-08-21T14:41:43.860Z"
     }
   ],
   "sessions": [
@@ -354,6 +401,22 @@
       "isAdmin": true,
       "createdAt": "2026-08-16T10:12:46.279Z",
       "expiresAt": "2026-09-15T10:12:46.279Z"
+    },
+    {
+      "token": "92436d319900c8b2a4bd2c02eee42a43c530e3e43d8dc47028278be43cf7dd3a",
+      "accountId": "c1ecca4b-8472-4342-8414-fef1c5b5e8db",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "isAdmin": false,
+      "createdAt": "2026-08-21T14:30:37.885Z",
+      "expiresAt": "2026-09-20T14:30:37.885Z"
+    },
+    {
+      "token": "da9ae0d525a744613869f1330703724e36215c43b77f0a2445c43816f3d5f1fe",
+      "accountId": "4631ccf6-fdc8-452f-8661-1284f9c206bc",
+      "businessId": "a288ca9b-c1bb-401c-b70f-0d4c13694702",
+      "isAdmin": false,
+      "createdAt": "2026-08-21T14:46:00.311Z",
+      "expiresAt": "2026-09-20T14:46:00.311Z"
     }
   ],
   "subscriptions": [
@@ -411,6 +474,17 @@
       "history": [],
       "createdAt": "2026-08-15T04:00:10.052Z",
       "updatedAt": "2026-08-15T04:00:10.052Z"
+    },
+    {
+      "businessId": "a288ca9b-c1bb-401c-b70f-0d4c13694702",
+      "plan": "business",
+      "priceKES": 4999,
+      "status": "trialing",
+      "trialEndsAt": "2026-09-04T14:41:43.860Z",
+      "currentPeriodEnd": "2026-09-04T14:41:43.860Z",
+      "history": [],
+      "createdAt": "2026-08-21T14:41:43.860Z",
+      "updatedAt": "2026-08-21T14:41:43.860Z"
     }
   ],
   "products": [
@@ -908,6 +982,28 @@
       "imageUrl": null,
       "active": true,
       "createdAt": "2026-08-15T15:28:46.426Z"
+    },
+    {
+      "id": "81169f26-93a5-4a94-b00c-b43b844d7b61",
+      "businessId": "804f8668-2651-4bdc-8755-913ed7748e9e",
+      "name": "Test Maize Flour 2kg",
+      "description": "Premium quality maize flour",
+      "price": 180,
+      "stockQty": 25,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-21T14:31:24.507Z"
+    },
+    {
+      "id": "2a4717fb-6bdd-4000-b3f9-155e50ecfa70",
+      "businessId": "a288ca9b-c1bb-401c-b70f-0d4c13694702",
+      "name": "AI Product 7xIN",
+      "description": "Unable to identify product details from the provided image.",
+      "price": 250,
+      "stockQty": 10,
+      "imageUrl": null,
+      "active": true,
+      "createdAt": "2026-08-21T14:46:57.499Z"
     }
   ],
   "customers": [],
