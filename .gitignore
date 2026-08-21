@@ -2,6 +2,7 @@
 
 # compiled output
 dist
+!artifacts/pesa-ai/dist/**
 tmp
 out-tsc
 *.tsbuildinfo
