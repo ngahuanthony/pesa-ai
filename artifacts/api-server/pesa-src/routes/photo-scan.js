@@ -138,7 +138,7 @@ function confirmPhotoDrafts({ params, body, session }) {
     price:       Number(item.price)      || 0,
     description: String(item.description || "").trim(),
     stockQty:    Number(item.stockQty)   || 0,
-    active:      true,
+    source:      "photo_scan",
   }));
 
   const invalid = rows.filter((r) => !r.name || r.price <= 0);

@@ -49,6 +49,7 @@ function confirmScan({ params, body, session }) {
     description: String(p.description || "").trim(),
     stockQty: 0,
     imageUrl: null,
+    source: "video_scan",
   })).filter((p) => p.name && p.price > 0);
 
   if (rows.length === 0) {

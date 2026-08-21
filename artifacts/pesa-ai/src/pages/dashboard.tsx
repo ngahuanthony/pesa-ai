@@ -5,6 +5,7 @@ import { OverviewTab }        from "@/components/dashboard/overview-tab";
 import { ProductsTab }        from "@/components/dashboard/products-tab";
 import { ProductAddHub }      from "@/components/dashboard/product-add-hub";
 import { PhotoScanTab }       from "@/components/dashboard/photo-scan-tab";
+import { CsvImportTab }       from "@/components/dashboard/csv-import-tab";
 import { ChatTesterTab }      from "@/components/dashboard/chat-tester-tab";
 import { OrdersTab }          from "@/components/dashboard/orders-tab";
 import { SalesTab }           from "@/components/dashboard/sales-tab";
@@ -26,6 +27,7 @@ function getSection(location: string): string {
   if (raw.startsWith("stock")) return "stock";
   // product add hub sub-pages
   if (raw === "products/add/photo") return "products/add/photo";
+  if (raw === "products/add/csv")   return "products/add/csv";
   if (raw.startsWith("products/add")) return "products/add";
   return raw;
 }
@@ -39,6 +41,7 @@ function DashboardContent() {
       case "products":          return <ProductsTab />;
       case "products/add":      return <ProductAddHub />;
       case "products/add/photo":return <PhotoScanTab />;
+      case "products/add/csv":  return <CsvImportTab />;
       case "orders":            return <OrdersTab />;
       case "chat":              return <ChatTesterTab />;
       case "sales":             return <SalesTab />;
@@ -59,6 +62,7 @@ function DashboardContent() {
     "products":           { title: "Products",        sub: "Manage your inventory." },
     "products/add":       { title: "Add Products",    sub: "Choose how you'd like to add products to your shop." },
     "products/add/photo": { title: "Photo Scan",      sub: "Take or upload photos — AI detects products and suggests prices." },
+    "products/add/csv":   { title: "Bulk Import",     sub: "Upload a CSV or Excel file — products appear instantly in your catalogue." },
     "orders":             { title: "Orders",          sub: "Track customer purchases." },
     "chat":               { title: "Chat Tester",     sub: "Preview how your shop responds." },
     "sales":              { title: "Reports",         sub: "Review your revenue and performance." },

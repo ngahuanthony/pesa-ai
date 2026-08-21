@@ -9,7 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Edit2, Package, FileSpreadsheet, Tag } from "lucide-react";
+import { Plus, Trash2, Edit2, Tag } from "lucide-react";
+
+const SOURCE_CHIP: Record<string, { icon: string; label: string; color: string }> = {
+  photo_scan: { icon: "📸", label: "Photo",     color: "bg-blue-50 text-blue-700" },
+  video_scan: { icon: "🎥", label: "Video",     color: "bg-purple-50 text-purple-700" },
+  manual:     { icon: "✍️", label: "Manual",    color: "bg-gray-100 text-gray-600" },
+  csv:        { icon: "📊", label: "CSV",       color: "bg-green-50 text-green-700" },
+  whatsapp:   { icon: "💬", label: "WhatsApp",  color: "bg-emerald-50 text-emerald-700" },
+};
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -182,7 +190,14 @@ export function ProductsTab() {
                   <Tag className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div className="min-w-0">
-                  <div className="font-medium text-sm text-foreground truncate">{p.name}</div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-medium text-sm text-foreground truncate">{p.name}</span>
+                    {SOURCE_CHIP[(p as any).source] && (
+                      <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold rounded-full px-1.5 py-0.5 whitespace-nowrap ${SOURCE_CHIP[(p as any).source].color}`}>
+                        {SOURCE_CHIP[(p as any).source].icon} {SOURCE_CHIP[(p as any).source].label}
+                      </span>
+                    )}
+                  </div>
                   {p.description && <div className="text-xs text-muted-foreground truncate max-w-xs">{p.description}</div>}
                 </div>
               </div>

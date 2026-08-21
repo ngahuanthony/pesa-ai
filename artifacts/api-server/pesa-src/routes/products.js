@@ -16,7 +16,7 @@ function create({ params, body, session }) {
   if (Number.isNaN(Number(price)) || Number(price) < 0) {
     throw db.httpError(400, "price must be a non-negative number");
   }
-  const product = db.createProduct(params.businessId, { name, description, price, stockQty, imageUrl });
+  const product = db.createProduct(params.businessId, { name, description, price, stockQty, imageUrl, source: "manual" });
   return { status: 201, data: product };
 }
 

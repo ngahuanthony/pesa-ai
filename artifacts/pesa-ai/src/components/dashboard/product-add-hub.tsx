@@ -55,7 +55,7 @@ const METHODS = [
     badge: "Migration",
     badgeColor: "bg-purple-100 text-purple-700",
     description: "Already have products in a spreadsheet? Import them all in seconds.",
-    comingSoon: true,
+    href: "/dashboard/products/add/csv",
     highlight: false,
   },
   {

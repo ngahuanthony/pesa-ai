@@ -720,7 +720,7 @@ function getAdminStats() {
 
 // --- Products ------------------------------------------------------------
 
-function createProduct(businessId, { name, description, price, stockQty, imageUrl }) {
+function createProduct(businessId, { name, description, price, stockQty, imageUrl, source }) {
   return mutate((state) => {
     if (!state.businesses.some((b) => b.id === businessId)) {
       throw httpError(404, "Business not found");
@@ -733,6 +733,7 @@ function createProduct(businessId, { name, description, price, stockQty, imageUr
       price: Number(price),
       stockQty: Number.isFinite(Number(stockQty)) ? Number(stockQty) : 0,
       imageUrl: imageUrl || null,
+      source: source || null,
       active: true,
       createdAt: now(),
     };
@@ -775,6 +776,7 @@ function bulkCreateProducts(businessId, rows) {
         price: priceNum,
         stockQty: Number.isFinite(stockQtyNum) && stockQtyNum >= 0 ? stockQtyNum : 0,
         imageUrl: row.imageUrl || null,
+        source: row.source || null,
         active: true,
         createdAt: now(),
       };
