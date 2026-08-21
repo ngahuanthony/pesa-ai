@@ -14,6 +14,7 @@ import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Product } from "@workspace/api-client-react";
+import { Link } from "wouter";
 
 const productSchema = z.object({
   name:        z.string().min(1, "Name is required"),
@@ -138,32 +139,12 @@ export function ProductsTab() {
     <div className="space-y-5">
       {/* Actions row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2">
-        <button
-          onClick={handleImport}
-          disabled={importProducts.isPending}
-          className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+        <Link
+          href="/dashboard/products/add"
+          className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 transition-colors"
         >
-          <FileSpreadsheet className="h-4 w-4" />
-          {importProducts.isPending ? "Importing…" : "Import CSV"}
-        </button>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 transition-colors">
-              <Plus className="h-4 w-4" /> Add Product
-            </button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add New Product</DialogTitle></DialogHeader>
-            <Form {...createForm}>
-              <form onSubmit={createForm.handleSubmit(onSubmitCreate)} className="space-y-4 mt-2">
-                <ProductFormFields form={createForm} />
-                <button type="submit" disabled={createProduct.isPending} className="w-full h-10 rounded-lg bg-primary text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 transition-colors">
-                  {createProduct.isPending ? "Saving…" : "Save Product"}
-                </button>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+          <Plus className="h-4 w-4" /> Add Products
+        </Link>
       </div>
 
       {/* Empty state */}
@@ -176,9 +157,12 @@ export function ProductsTab() {
           <p className="text-sm text-muted-foreground max-w-sm mb-6">
             Add products so your WhatsApp assistant knows what to sell and how to describe them to customers.
           </p>
-          <button onClick={() => setIsCreateOpen(true)} className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 transition-colors">
+          <Link
+            href="/dashboard/products/add"
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 transition-colors"
+          >
             <Plus className="h-4 w-4" /> Add your first product
-          </button>
+          </Link>
         </div>
       ) : (
         /* Product list */

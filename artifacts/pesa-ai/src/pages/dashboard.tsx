@@ -1,8 +1,10 @@
 import { useLocation } from "wouter";
 import { ProtectedRoute } from "@/hooks/use-auth-redirect";
-import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { DashboardLayout }    from "@/components/dashboard/dashboard-layout";
 import { OverviewTab }        from "@/components/dashboard/overview-tab";
 import { ProductsTab }        from "@/components/dashboard/products-tab";
+import { ProductAddHub }      from "@/components/dashboard/product-add-hub";
+import { PhotoScanTab }       from "@/components/dashboard/photo-scan-tab";
 import { ChatTesterTab }      from "@/components/dashboard/chat-tester-tab";
 import { OrdersTab }          from "@/components/dashboard/orders-tab";
 import { SalesTab }           from "@/components/dashboard/sales-tab";
@@ -18,11 +20,13 @@ import { PaymentsTab }        from "@/components/dashboard/payments-tab";
 
 // Normalise path → section key
 function getSection(location: string): string {
-  // Strip leading /dashboard/
   const raw = location.replace(/^\/dashboard\/?/, "");
   if (!raw) return "overview";
-  // stock sub-pages: stock/in, stock/sale, stock/take, stock/history → all "stock"
+  // stock sub-pages all collapse to "stock"
   if (raw.startsWith("stock")) return "stock";
+  // product add hub sub-pages
+  if (raw === "products/add/photo") return "products/add/photo";
+  if (raw.startsWith("products/add")) return "products/add";
   return raw;
 }
 
@@ -32,37 +36,41 @@ function DashboardContent() {
 
   const renderSection = () => {
     switch (section) {
-      case "products":   return <ProductsTab />;
-      case "orders":     return <OrdersTab />;
-      case "chat":       return <ChatTesterTab />;
-      case "sales":      return <SalesTab />;
-      case "billing":    return <BillingTab />;
-      case "settings":   return <SettingsTab />;
-      case "whatsapp":   return <WhatsAppAccountTab />;
-      case "video-scan": return <VideoScanTab />;
-      case "profile":    return <BusinessProfileTab />;
-      case "stock":      return <StockTab />;
-      case "prices":     return <PricesTab />;
-      case "customers":  return <CustomersTab />;
-      case "payments":   return <PaymentsTab />;
-      default:           return <OverviewTab />;
+      case "products":          return <ProductsTab />;
+      case "products/add":      return <ProductAddHub />;
+      case "products/add/photo":return <PhotoScanTab />;
+      case "orders":            return <OrdersTab />;
+      case "chat":              return <ChatTesterTab />;
+      case "sales":             return <SalesTab />;
+      case "billing":           return <BillingTab />;
+      case "settings":          return <SettingsTab />;
+      case "whatsapp":          return <WhatsAppAccountTab />;
+      case "video-scan":        return <VideoScanTab />;
+      case "profile":           return <BusinessProfileTab />;
+      case "stock":             return <StockTab />;
+      case "prices":            return <PricesTab />;
+      case "customers":         return <CustomersTab />;
+      case "payments":          return <PaymentsTab />;
+      default:                  return <OverviewTab />;
     }
   };
 
   const sectionTitles: Record<string, { title: string; sub: string }> = {
-    products:    { title: "Products",         sub: "Manage your inventory." },
-    orders:      { title: "Orders",           sub: "Track customer purchases." },
-    chat:        { title: "Chat Tester",      sub: "Preview how your shop responds." },
-    sales:       { title: "Reports",          sub: "Review your revenue and performance." },
-    billing:     { title: "Billing",          sub: "Manage your subscription." },
-    settings:    { title: "Settings",         sub: "Manage your business profile, AI persona, and integrations." },
-    whatsapp:    { title: "WhatsApp Account", sub: "Connect your WhatsApp Business number to your shop." },
-    "video-scan":{ title: "Stock Scanner",     sub: "Scan your shop and AI will build your product catalogue." },
-    profile:     { title: "Business Profile", sub: "Your shop details and account information." },
-    stock:       { title: "Stock",            sub: "Manage inventory levels, sales, and adjustments." },
-    prices:      { title: "Prices",           sub: "Set pricing rules and discounts." },
-    customers:   { title: "Customers",        sub: "View and manage your customer list." },
-    payments:    { title: "Payments",         sub: "Track M-Pesa transactions and revenue." },
+    "products":           { title: "Products",        sub: "Manage your inventory." },
+    "products/add":       { title: "Add Products",    sub: "Choose how you'd like to add products to your shop." },
+    "products/add/photo": { title: "Photo Scan",      sub: "Take or upload photos — AI detects products and suggests prices." },
+    "orders":             { title: "Orders",          sub: "Track customer purchases." },
+    "chat":               { title: "Chat Tester",     sub: "Preview how your shop responds." },
+    "sales":              { title: "Reports",         sub: "Review your revenue and performance." },
+    "billing":            { title: "Billing",         sub: "Manage your subscription." },
+    "settings":           { title: "Settings",        sub: "Manage your business profile, AI persona, and integrations." },
+    "whatsapp":           { title: "WhatsApp Account",sub: "Connect your WhatsApp Business number to your shop." },
+    "video-scan":         { title: "Stock Scanner",   sub: "Scan your shop and AI will build your product catalogue." },
+    "profile":            { title: "Business Profile",sub: "Your shop details and account information." },
+    "stock":              { title: "Stock",           sub: "Manage inventory levels, sales, and adjustments." },
+    "prices":             { title: "Prices",          sub: "Set pricing rules and discounts." },
+    "customers":          { title: "Customers",       sub: "View and manage your customer list." },
+    "payments":           { title: "Payments",        sub: "Track M-Pesa transactions and revenue." },
   };
 
   const meta = sectionTitles[section];
