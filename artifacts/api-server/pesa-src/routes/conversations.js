@@ -18,4 +18,11 @@ function resumeAI({ params, session }) {
   return { ok: true };
 }
 
-module.exports = { listHandover, resumeAI };
+// GET /api/businesses/:businessId/activity
+// Returns a merged, time-sorted feed of AI replies and orders for the dashboard.
+function getActivityFeed({ params, session }) {
+  auth.requireOwnBusiness(session, params.businessId);
+  return { events: db.getActivityFeed(params.businessId, 20) };
+}
+
+module.exports = { listHandover, resumeAI, getActivityFeed };

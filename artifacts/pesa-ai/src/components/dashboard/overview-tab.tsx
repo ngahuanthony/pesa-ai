@@ -1,5 +1,5 @@
 import { useGetMe, useListOrders, useListProducts, useGetSalesSummary, getListOrdersQueryKey, getListProductsQueryKey, getGetSalesSummaryQueryKey } from "@workspace/api-client-react";
-import { ShoppingCart, DollarSign, Package, MessageSquare, Bot, UserCheck, AlertTriangle } from "lucide-react";
+import { ShoppingCart, DollarSign, Package, Bot, AlertTriangle, CheckCircle2, Circle, ExternalLink, Copy, Check, Wifi } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -13,11 +13,21 @@ interface HandoverConvo {
   lastMessage: string | null;
 }
 
+interface ActivityEvent {
+  type: "ai_reply" | "order" | "handover";
+  customerPhone: string | null;
+  customerName: string | null;
+  preview?: string;
+  total?: number;
+  itemCount?: number;
+  createdAt: string;
+}
+
 export function OverviewTab() {
   const { data: me } = useGetMe();
-  const businessId  = (me as any)?.business?.id || "";
+  const businessId   = (me as any)?.business?.id || "";
   const businessName = (me as any)?.business?.name || "your shop";
-  const { toast } = useToast();
+  const { toast }    = useToast();
 
   const { data: ordersData }   = useListOrders(businessId,   { query: { enabled: !!businessId, queryKey: getListOrdersQueryKey(businessId) } });
   const { data: productsData } = useListProducts(businessId, { query: { enabled: !!businessId, queryKey: getListProductsQueryKey(businessId) } });
@@ -25,26 +35,45 @@ export function OverviewTab() {
 
   const [handoverConvos, setHandoverConvos] = useState<HandoverConvo[]>([]);
   const [resumingId, setResumingId]         = useState<string | null>(null);
+  const [waStatus, setWaStatus]             = useState<any>(null);
+  const [activity, setActivity]             = useState<ActivityEvent[]>([]);
+  const [linkCopied, setLinkCopied]         = useState(false);
 
   const fetchHandover = async () => {
     if (!businessId) return;
     try {
       const res = await fetch(`/api/businesses/${businessId}/conversations`, { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        setHandoverConvos(data.conversations || []);
-      }
+      if (res.ok) setHandoverConvos((await res.json()).conversations || []);
     } catch { /* ignore */ }
   };
 
-  useEffect(() => { fetchHandover(); }, [businessId]);
+  const fetchWaStatus = async () => {
+    if (!businessId) return;
+    try {
+      const res = await fetch(`/api/businesses/${businessId}/whatsapp/status`, { credentials: "include" });
+      if (res.ok) setWaStatus(await res.json());
+    } catch { /* ignore */ }
+  };
+
+  const fetchActivity = async () => {
+    if (!businessId) return;
+    try {
+      const res = await fetch(`/api/businesses/${businessId}/activity`, { credentials: "include" });
+      if (res.ok) setActivity((await res.json()).events || []);
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    fetchHandover();
+    fetchWaStatus();
+    fetchActivity();
+  }, [businessId]);
 
   const handleResumeAI = async (customerPhone: string) => {
     setResumingId(customerPhone);
     try {
       await fetch(`/api/businesses/${businessId}/conversations/${encodeURIComponent(customerPhone)}/resume-ai`, {
-        method: "POST",
-        credentials: "include",
+        method: "POST", credentials: "include",
       });
       toast({ title: "AI resumed for this customer" });
       await fetchHandover();
@@ -60,81 +89,168 @@ export function OverviewTab() {
   const totalRevenue = (salesData    as any)?.totalRevenue || 0;
   const recentOrders = orders.slice(0, 5);
 
-  const stats = [
-    {
-      label: "Total Products",
-      value: String(products.length),
-      link: { label: "Add products",  href: "/dashboard/products" },
-      icon: Package,
-      iconBg: "bg-purple-100",
-      iconColor: "text-purple-600",
-    },
-    {
-      label: "Total Orders",
-      value: String(orders.length),
-      link: { label: "View orders",   href: "/dashboard/orders" },
-      icon: ShoppingCart,
-      iconBg: "bg-orange-100",
-      iconColor: "text-orange-500",
-    },
-    {
-      label: "Total Revenue",
-      value: `KSh ${totalRevenue.toLocaleString()}`,
-      link: { label: "View reports",  href: "/dashboard/sales" },
-      icon: DollarSign,
-      iconBg: "bg-green-100",
-      iconColor: "text-green-600",
-    },
-    {
-      label: "Need Attention",
-      value: String(handoverConvos.length),
-      link: { label: handoverConvos.length > 0 ? "See below ↓" : "All good", href: "#handover" },
-      icon: handoverConvos.length > 0 ? AlertTriangle : UserCheck,
-      iconBg: handoverConvos.length > 0 ? "bg-amber-100" : "bg-blue-100",
-      iconColor: handoverConvos.length > 0 ? "text-amber-600" : "text-blue-500",
-    },
+  const waConnected = waStatus?.connected === true;
+
+  // Build shop link from WhatsApp status
+  const shopUrl = (() => {
+    if (!waStatus?.requestedPhone) return null;
+    const digits = waStatus.requestedPhone
+      .replace(/[\s\-\(\)]/g, "")
+      .replace(/^\+/, "")
+      .replace(/^0/, "254");
+    return `https://wa.me/${digits}?text=Hi%2C%20I%27d%20like%20to%20shop`;
+  })();
+
+  // Setup checklist
+  const setupSteps = [
+    { label: "Add your first product", done: products.length > 0, href: "/dashboard/products" },
+    { label: "Connect WhatsApp", done: waConnected, href: "/dashboard/whatsapp" },
+    { label: "Get your first customer", done: orders.length > 0, href: shopUrl || "/dashboard/whatsapp" },
   ];
+  const stepsDone = setupSteps.filter((s) => s.done).length;
+  const shopIsNew = stepsDone < 3;
+
+  // Human-readable activity label
+  function eventLabel(e: ActivityEvent): string {
+    const who = e.customerName || e.customerPhone || "A customer";
+    if (e.type === "order")    return `${who} placed an order — KSh ${(e.total || 0).toLocaleString()}`;
+    if (e.type === "handover") return `${who} asked to speak with you`;
+    return "AI answered a customer's question";
+  }
+
+  function timeAgo(iso: string): string {
+    const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    if (mins < 1)   return "just now";
+    if (mins < 60)  return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24)   return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  }
 
   return (
     <div className="p-6 space-y-6">
+
       {/* ── Hero banner ── */}
       <div className="rounded-2xl bg-[#0d3d26] text-white p-7">
-        <h2 className="text-xl font-bold mb-1">Pesa AI – Your WhatsApp Shop, Simplified.</h2>
-        <p className="text-white/70 text-sm mb-4">Upload. Connect. Sell. AI handles the rest.</p>
-        <div className="flex flex-wrap gap-4 text-sm text-white/80">
-          <span className="flex items-center gap-1.5"><span className="text-green-400">✓</span> Easy Setup</span>
-          <span className="flex items-center gap-1.5"><span className="text-green-400">✓</span> Manage Stock</span>
-          <span className="flex items-center gap-1.5"><span className="text-green-400">✓</span> Connect WhatsApp</span>
-        </div>
+        <h2 className="text-xl font-bold mb-1">Welcome to {businessName} 👋</h2>
+        <p className="text-white/70 text-sm mb-5">
+          {waConnected
+            ? "Your WhatsApp shop is live. Share your link and the AI handles the rest."
+            : "You're almost set up. Connect WhatsApp to start selling — the AI does the rest."}
+        </p>
+
+        {waConnected && shopUrl ? (
+          /* Connected: show shop link in hero */
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2 min-w-0">
+              <span className="text-xs text-white/80 font-mono truncate max-w-[220px]">{shopUrl}</span>
+            </div>
+            <button
+              onClick={() => { navigator.clipboard.writeText(shopUrl); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white/20 hover:bg-white/30 px-3 py-2 text-xs font-semibold text-white transition-colors"
+            >
+              {linkCopied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy shop link</>}
+            </button>
+            <a
+              href={shopUrl} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] hover:bg-[#1ebe5d] px-3 py-2 text-xs font-semibold text-white transition-colors"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Open in WhatsApp
+            </a>
+          </div>
+        ) : (
+          /* Not connected: big Connect CTA */
+          <Link
+            href="/dashboard/whatsapp"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] px-5 py-3 text-sm font-bold text-white transition-colors shadow-lg"
+          >
+            <Wifi className="h-4 w-4" />
+            Connect WhatsApp to start selling →
+          </Link>
+        )}
       </div>
+
+      {/* ── Setup checklist (hidden once all steps done) ── */}
+      {shopIsNew && (
+        <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-semibold text-foreground text-sm">Getting started</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">{stepsDone} of {setupSteps.length} steps complete</p>
+            </div>
+            {/* Progress pills */}
+            <div className="flex items-center gap-1">
+              {setupSteps.map((s, i) => (
+                <div key={i} className={`h-2 w-8 rounded-full transition-colors ${s.done ? "bg-primary" : "bg-muted"}`} />
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1">
+            {setupSteps.map((step, i) => (
+              <Link
+                key={i}
+                href={step.href}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${step.done ? "opacity-50" : "hover:bg-muted/50 cursor-pointer"}`}
+              >
+                {step.done
+                  ? <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
+                  : <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+                <span className={`text-sm flex-1 ${step.done ? "line-through text-muted-foreground" : "font-medium text-foreground"}`}>
+                  {step.label}
+                </span>
+                {!step.done && <span className="text-xs text-primary font-semibold">Do this →</span>}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Section title ── */}
       <div>
         <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Welcome to {businessName}! Here's your shop overview.</p>
+        <p className="text-sm text-muted-foreground">Here's how {businessName} is doing.</p>
       </div>
 
-      {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map(({ label, value, link, icon: Icon, iconBg, iconColor }) => (
-          <div key={label} className="bg-white rounded-xl border border-border p-5 shadow-sm">
-            <div className={`inline-flex h-10 w-10 items-center justify-center rounded-full ${iconBg} mb-3`}>
-              <Icon className={`h-5 w-5 ${iconColor}`} />
-            </div>
-            <p className="text-xs text-muted-foreground font-medium">{label}</p>
-            <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
-            {link.href.startsWith("#") ? (
-              <span className="text-xs font-medium text-primary mt-1 inline-block">{link.label}</span>
-            ) : (
-              <Link href={link.href} className="text-xs font-medium text-primary hover:underline mt-1 inline-block">
-                {link.label}
-              </Link>
-            )}
+      {/* ── Stat cards (3 across) ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Products */}
+        <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
+          <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 mb-3">
+            <Package className="h-5 w-5 text-purple-600" />
           </div>
-        ))}
+          <p className="text-xs text-muted-foreground font-medium">Total Products</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{products.length}</p>
+          <Link href="/dashboard/products" className="text-xs font-medium text-primary hover:underline mt-1 inline-block">
+            Add products
+          </Link>
+        </div>
+
+        {/* Orders */}
+        <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
+          <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 mb-3">
+            <ShoppingCart className="h-5 w-5 text-orange-500" />
+          </div>
+          <p className="text-xs text-muted-foreground font-medium">Total Orders</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{orders.length}</p>
+          <Link href="/dashboard/orders" className="text-xs font-medium text-primary hover:underline mt-1 inline-block">
+            View orders
+          </Link>
+        </div>
+
+        {/* Revenue */}
+        <div className="bg-white rounded-xl border border-border p-5 shadow-sm col-span-2 lg:col-span-1">
+          <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-green-100 mb-3">
+            <DollarSign className="h-5 w-5 text-green-600" />
+          </div>
+          <p className="text-xs text-muted-foreground font-medium">Total Revenue</p>
+          <p className="text-2xl font-bold text-foreground mt-1">KSh {totalRevenue.toLocaleString()}</p>
+          <Link href="/dashboard/sales" className="text-xs font-medium text-primary hover:underline mt-1 inline-block">
+            View reports
+          </Link>
+        </div>
       </div>
 
-      {/* ── Human handover alert ── */}
+      {/* ── Human handover alert (only shown when customers need attention) ── */}
       {handoverConvos.length > 0 && (
         <div id="handover" className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">
           <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-200 bg-amber-100/60">
@@ -172,14 +288,15 @@ export function OverviewTab() {
         </div>
       )}
 
-      {/* ── Bottom row ── */}
-      <div className="grid lg:grid-cols-[1fr_320px] gap-4">
+      {/* ── Bottom row: Recent Orders + AI Activity Feed ── */}
+      <div className="grid lg:grid-cols-[1fr_340px] gap-4">
+
         {/* Recent Orders */}
         <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-foreground">Recent Orders</h2>
-            <Link href="/dashboard/orders" className="text-xs font-medium text-primary hover:underline flex items-center gap-1">
-              View all orders →
+            <Link href="/dashboard/orders" className="text-xs font-medium text-primary hover:underline">
+              View all →
             </Link>
           </div>
 
@@ -190,14 +307,23 @@ export function OverviewTab() {
               </div>
               <p className="font-medium text-sm text-foreground">No orders yet</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-[220px]">
-                Once customers start ordering through your WhatsApp shop, their orders will appear here.
+                Share your shop link — customers message you, and the AI takes their order automatically.
               </p>
-              <Link
-                href="/dashboard/whatsapp"
-                className="mt-4 inline-flex h-8 items-center justify-center rounded-full bg-primary px-4 text-xs font-semibold text-white hover:bg-primary/90"
-              >
-                Connect WhatsApp to start
-              </Link>
+              {shopUrl ? (
+                <a
+                  href={shopUrl} target="_blank" rel="noopener noreferrer"
+                  className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-full bg-[#25D366] px-4 text-xs font-semibold text-white hover:bg-[#1ebe5d]"
+                >
+                  <ExternalLink className="h-3 w-3" /> Open your shop link
+                </a>
+              ) : (
+                <Link
+                  href="/dashboard/whatsapp"
+                  className="mt-4 inline-flex h-8 items-center justify-center rounded-full bg-primary px-4 text-xs font-semibold text-white hover:bg-primary/90"
+                >
+                  Connect WhatsApp first →
+                </Link>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
@@ -218,19 +344,41 @@ export function OverviewTab() {
         <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <Bot className="h-4 w-4 text-primary" />
-            <h2 className="font-semibold text-foreground">AI Activity Feed</h2>
+            <h2 className="font-semibold text-foreground">AI Activity</h2>
           </div>
 
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-3">
-              <Bot className="h-5 w-5 text-muted-foreground" />
+          {activity.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-3">
+                <Bot className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-foreground">No activity yet</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+                {waConnected
+                  ? "Share your shop link to get your first customer."
+                  : "Connect WhatsApp — then the AI gets to work."}
+              </p>
             </div>
-            <p className="text-sm font-medium text-foreground">No activity yet</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Your AI's actions will show here once WhatsApp is connected.
-            </p>
-          </div>
+          ) : (
+            <div className="space-y-4">
+              {activity.slice(0, 8).map((e, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-sm leading-none">
+                    {e.type === "order" ? "🛒" : e.type === "handover" ? "👋" : "🤖"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-foreground leading-snug">{eventLabel(e)}</p>
+                    {e.type === "ai_reply" && e.preview && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">"{e.preview}"</p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground/70 mt-0.5">{timeAgo(e.createdAt)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
       </div>
     </div>
   );

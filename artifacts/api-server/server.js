@@ -145,6 +145,7 @@ router.post("/api/businesses/:businessId/video-scan/:scanId/cancel",   videoScan
 router.patch("/api/businesses/:businessId/video-scan/:scanId",         videoScanRoutes.renameScan);
 router.get("/api/businesses/:businessId/conversations",                              conversationRoutes.listHandover);
 router.post("/api/businesses/:businessId/conversations/:customerId/resume-ai",       conversationRoutes.resumeAI);
+router.get("/api/businesses/:businessId/activity",                                   conversationRoutes.getActivityFeed);
 router.delete("/api/businesses/:businessId/video-scan/:scanId",        videoScanRoutes.deleteScan);
 
 router.post("/api/businesses/:businessId/chat", chatRoutes.send);

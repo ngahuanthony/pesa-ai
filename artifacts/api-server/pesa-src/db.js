@@ -1169,6 +1169,7 @@ module.exports = {
   getPendingOrdersForBusiness,
   setConversationHandover,
   getHandoverConversations,
+  getActivityFeed,
   getSalesSummary,
   createReport,
   getReportsGroupedByBusiness,
@@ -1254,4 +1255,53 @@ function deleteVideoScan(scanId) {
     if (!state.videoScans) return;
     state.videoScans = state.videoScans.filter((s) => s.id !== scanId);
   });
+}
+
+// --- Activity feed -------------------------------------------------------
+
+// Returns a merged, time-sorted list of AI replies and orders for the vendor
+// dashboard's AI Activity Feed card.  Limit defaults to 20.
+function getActivityFeed(businessId, limit = 20) {
+  const state = load();
+
+  // Build lookup maps for this business
+  const convos = (state.conversations || []).filter((c) => c.businessId === businessId);
+  const convoIdSet = new Set(convos.map((c) => c.id));
+  const convoById  = Object.fromEntries(convos.map((c) => [c.id, c]));
+  const customerById = Object.fromEntries(
+    (state.customers || [])
+      .filter((c) => c.businessId === businessId)
+      .map((c) => [c.id, c])
+  );
+
+  // AI reply events — take assistant messages only (skip system/user)
+  const aiEvents = (state.messages || [])
+    .filter((m) => convoIdSet.has(m.conversationId) && m.role === "assistant")
+    .map((m) => {
+      const convo    = convoById[m.conversationId];
+      const customer = customerById[convo?.customerId] || {};
+      return {
+        type:          "ai_reply",
+        customerPhone: customer.phone  || null,
+        customerName:  customer.name   || null,
+        preview:       typeof m.content === "string" ? m.content.slice(0, 120) : null,
+        createdAt:     m.createdAt,
+      };
+    });
+
+  // Order events
+  const orderEvents = (state.orders || [])
+    .filter((o) => o.businessId === businessId)
+    .map((o) => ({
+      type:          "order",
+      customerPhone: o.customerPhone || null,
+      customerName:  null,
+      total:         o.total     || 0,
+      itemCount:     Array.isArray(o.items) ? o.items.length : 0,
+      createdAt:     o.createdAt,
+    }));
+
+  return [...aiEvents, ...orderEvents]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, limit);
 }
