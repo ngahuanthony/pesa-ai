@@ -144,7 +144,7 @@ function confirmPhotoDrafts({ params, body, session }) {
   const invalid = rows.filter((r) => !r.name || r.price <= 0);
   if (invalid.length) throw db.httpError(400, `${invalid.length} item(s) missing name or valid price`);
 
-  const created = db.mutate((state) => db.bulkCreateProducts(state, params.businessId, rows));
+  const { created } = db.bulkCreateProducts(params.businessId, rows);
   return { ok: true, created: created.length, products: created };
 }
 

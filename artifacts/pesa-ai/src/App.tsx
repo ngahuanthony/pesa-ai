@@ -33,6 +33,7 @@ function Router() {
         <Route path="/dashboard" component={DashboardPage} />
         <Route path="/dashboard/:section" component={DashboardPage} />
         <Route path="/dashboard/:section/:sub" component={DashboardPage} />
+        <Route path="/dashboard/:section/:sub/:subsub" component={DashboardPage} />
         <Route path="/admin" component={AdminPage} />
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/admin/login">{() => { window.location.replace("/admin"); return null; }}</Route>
