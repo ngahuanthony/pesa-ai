@@ -22,6 +22,7 @@ import type {
 import type {
   AdminChargeInput,
   AdminLoginInput,
+  AdminResetPasswordInput,
   AdminStats,
   AuthResult,
   Business,
@@ -30,6 +31,7 @@ import type {
   ChatMessage,
   ChatMessageInput,
   ChatReply,
+  GetVoiceStockHistoryParams,
   HealthStatus,
   LoginInput,
   MeResult,
@@ -48,8 +50,13 @@ import type {
   ReportStatusUpdate,
   SalesSummary,
   SignupInput,
+  StockMovement,
   Subscription,
-  SubscriptionChargeInput
+  SubscriptionChargeInput,
+  VoiceStockConfirmInput,
+  VoiceStockConfirmResult,
+  VoiceStockInterpretInput,
+  VoiceStockInterpretation
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1722,6 +1729,221 @@ export function useGetChatHistory<TData = Awaited<ReturnType<typeof getChatHisto
 
 
 
+export const getInterpretVoiceStockUrl = (businessId: string,) => {
+
+
+
+
+  return `/api/businesses/${businessId}/voice-stock/interpret`
+}
+
+export const interpretVoiceStock = async (businessId: string,
+    voiceStockInterpretInput: VoiceStockInterpretInput, options?: Parameters<typeof customFetch>[1]): Promise<VoiceStockInterpretation> => {
+
+  return customFetch<VoiceStockInterpretation>(getInterpretVoiceStockUrl(businessId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(voiceStockInterpretInput)
+  }
+);}
+
+
+
+
+
+export const getInterpretVoiceStockMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof interpretVoiceStock>>, TError,{businessId: string;data: BodyType<VoiceStockInterpretInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof interpretVoiceStock>>, TError,{businessId: string;data: BodyType<VoiceStockInterpretInput>}, TContext> => {
+
+const mutationKey = ['interpretVoiceStock'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof interpretVoiceStock>>, {businessId: string;data: BodyType<VoiceStockInterpretInput>}> = (props) => {
+          const {businessId,data} = props ?? {};
+
+          return  interpretVoiceStock(businessId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InterpretVoiceStockMutationResult = NonNullable<Awaited<ReturnType<typeof interpretVoiceStock>>>
+    export type InterpretVoiceStockMutationBody = BodyType<VoiceStockInterpretInput>
+    export type InterpretVoiceStockMutationError = ErrorType<unknown>
+
+    export const useInterpretVoiceStock = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof interpretVoiceStock>>, TError,{businessId: string;data: BodyType<VoiceStockInterpretInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof interpretVoiceStock>>,
+        TError,
+        {businessId: string;data: BodyType<VoiceStockInterpretInput>},
+        TContext
+      > => {
+      return useMutation(getInterpretVoiceStockMutationOptions(options));
+    }
+
+export const getConfirmVoiceStockUrl = (businessId: string,) => {
+
+
+
+
+  return `/api/businesses/${businessId}/voice-stock/confirm`
+}
+
+export const confirmVoiceStock = async (businessId: string,
+    voiceStockConfirmInput: VoiceStockConfirmInput, options?: Parameters<typeof customFetch>[1]): Promise<VoiceStockConfirmResult> => {
+
+  return customFetch<VoiceStockConfirmResult>(getConfirmVoiceStockUrl(businessId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(voiceStockConfirmInput)
+  }
+);}
+
+
+
+
+
+export const getConfirmVoiceStockMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmVoiceStock>>, TError,{businessId: string;data: BodyType<VoiceStockConfirmInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmVoiceStock>>, TError,{businessId: string;data: BodyType<VoiceStockConfirmInput>}, TContext> => {
+
+const mutationKey = ['confirmVoiceStock'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmVoiceStock>>, {businessId: string;data: BodyType<VoiceStockConfirmInput>}> = (props) => {
+          const {businessId,data} = props ?? {};
+
+          return  confirmVoiceStock(businessId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmVoiceStockMutationResult = NonNullable<Awaited<ReturnType<typeof confirmVoiceStock>>>
+    export type ConfirmVoiceStockMutationBody = BodyType<VoiceStockConfirmInput>
+    export type ConfirmVoiceStockMutationError = ErrorType<unknown>
+
+    export const useConfirmVoiceStock = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmVoiceStock>>, TError,{businessId: string;data: BodyType<VoiceStockConfirmInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmVoiceStock>>,
+        TError,
+        {businessId: string;data: BodyType<VoiceStockConfirmInput>},
+        TContext
+      > => {
+      return useMutation(getConfirmVoiceStockMutationOptions(options));
+    }
+
+export const getGetVoiceStockHistoryUrl = (businessId: string,
+    params?: GetVoiceStockHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/businesses/${businessId}/voice-stock/history?${stringifiedParams}` : `/api/businesses/${businessId}/voice-stock/history`
+}
+
+export const getVoiceStockHistory = async (businessId: string,
+    params?: GetVoiceStockHistoryParams, options?: Parameters<typeof customFetch>[1]): Promise<StockMovement[]> => {
+
+  return customFetch<StockMovement[]>(getGetVoiceStockHistoryUrl(businessId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVoiceStockHistoryQueryKey = (businessId: string,
+    params?: GetVoiceStockHistoryParams,) => {
+    return [
+    `/api/businesses/${businessId}/voice-stock/history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetVoiceStockHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getVoiceStockHistory>>, TError = ErrorType<unknown>>(businessId: string,
+    params?: GetVoiceStockHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVoiceStockHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVoiceStockHistoryQueryKey(businessId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVoiceStockHistory>>> = ({ signal }) => getVoiceStockHistory(businessId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: businessId !== null && businessId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVoiceStockHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVoiceStockHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getVoiceStockHistory>>>
+export type GetVoiceStockHistoryQueryError = ErrorType<unknown>
+
+
+
+export function useGetVoiceStockHistory<TData = Awaited<ReturnType<typeof getVoiceStockHistory>>, TError = ErrorType<unknown>>(
+ businessId: string,
+    params?: GetVoiceStockHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVoiceStockHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVoiceStockHistoryQueryOptions(businessId,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getCreateReportUrl = () => {
 
 
@@ -1987,6 +2209,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getAdminChargeSubscriptionMutationOptions(options));
+    }
+
+export const getAdminResetPasswordUrl = (businessId: string,) => {
+
+
+
+
+  return `/api/admin/businesses/${businessId}/reset-password`
+}
+
+export const adminResetPassword = async (businessId: string,
+    adminResetPasswordInput: AdminResetPasswordInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getAdminResetPasswordUrl(businessId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminResetPasswordInput)
+  }
+);}
+
+
+
+
+
+export const getAdminResetPasswordMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminResetPassword>>, TError,{businessId: string;data: BodyType<AdminResetPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminResetPassword>>, TError,{businessId: string;data: BodyType<AdminResetPasswordInput>}, TContext> => {
+
+const mutationKey = ['adminResetPassword'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminResetPassword>>, {businessId: string;data: BodyType<AdminResetPasswordInput>}> = (props) => {
+          const {businessId,data} = props ?? {};
+
+          return  adminResetPassword(businessId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminResetPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof adminResetPassword>>>
+    export type AdminResetPasswordMutationBody = BodyType<AdminResetPasswordInput>
+    export type AdminResetPasswordMutationError = ErrorType<unknown>
+
+    export const useAdminResetPassword = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminResetPassword>>, TError,{businessId: string;data: BodyType<AdminResetPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminResetPassword>>,
+        TError,
+        {businessId: string;data: BodyType<AdminResetPasswordInput>},
+        TContext
+      > => {
+      return useMutation(getAdminResetPasswordMutationOptions(options));
     }
 
 export const getAdminSuspendBusinessUrl = (businessId: string,) => {
@@ -2326,76 +2614,4 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getAdminUpdateReportMutationOptions(options));
     }
-
-// ── Admin Reset Password ──────────────────────────────────────────────────────
-
-export const getAdminResetPasswordUrl = (businessId: string) =>
-  `/api/admin/businesses/${businessId}/reset-password`;
-
-export const adminResetPassword = async (
-  businessId: string,
-  data: { newPassword: string },
-  options?: Parameters<typeof customFetch>[1],
-): Promise<void> =>
-  customFetch<void>(getAdminResetPasswordUrl(businessId), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(data),
-  });
-
-export const getAdminResetPasswordMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof adminResetPassword>>,
-    TError,
-    { businessId: string; data: { newPassword: string } },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof adminResetPassword>>,
-  TError,
-  { businessId: string; data: { newPassword: string } },
-  TContext
-> => {
-  const mutationKey = ['adminResetPassword'];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof adminResetPassword>>,
-    { businessId: string; data: { newPassword: string } }
-  > = (props) => {
-    const { businessId, data } = props ?? {};
-    return adminResetPassword(businessId, data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type AdminResetPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof adminResetPassword>>>;
-export type AdminResetPasswordMutationError = ErrorType<unknown>;
-
-export const useAdminResetPassword = <TError = ErrorType<unknown>, TContext = unknown>(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof adminResetPassword>>,
-      TError,
-      { businessId: string; data: { newPassword: string } },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseMutationResult<
-  Awaited<ReturnType<typeof adminResetPassword>>,
-  TError,
-  { businessId: string; data: { newPassword: string } },
-  TContext
-> => useMutation(getAdminResetPasswordMutationOptions(options));
 

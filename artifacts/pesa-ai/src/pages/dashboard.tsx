@@ -13,6 +13,7 @@ import { BillingTab }         from "@/components/dashboard/billing-tab";
 import { SettingsTab }        from "@/components/dashboard/settings-tab";
 import { WhatsAppAccountTab } from "@/components/dashboard/whatsapp-account-tab";
 import { VideoScanTab }       from "@/components/dashboard/video-scan-tab";
+import { VoiceStockTab }      from "@/components/dashboard/voice-stock-tab";
 import { BusinessProfileTab } from "@/components/dashboard/business-profile-tab";
 import { StockTab }           from "@/components/dashboard/stock-tab";
 import { PricesTab }          from "@/components/dashboard/prices-tab";
@@ -23,6 +24,7 @@ import { PaymentsTab }        from "@/components/dashboard/payments-tab";
 function getSection(location: string): string {
   const raw = location.replace(/^\/dashboard\/?/, "");
   if (!raw) return "overview";
+  if (raw === "voice-stock") return "voice-stock";
   // stock sub-pages all collapse to "stock"
   if (raw.startsWith("stock")) return "stock";
   // product add hub sub-pages
@@ -49,6 +51,7 @@ function DashboardContent() {
       case "settings":          return <SettingsTab />;
       case "whatsapp":          return <WhatsAppAccountTab />;
       case "video-scan":        return <VideoScanTab />;
+      case "voice-stock":       return <VoiceStockTab />;
       case "profile":           return <BusinessProfileTab />;
       case "stock":             return <StockTab />;
       case "prices":            return <PricesTab />;
@@ -70,6 +73,7 @@ function DashboardContent() {
     "settings":           { title: "Settings",        sub: "Manage your business profile, AI persona, and integrations." },
     "whatsapp":           { title: "WhatsApp Account",sub: "Connect your WhatsApp Business number to your shop." },
     "video-scan":         { title: "Stock Scanner",   sub: "Scan your shop and AI will build your product catalogue." },
+    "voice-stock":        { title: "Voice to Stock",  sub: "Log inventory changes quickly by speaking or typing." },
     "profile":            { title: "Business Profile",sub: "Your shop details and account information." },
     "stock":              { title: "Stock",           sub: "Manage inventory levels, sales, and adjustments." },
     "prices":             { title: "Prices",          sub: "Set pricing rules and discounts." },

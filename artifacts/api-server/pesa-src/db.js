@@ -35,6 +35,7 @@ function emptyState() {
     orders: [],
     reports: [],
     videoScans: [],
+    stockMovements: [],
   };
 }
 
@@ -818,6 +819,87 @@ function decrementStock(state, productId, quantity) {
   if (p) p.stockQty = Math.max(0, p.stockQty - quantity);
 }
 
+// --- Voice stock movements -------------------------------------------------
+
+function ensureStockMovements(state) {
+  // Older database files predate stock movements. Keep this migration lazy so
+  // they remain readable without a separate migration command.
+  if (!Array.isArray(state.stockMovements)) state.stockMovements = [];
+  return state.stockMovements;
+}
+
+function confirmStockMovements(businessId, items, { transcript, accountId } = {}) {
+  return mutate((state) => {
+    if (!state.businesses.some((business) => business.id === businessId)) {
+      throw httpError(404, "Business not found");
+    }
+    ensureStockMovements(state);
+    const products = [];
+    const movements = [];
+
+    // Validate and stage all changes before modifying any product. This makes
+    // the JSON-file transaction all-or-nothing, including repeated products.
+    const stagedStock = new Map();
+    for (const item of items) {
+      const product = state.products.find((p) => p.id === item.productId && p.businessId === businessId);
+      if (!product) throw httpError(400, "Product does not belong to this business");
+      const quantity = Number(item.quantity);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw httpError(400, "Each movement quantity must be a positive number");
+      }
+      if (!["receive", "sell", "damage", "missing", "adjustment"].includes(item.action)) {
+        throw httpError(400, "Invalid stock movement action");
+      }
+      if (item.unit != null && String(item.unit).length > 50) {
+        throw httpError(400, "Movement unit must be at most 50 characters");
+      }
+      const current = stagedStock.has(product.id) ? stagedStock.get(product.id) : Number(product.stockQty);
+      // An adjustment is a physical count: it sets stock to that count,
+      // rather than adding another quantity to the existing balance.
+      const next = item.action === "adjustment"
+        ? quantity
+        : current + (["sell", "damage", "missing"].includes(item.action) ? -quantity : quantity);
+      const delta = next - current;
+      if (next < 0) throw httpError(400, `Stock cannot become negative for ${product.name}`);
+      stagedStock.set(product.id, next);
+      movements.push({ product, item, quantity, delta, previousStock: current, proposedStock: next });
+    }
+
+    for (const entry of movements) {
+      entry.product.stockQty = entry.proposedStock;
+      if (!products.some((product) => product.id === entry.product.id)) products.push(entry.product);
+      const movement = {
+        id: id(),
+        businessId,
+        productId: entry.product.id,
+        productName: entry.product.name,
+        action: entry.item.action,
+        quantity: entry.quantity,
+        unit: entry.item.unit ? String(entry.item.unit) : "units",
+        delta: entry.delta,
+        previousStock: entry.previousStock,
+        resultingStock: entry.proposedStock,
+        transcript: transcript ? String(transcript) : null,
+        accountId: accountId || null,
+        createdAt: now(),
+      };
+      state.stockMovements.push(movement);
+      entry.movement = movement;
+    }
+    return { products, movements: movements.map((entry) => entry.movement) };
+  });
+}
+
+function listStockMovements(businessId, limit = 100) {
+  const state = load();
+  const movements = Array.isArray(state.stockMovements) ? state.stockMovements : [];
+  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+  return movements
+    .filter((movement) => movement.businessId === businessId)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .slice(0, safeLimit);
+}
+
 // --- Customers -------------------------------------------------------
 
 function findOrCreateCustomer(state, businessId, phone, name) {
@@ -1157,6 +1239,8 @@ module.exports = {
   getProduct,
   updateProduct,
   deleteProduct,
+  confirmStockMovements,
+  listStockMovements,
   findOrCreateCustomer,
   findOrCreateConversation,
   addMessage,

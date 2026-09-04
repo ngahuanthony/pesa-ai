@@ -6,7 +6,8 @@
     "dev": "node --watch server.js",
     "start": "node server.js",
     "build": "echo 'No build step needed for JS server'",
-    "typecheck": "echo 'No typecheck for JS server'"
+    "typecheck": "echo 'No typecheck for JS server'",
+    "test": "node --test pesa-src/routes/*.test.js"
   },
   "dependencies": {
     "@replit/object-storage": "^1.0.0"

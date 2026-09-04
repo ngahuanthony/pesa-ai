@@ -78,6 +78,7 @@ const reportsRoutes = require("./pesa-src/routes/reports");
 const videoScanRoutes    = require("./pesa-src/routes/video-scan");
 const conversationRoutes = require("./pesa-src/routes/conversations");
 const photoScanRoutes   = require("./pesa-src/routes/photo-scan");
+const voiceStockRoutes  = require("./pesa-src/routes/voice-stock");
 const videoProcessor = require("./pesa-src/video-processor");
 const whatsapp = require("./pesa-src/whatsapp");
 const mpesa = require("./pesa-src/mpesa");
@@ -151,6 +152,9 @@ router.get("/api/businesses/:businessId/activity",                              
 // Photo batch scan — POST analyse photos with AI, POST confirm selected drafts
 router.post("/api/businesses/:businessId/photo-scan",         photoScanRoutes.analyzePhotos);
 router.post("/api/businesses/:businessId/photo-scan/confirm", photoScanRoutes.confirmPhotoDrafts);
+router.post("/api/businesses/:businessId/voice-stock/interpret", voiceStockRoutes.interpret);
+router.post("/api/businesses/:businessId/voice-stock/confirm", voiceStockRoutes.confirm);
+router.get("/api/businesses/:businessId/voice-stock/history", voiceStockRoutes.history);
 router.delete("/api/businesses/:businessId/video-scan/:scanId",        videoScanRoutes.deleteScan);
 
 router.post("/api/businesses/:businessId/chat", chatRoutes.send);

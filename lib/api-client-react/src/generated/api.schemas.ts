@@ -48,6 +48,97 @@ export interface Product {
   createdAt: string;
 }
 
+export interface VoiceStockInterpretInput {
+  /** @maxLength 4000 */
+  transcript: string;
+}
+
+export type VoiceStockItemAction = typeof VoiceStockItemAction[keyof typeof VoiceStockItemAction] | null;
+
+
+export const VoiceStockItemAction = {
+  receive: 'receive',
+  sell: 'sell',
+  damage: 'damage',
+  missing: 'missing',
+  adjustment: 'adjustment',
+} as const;
+
+export interface VoiceStockItem {
+  productId: string | null;
+  productName: string | null;
+  action: VoiceStockItemAction;
+  quantity: number | null;
+  unit: string;
+  confidence: number;
+  currentStock: number | null;
+  proposedStock: number | null;
+  warning?: string | null;
+}
+
+export interface VoiceStockInterpretation {
+  transcript: string;
+  items: VoiceStockItem[];
+}
+
+export type VoiceStockConfirmInputItemsItemAction = typeof VoiceStockConfirmInputItemsItemAction[keyof typeof VoiceStockConfirmInputItemsItemAction];
+
+
+export const VoiceStockConfirmInputItemsItemAction = {
+  receive: 'receive',
+  sell: 'sell',
+  damage: 'damage',
+  missing: 'missing',
+  adjustment: 'adjustment',
+} as const;
+
+export type VoiceStockConfirmInputItemsItem = {
+  productId: string;
+  action: VoiceStockConfirmInputItemsItemAction;
+  /** @exclusiveMinimum 0 */
+  quantity: number;
+  /** @maxLength 50 */
+  unit?: string;
+};
+
+export interface VoiceStockConfirmInput {
+  /** @maxLength 4000 */
+  transcript?: string;
+  /** @minItems 1 */
+  items: VoiceStockConfirmInputItemsItem[];
+}
+
+export type StockMovementAction = typeof StockMovementAction[keyof typeof StockMovementAction];
+
+
+export const StockMovementAction = {
+  receive: 'receive',
+  sell: 'sell',
+  damage: 'damage',
+  missing: 'missing',
+  adjustment: 'adjustment',
+} as const;
+
+export interface StockMovement {
+  id: string;
+  businessId: string;
+  productId: string;
+  productName: string;
+  action: StockMovementAction;
+  quantity: number;
+  unit: string;
+  delta: number;
+  previousStock: number;
+  resultingStock: number;
+  transcript?: string | null;
+  createdAt: string;
+}
+
+export interface VoiceStockConfirmResult {
+  products: Product[];
+  movements: StockMovement[];
+}
+
 export interface OrderItem {
   productId: string;
   productName: string;
@@ -179,6 +270,11 @@ export interface AdminLoginInput {
   password: string;
 }
 
+export interface AdminResetPasswordInput {
+  /** @minLength 8 */
+  newPassword: string;
+}
+
 export interface BusinessUpdate {
   name?: string;
   category?: string;
@@ -250,4 +346,12 @@ export interface ReportStatusUpdate {
 export interface AdminChargeInput {
   phone?: string;
 }
+
+export type GetVoiceStockHistoryParams = {
+/**
+ * @minimum 1
+ * @maximum 500
+ */
+limit?: number;
+};
 

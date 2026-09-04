@@ -18,6 +18,7 @@ tags:
   - name: mpesa
   - name: admin
   - name: reports
+  - name: voice-stock
 paths:
   /healthz:
     get:
@@ -491,6 +492,68 @@ paths:
                 items:
                   $ref: "#/components/schemas/ChatMessage"
 
+  /businesses/{businessId}/voice-stock/interpret:
+    post:
+      operationId: interpretVoiceStock
+      tags: [voice-stock]
+      parameters:
+        - $ref: "#/components/parameters/BusinessId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoiceStockInterpretInput"
+      responses:
+        "200":
+          description: Proposed stock changes; no stock is changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceStockInterpretation"
+
+  /businesses/{businessId}/voice-stock/confirm:
+    post:
+      operationId: confirmVoiceStock
+      tags: [voice-stock]
+      parameters:
+        - $ref: "#/components/parameters/BusinessId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoiceStockConfirmInput"
+      responses:
+        "200":
+          description: Confirmed stock changes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceStockConfirmResult"
+
+  /businesses/{businessId}/voice-stock/history:
+    get:
+      operationId: getVoiceStockHistory
+      tags: [voice-stock]
+      parameters:
+        - $ref: "#/components/parameters/BusinessId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Recent stock movements, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockMovement"
+
   /reports:
     post:
       operationId: createReport
@@ -552,6 +615,22 @@ paths:
       responses:
         "200":
           description: OK
+
+  /admin/businesses/{businessId}/reset-password:
+    post:
+      operationId: adminResetPassword
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/BusinessId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminResetPasswordInput"
+      responses:
+        "200":
+          description: Password reset.
 
   /admin/businesses/{businessId}/suspend:
     post:
@@ -628,6 +707,13 @@ paths:
           description: OK
 
 components:
+  parameters:
+    BusinessId:
+      name: businessId
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     HealthStatus:
       type: object
@@ -737,6 +823,126 @@ components:
         - stockQty
         - active
         - createdAt
+
+    VoiceStockInterpretInput:
+      type: object
+      properties:
+        transcript:
+          type: string
+          maxLength: 4000
+      required: [transcript]
+
+    VoiceStockItem:
+      type: object
+      properties:
+        productId:
+          type: string
+          nullable: true
+        productName:
+          type: string
+          nullable: true
+        action:
+          type: string
+          enum: [receive, sell, damage, missing, adjustment]
+          nullable: true
+        quantity:
+          type: number
+          nullable: true
+        unit:
+          type: string
+        confidence:
+          type: number
+        currentStock:
+          type: number
+          nullable: true
+        proposedStock:
+          type: number
+          nullable: true
+        warning:
+          type: string
+          nullable: true
+      required: [productId, productName, action, quantity, unit, confidence, currentStock, proposedStock]
+
+    VoiceStockInterpretation:
+      type: object
+      properties:
+        transcript:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoiceStockItem"
+      required: [transcript, items]
+
+    VoiceStockConfirmInput:
+      type: object
+      properties:
+        transcript:
+          type: string
+          maxLength: 4000
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            properties:
+              productId:
+                type: string
+              action:
+                type: string
+                enum: [receive, sell, damage, missing, adjustment]
+              quantity:
+                type: number
+                exclusiveMinimum: 0
+              unit:
+                type: string
+                maxLength: 50
+            required: [productId, action, quantity]
+      required: [items]
+
+    StockMovement:
+      type: object
+      properties:
+        id:
+          type: string
+        businessId:
+          type: string
+        productId:
+          type: string
+        productName:
+          type: string
+        action:
+          type: string
+          enum: [receive, sell, damage, missing, adjustment]
+        quantity:
+          type: number
+        unit:
+          type: string
+        delta:
+          type: number
+        previousStock:
+          type: number
+        resultingStock:
+          type: number
+        transcript:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required: [id, businessId, productId, productName, action, quantity, unit, delta, previousStock, resultingStock, createdAt]
+
+    VoiceStockConfirmResult:
+      type: object
+      properties:
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        movements:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockMovement"
+      required: [products, movements]
 
     OrderItem:
       type: object
@@ -1062,6 +1268,14 @@ components:
           type: string
       required:
         - password
+
+    AdminResetPasswordInput:
+      type: object
+      properties:
+        newPassword:
+          type: string
+          minLength: 8
+      required: [newPassword]
 
     BusinessUpdate:
       type: object

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, MessageSquare,
   Settings, LogOut, Phone, ChevronDown, User, Tag,
   Users, CreditCard, Layers, ScanLine, BarChart2,
-  Menu, X,
+  Menu, X, Mic,
 } from "lucide-react";
 import { useLogout, useGetMe } from "@workspace/api-client-react";
 import { useState } from "react";
@@ -155,6 +155,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         )}
 
         {navLink("/dashboard/products",   "Products",  Package)}
+        {navLink("/dashboard/voice-stock", "Voice to Stock", Mic)}
         {navLink("/dashboard/video-scan", "Stock Scanner", ScanLine)}
 
         {expandable(

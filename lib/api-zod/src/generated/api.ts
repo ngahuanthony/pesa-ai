@@ -449,6 +449,115 @@ export const GetChatHistoryResponseItem = zod.object({
 export const GetChatHistoryResponse = zod.array(GetChatHistoryResponseItem)
 
 
+export const InterpretVoiceStockParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+export const interpretVoiceStockBodyTranscriptMax = 4000;
+
+
+
+export const InterpretVoiceStockBody = zod.object({
+  "transcript": zod.string().max(interpretVoiceStockBodyTranscriptMax)
+})
+
+export const InterpretVoiceStockResponse = zod.object({
+  "transcript": zod.string(),
+  "items": zod.array(zod.object({
+  "productId": zod.string().nullable(),
+  "productName": zod.string().nullable(),
+  "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']).nullable(),
+  "quantity": zod.number().nullable(),
+  "unit": zod.string(),
+  "confidence": zod.number(),
+  "currentStock": zod.number().nullable(),
+  "proposedStock": zod.number().nullable(),
+  "warning": zod.string().nullish()
+}))
+})
+
+
+export const ConfirmVoiceStockParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+export const confirmVoiceStockBodyTranscriptMax = 4000;
+
+export const confirmVoiceStockBodyItemsItemQuantityExclusiveMin = 0;
+
+export const confirmVoiceStockBodyItemsItemUnitMax = 50;
+
+
+
+
+export const ConfirmVoiceStockBody = zod.object({
+  "transcript": zod.string().max(confirmVoiceStockBodyTranscriptMax).optional(),
+  "items": zod.array(zod.object({
+  "productId": zod.string(),
+  "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']),
+  "quantity": zod.number().gt(confirmVoiceStockBodyItemsItemQuantityExclusiveMin),
+  "unit": zod.string().max(confirmVoiceStockBodyItemsItemUnitMax).optional()
+})).min(1)
+})
+
+export const ConfirmVoiceStockResponse = zod.object({
+  "products": zod.array(zod.object({
+  "id": zod.string(),
+  "businessId": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "price": zod.number(),
+  "stockQty": zod.number(),
+  "imageUrl": zod.string().nullish(),
+  "active": zod.boolean(),
+  "createdAt": zod.string()
+})),
+  "movements": zod.array(zod.object({
+  "id": zod.string(),
+  "businessId": zod.string(),
+  "productId": zod.string(),
+  "productName": zod.string(),
+  "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "delta": zod.number(),
+  "previousStock": zod.number(),
+  "resultingStock": zod.number(),
+  "transcript": zod.string().nullish(),
+  "createdAt": zod.string()
+}))
+})
+
+
+export const GetVoiceStockHistoryParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+export const getVoiceStockHistoryQueryLimitMax = 500;
+
+
+
+export const GetVoiceStockHistoryQueryParams = zod.object({
+  "limit": zod.coerce.number().int().min(1).max(getVoiceStockHistoryQueryLimitMax).optional()
+})
+
+export const GetVoiceStockHistoryResponseItem = zod.object({
+  "id": zod.string(),
+  "businessId": zod.string(),
+  "productId": zod.string(),
+  "productName": zod.string(),
+  "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "delta": zod.number(),
+  "previousStock": zod.number(),
+  "resultingStock": zod.number(),
+  "transcript": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const GetVoiceStockHistoryResponse = zod.array(GetVoiceStockHistoryResponseItem)
+
+
 export const CreateReportBody = zod.object({
   "businessId": zod.string(),
   "reason": zod.string(),
@@ -498,6 +607,21 @@ export const AdminChargeSubscriptionBody = zod.object({
 })
 
 export const AdminChargeSubscriptionResponse = zod.unknown()
+
+
+export const AdminResetPasswordParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+export const adminResetPasswordBodyNewPasswordMin = 8;
+
+
+
+export const AdminResetPasswordBody = zod.object({
+  "newPassword": zod.string().min(adminResetPasswordBodyNewPasswordMin)
+})
+
+export const AdminResetPasswordResponse = zod.unknown()
 
 
 export const AdminSuspendBusinessParams = zod.object({
