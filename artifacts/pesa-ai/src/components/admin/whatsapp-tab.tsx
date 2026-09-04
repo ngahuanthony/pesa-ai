@@ -5,6 +5,46 @@ import { useToast } from "@/hooks/use-toast";
 import { AlertCircle, CheckCircle2, MessageSquare, Wifi } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import QRCode from "qrcode";
+
+async function buildQrProfilePicture(businessName: string, phone: string): Promise<string> {
+  const canvas = document.createElement("canvas");
+  canvas.width = 640;
+  canvas.height = 640;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not create profile image");
+
+  ctx.fillStyle = "#16a34a";
+  ctx.fillRect(0, 0, 640, 640);
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "center";
+  ctx.font = "bold 38px Arial";
+  const shortName = businessName.length > 28 ? `${businessName.slice(0, 27)}…` : businessName;
+  ctx.fillText(shortName.toUpperCase(), 320, 105);
+
+  const shopUrl = `https://wa.me/${phone}?text=${encodeURIComponent("Hi, I'd like to shop")}`;
+  const qrDataUrl = await QRCode.toDataURL(shopUrl, {
+    width: 320,
+    margin: 2,
+    color: { dark: "#111827", light: "#ffffff" },
+  });
+  const qrImage = new Image();
+  qrImage.src = qrDataUrl;
+  await new Promise<void>((resolve, reject) => {
+    qrImage.onload = () => resolve();
+    qrImage.onerror = () => reject(new Error("Could not generate QR image"));
+  });
+
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.roundRect(130, 145, 380, 380, 28);
+  ctx.fill();
+  ctx.drawImage(qrImage, 160, 175, 320, 320);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 28px Arial";
+  ctx.fillText("SCAN TO SHOP", 320, 575);
+  return canvas.toDataURL("image/png");
+}
 
 export function AdminWhatsAppTab() {
   const { data: businesses, isLoading } = useAdminListBusinesses();
@@ -77,6 +117,7 @@ export function AdminWhatsAppTab() {
 
     setSaving(true);
     try {
+      const profileImageDataUrl = await buildQrProfilePicture(displayName.trim(), normalizedPhone);
       const res = await fetch(`/api/admin/businesses/${selectedId}/whatsapp`, {
         method: "POST",
         credentials: "include",
@@ -87,6 +128,7 @@ export function AdminWhatsAppTab() {
           verifyToken,
           displayName: displayName.trim(),
           waPhone: normalizedPhone,
+          profileImageDataUrl,
         }),
       });
       const data = await res.json();
@@ -94,7 +136,9 @@ export function AdminWhatsAppTab() {
       setStatus(data.connected ? "connected" : "not_connected");
       toast({
         title: "WhatsApp connected",
-        description: `${displayName.trim()} is now using the production Pesa AI sender.`,
+        description: data.profilePictureUpdated
+          ? "Connected and the QR profile picture was applied."
+          : "Connected. Meta did not update the profile picture yet; click Update to retry.",
       });
       queryClient.invalidateQueries({ queryKey: getAdminListBusinessesQueryKey() });
     } catch (error) {

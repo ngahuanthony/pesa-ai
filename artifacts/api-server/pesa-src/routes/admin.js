@@ -113,7 +113,7 @@ function getPlatformDefaults({ session }) {
 
 async function setWhatsAppCredentials({ params, body, session }) {
   auth.requireAdmin(session);
-  let { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone } = body || {};
+  let { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone, profileImageDataUrl } = body || {};
 
   // Fall back to platform-level credentials if admin left them blank
   if (!accessToken && process.env.WHATSAPP_PLATFORM_TOKEN) {
@@ -134,12 +134,24 @@ async function setWhatsAppCredentials({ params, body, session }) {
   // After credentials are saved, push the business profile to Meta so
   // customers see the correct name, category and description on WhatsApp.
   // Do this in the background — don't let a Meta API hiccup block the response.
+  let profilePictureUpdated = false;
   if (result.connected && phoneNumberId && accessToken) {
     const business = db.getBusiness(params.businessId);
-    whatsapp.updateWhatsAppBusinessProfile(business, phoneNumberId, accessToken).catch(() => {});
+    await whatsapp.updateWhatsAppBusinessProfile(business, phoneNumberId, accessToken);
+    if (profileImageDataUrl) {
+      try {
+        profilePictureUpdated = await whatsapp.updateWhatsAppProfilePicture(
+          phoneNumberId,
+          accessToken,
+          profileImageDataUrl
+        );
+      } catch (err) {
+        console.warn(`[whatsapp] QR profile picture update failed: ${err.message}`);
+      }
+    }
   }
 
-  return result;
+  return { ...result, profilePictureUpdated };
 }
 
 function getWhatsAppStatus({ params, session }) {

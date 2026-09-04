@@ -205,4 +205,59 @@ async function updateWhatsAppBusinessProfile(business, phoneNumberId, accessToke
   }
 }
 
-module.exports = { verifyWebhook, handleIncomingWebhook, sendMessage, resolveAccessToken, updateWhatsAppBusinessProfile };
+async function updateWhatsAppProfilePicture(phoneNumberId, accessToken, imageDataUrl) {
+  if (!phoneNumberId || !accessToken || !imageDataUrl) return false;
+  const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(imageDataUrl);
+  if (!match) throw new Error("Profile picture must be a PNG data URL");
+  const image = Buffer.from(match[1], "base64");
+  if (image.length < 100 || image.length > 1_000_000) {
+    throw new Error("Profile picture size is invalid");
+  }
+  const appId = process.env.WHATSAPP_APP_ID || "3095173927353545";
+
+  const sessionRes = await fetch(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${appId}/uploads?file_length=${image.length}&file_type=image/png`,
+    { method: "POST", headers: { authorization: `Bearer ${accessToken}` } }
+  );
+  if (!sessionRes.ok) throw new Error(`Meta upload session failed (${sessionRes.status})`);
+  const session = await sessionRes.json();
+
+  const uploadRes = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${session.id}`, {
+    method: "POST",
+    headers: {
+      authorization: `OAuth ${accessToken}`,
+      file_offset: "0",
+      "content-type": "application/octet-stream",
+    },
+    body: image,
+  });
+  if (!uploadRes.ok) throw new Error(`Meta image upload failed (${uploadRes.status})`);
+  const uploaded = await uploadRes.json();
+  if (!uploaded.h) throw new Error("Meta did not return an image handle");
+
+  const profileRes = await fetch(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/whatsapp_business_profile`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        profile_picture_handle: uploaded.h,
+      }),
+    }
+  );
+  if (!profileRes.ok) throw new Error(`Meta profile picture update failed (${profileRes.status})`);
+  return true;
+}
+
+module.exports = {
+  verifyWebhook,
+  handleIncomingWebhook,
+  sendMessage,
+  resolveAccessToken,
+  updateWhatsAppBusinessProfile,
+  updateWhatsAppProfilePicture,
+};
