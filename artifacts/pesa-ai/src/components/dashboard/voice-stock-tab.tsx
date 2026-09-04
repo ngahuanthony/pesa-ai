@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Mic, MicOff, Loader2, Check, AlertTriangle, Trash2, ArrowRight, Save, History, RefreshCcw, Package, ShieldCheck } from "lucide-react";
+import { Mic, MicOff, Loader2, Check, AlertTriangle, Trash2, ArrowRight, Save, History, RefreshCcw, Package, ShieldCheck, Volume2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -62,19 +62,39 @@ export function VoiceStockTab() {
   const [speechError, setSpeechError] = useState("");
   const [micPermission, setMicPermission] = useState<MicrophonePermission>("unknown");
   const [isRequestingMic, setIsRequestingMic] = useState(false);
+  const [audioUrl, setAudioUrl] = useState("");
+  const [playbackUnavailable, setPlaybackUnavailable] = useState(false);
 
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const stopAudioRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    };
+  }, [audioUrl]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRec) {
         const recognition = new SpeechRec();
-          const isMobile = /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent);
-          recognition.continuous = !isMobile;
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent);
+        recognition.continuous = !isMobile;
         recognition.interimResults = true;
         recognition.lang = "en-KE"; // Best effort for English/Kiswahili mix
-          recognition.maxAlternatives = 1;
+        recognition.maxAlternatives = 1;
 
         recognition.onresult = (event: any) => {
           let currentTranscript = "";
@@ -98,10 +118,12 @@ export function VoiceStockTab() {
           }
           setSpeechError(messages[event.error] || "Voice capture could not start. Please try again or type the update.");
           setIsListening(false);
+          stopAudioRecording();
         };
 
         recognition.onend = () => {
           setIsListening(false);
+          stopAudioRecording();
         };
 
         recognitionRef.current = recognition;
@@ -136,11 +158,12 @@ export function VoiceStockTab() {
 
       return () => {
         recognitionRef.current?.stop();
+        stopAudioRecording();
         if (permissionStatus) permissionStatus.onchange = null;
       };
     }
     return undefined;
-  }, []);
+  }, [stopAudioRecording]);
 
   const startRecognition = useCallback(() => {
     try {
@@ -153,6 +176,40 @@ export function VoiceStockTab() {
     }
   }, []);
 
+  const startVoiceCapture = useCallback((stream: MediaStream) => {
+    mediaStreamRef.current = stream;
+    audioChunksRef.current = [];
+    setAudioUrl("");
+    setPlaybackUnavailable(false);
+
+    if (typeof MediaRecorder !== "undefined") {
+      try {
+        const recorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = recorder;
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) audioChunksRef.current.push(event.data);
+        };
+        recorder.onstop = () => {
+          if (audioChunksRef.current.length > 0) {
+            const blob = new Blob(audioChunksRef.current, {
+              type: recorder.mimeType || "audio/webm",
+            });
+            setAudioUrl(URL.createObjectURL(blob));
+          }
+          audioChunksRef.current = [];
+          mediaRecorderRef.current = null;
+        };
+        recorder.start();
+      } catch {
+        setPlaybackUnavailable(true);
+      }
+    } else {
+      setPlaybackUnavailable(true);
+    }
+
+    startRecognition();
+  }, [startRecognition]);
+
   const requestMicrophone = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setSpeechError("This browser cannot request microphone access. Type the stock update instead.");
@@ -163,10 +220,9 @@ export function VoiceStockTab() {
     setSpeechError("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
       setMicPermission("granted");
       window.localStorage.setItem("pesa-voice-microphone-ready", "true");
-      startRecognition();
+      startVoiceCapture(stream);
     } catch (error) {
       const name = error instanceof DOMException ? error.name : "";
       setMicPermission(name === "NotAllowedError" ? "denied" : "prompt");
@@ -178,17 +234,16 @@ export function VoiceStockTab() {
     } finally {
       setIsRequestingMic(false);
     }
-  }, [startRecognition]);
+  }, [startVoiceCapture]);
 
   const toggleListen = useCallback(() => {
     if (isListening) {
       recognitionRef.current?.stop();
-    } else if (micPermission !== "granted") {
-      void requestMicrophone();
+      stopAudioRecording();
     } else {
-      startRecognition();
+      void requestMicrophone();
     }
-  }, [isListening, micPermission, requestMicrophone, startRecognition]);
+  }, [isListening, requestMicrophone, stopAudioRecording]);
 
   const isAppleMobile = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
@@ -380,10 +435,10 @@ export function VoiceStockTab() {
                 variant={isListening ? "destructive" : "secondary"}
                 onClick={toggleListen}
                 className={`gap-2 touch-manipulation ${isListening ? "animate-pulse shadow-lg" : ""}`}
-                disabled={interpretMutation.isPending}
+                disabled={interpretMutation.isPending || isRequestingMic}
               >
-                {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                {isListening ? "Stop Listening" : "Speak"}
+                {isRequestingMic ? <Loader2 className="h-4 w-4 animate-spin" /> : isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                {isRequestingMic ? "Starting..." : isListening ? "Stop Listening" : "Speak"}
               </Button>
             )}
             <Button 
@@ -397,6 +452,38 @@ export function VoiceStockTab() {
             </Button>
           </div>
         </div>
+
+        {audioUrl && (
+          <div data-testid="card-voice-playback" className="mt-4 rounded-lg border border-border bg-muted/20 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                <Volume2 className="h-4 w-4" />
+                Listen to your recording
+              </div>
+              <Button
+                data-testid="button-discard-recording"
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label="Discard recording"
+                onClick={() => setAudioUrl("")}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <audio data-testid="audio-voice-playback" controls preload="metadata" src={audioUrl} className="h-10 w-full" />
+            <p className="mt-2 text-xs text-muted-foreground">
+              This recording stays on this device and is discarded when you close or refresh the page.
+            </p>
+          </div>
+        )}
+
+        {playbackUnavailable && (
+          <div data-testid="status-playback-unavailable" className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+            Voice transcription works, but audio playback is not supported by this browser.
+          </div>
+        )}
       </div>
 
       {/* ── Review Draft Items ── */}
