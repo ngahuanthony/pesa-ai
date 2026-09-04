@@ -64,11 +64,18 @@ export function VoiceStockTab() {
   const [isRequestingMic, setIsRequestingMic] = useState(false);
   const [audioUrl, setAudioUrl] = useState("");
   const [playbackUnavailable, setPlaybackUnavailable] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
 
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const keepListeningRef = useRef(false);
+  const transcriptRef = useRef("");
+  const recognitionBaseRef = useRef("");
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingSecondsRef = useRef(0);
 
   const stopAudioRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
@@ -78,6 +85,21 @@ export function VoiceStockTab() {
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     mediaStreamRef.current = null;
   }, []);
+
+  const stopVoiceCapture = useCallback(() => {
+    keepListeningRef.current = false;
+    if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+    restartTimerRef.current = null;
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    recordingTimerRef.current = null;
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      // The browser may already be between recognition segments.
+    }
+    setIsListening(false);
+    stopAudioRecording();
+  }, [stopAudioRecording]);
 
   useEffect(() => {
     return () => {
@@ -101,7 +123,9 @@ export function VoiceStockTab() {
           for (let i = 0; i < event.results.length; i++) {
             currentTranscript += event.results[i][0].transcript;
           }
-          setTranscript(currentTranscript);
+          const combined = `${recognitionBaseRef.current} ${currentTranscript}`.trim();
+          transcriptRef.current = combined;
+          setTranscript(combined);
         };
 
         recognition.onerror = (event: any) => {
@@ -112,18 +136,30 @@ export function VoiceStockTab() {
             "network": "The phone's speech service could not connect. Check your connection or type the update instead.",
             "no-speech": "No speech was detected. Tap Speak and try again.",
           };
+          if (event.error === "no-speech" && keepListeningRef.current) return;
           if (event.error === "not-allowed" || event.error === "service-not-allowed") {
             setMicPermission("denied");
             window.localStorage.removeItem("pesa-voice-microphone-ready");
           }
           setSpeechError(messages[event.error] || "Voice capture could not start. Please try again or type the update.");
-          setIsListening(false);
-          stopAudioRecording();
+          stopVoiceCapture();
         };
 
         recognition.onend = () => {
-          setIsListening(false);
-          stopAudioRecording();
+          if (!keepListeningRef.current) {
+            setIsListening(false);
+            return;
+          }
+          recognitionBaseRef.current = transcriptRef.current;
+          restartTimerRef.current = setTimeout(() => {
+            if (!keepListeningRef.current) return;
+            try {
+              recognition.start();
+            } catch {
+              stopVoiceCapture();
+              setSpeechError("Voice recognition stopped unexpectedly. Your captured words are still available to review.");
+            }
+          }, 150);
         };
 
         recognitionRef.current = recognition;
@@ -157,24 +193,24 @@ export function VoiceStockTab() {
       }
 
       return () => {
-        recognitionRef.current?.stop();
-        stopAudioRecording();
+        stopVoiceCapture();
         if (permissionStatus) permissionStatus.onchange = null;
       };
     }
     return undefined;
-  }, [stopAudioRecording]);
+  }, [stopVoiceCapture]);
 
   const startRecognition = useCallback(() => {
     try {
       setSpeechError("");
+      recognitionBaseRef.current = transcriptRef.current;
       recognitionRef.current?.start();
       setIsListening(true);
     } catch {
-      setIsListening(false);
+      stopVoiceCapture();
       setSpeechError("Voice capture could not start. Check microphone permission, then try again.");
     }
-  }, []);
+  }, [stopVoiceCapture]);
 
   const startVoiceCapture = useCallback((stream: MediaStream) => {
     mediaStreamRef.current = stream;
@@ -222,6 +258,15 @@ export function VoiceStockTab() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicPermission("granted");
       window.localStorage.setItem("pesa-voice-microphone-ready", "true");
+      keepListeningRef.current = true;
+      recordingSecondsRef.current = 0;
+      setRecordingSeconds(0);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        recordingSecondsRef.current += 1;
+        setRecordingSeconds(recordingSecondsRef.current);
+        if (recordingSecondsRef.current >= 59) stopVoiceCapture();
+      }, 1000);
       startVoiceCapture(stream);
     } catch (error) {
       const name = error instanceof DOMException ? error.name : "";
@@ -234,16 +279,15 @@ export function VoiceStockTab() {
     } finally {
       setIsRequestingMic(false);
     }
-  }, [startVoiceCapture]);
+  }, [startVoiceCapture, stopVoiceCapture]);
 
   const toggleListen = useCallback(() => {
     if (isListening) {
-      recognitionRef.current?.stop();
-      stopAudioRecording();
+      stopVoiceCapture();
     } else {
       void requestMicrophone();
     }
-  }, [isListening, requestMicrophone, stopAudioRecording]);
+  }, [isListening, requestMicrophone, stopVoiceCapture]);
 
   const isAppleMobile = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
@@ -333,6 +377,7 @@ export function VoiceStockTab() {
         queryClient.invalidateQueries({ queryKey: getListProductsQueryKey(businessId) });
         queryClient.invalidateQueries({ queryKey: getGetVoiceStockHistoryQueryKey(businessId) });
         setDraftItems(null);
+        transcriptRef.current = "";
         setTranscript("");
       },
       onError: (err: any) => {
@@ -408,7 +453,7 @@ export function VoiceStockTab() {
         )}
         {isListening && (
           <div data-testid="status-listening" className="mb-3 text-xs text-blue-600 bg-blue-50 p-2 rounded border border-blue-200">
-            Listening... Speak your stock changes now.
+            Listening... Speak your stock changes now. {recordingSeconds}s / 59s
           </div>
         )}
         {speechError && (
@@ -423,7 +468,10 @@ export function VoiceStockTab() {
             placeholder={isSupported ? "e.g. 'I received 10 bags of unga and sold 2 packets of milk'" : "Type your stock changes here..."}
             className="min-h-[120px] text-base resize-none pb-3 sm:pb-14 bg-muted/30"
             value={transcript}
-            onChange={(e) => setTranscript(e.target.value)}
+            onChange={(e) => {
+              transcriptRef.current = e.target.value;
+              setTranscript(e.target.value);
+            }}
             disabled={isListening || interpretMutation.isPending}
           />
           
