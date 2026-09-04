@@ -57,6 +57,7 @@ export function VoiceStockTab() {
   const [confirmedTranscript, setConfirmedTranscript] = useState("");
   const [isSupported, setIsSupported] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [speechError, setSpeechError] = useState("");
 
   const recognitionRef = useRef<any>(null);
 
@@ -65,9 +66,11 @@ export function VoiceStockTab() {
       const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRec) {
         const recognition = new SpeechRec();
-        recognition.continuous = true;
+          const isMobile = /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent);
+          recognition.continuous = !isMobile;
         recognition.interimResults = true;
         recognition.lang = "en-KE"; // Best effort for English/Kiswahili mix
+          recognition.maxAlternatives = 1;
 
         recognition.onresult = (event: any) => {
           let currentTranscript = "";
@@ -78,7 +81,15 @@ export function VoiceStockTab() {
         };
 
         recognition.onerror = (event: any) => {
-          if (event.error !== "no-speech") setIsListening(false);
+          const messages: Record<string, string> = {
+            "not-allowed": "Microphone access was blocked. Allow microphone permission for pesaai.africa, then try again.",
+            "service-not-allowed": "Speech recognition is blocked in this browser. Allow microphone access or type the update instead.",
+            "audio-capture": "No microphone was found. Check your phone microphone and try again.",
+            "network": "The phone's speech service could not connect. Check your connection or type the update instead.",
+            "no-speech": "No speech was detected. Tap Speak and try again.",
+          };
+          setSpeechError(messages[event.error] || "Voice capture could not start. Please try again or type the update.");
+          setIsListening(false);
         };
 
         recognition.onend = () => {
@@ -96,11 +107,16 @@ export function VoiceStockTab() {
     if (isListening) {
       recognitionRef.current?.stop();
     } else {
-      if (!transcript) setTranscript("");
-      recognitionRef.current?.start();
-      setIsListening(true);
+      try {
+        setSpeechError("");
+        recognitionRef.current?.start();
+        setIsListening(true);
+      } catch {
+        setIsListening(false);
+        setSpeechError("Voice capture could not start. Check microphone permission, then try again.");
+      }
     }
-  }, [isListening, transcript]);
+  }, [isListening]);
 
   const handleAnalyze = () => {
     if (!transcript.trim()) return;
@@ -221,25 +237,30 @@ export function VoiceStockTab() {
             Listening... Speak your stock changes now.
           </div>
         )}
+        {speechError && (
+          <div data-testid="status-speech-error" className="mb-3 text-xs text-rose-700 bg-rose-50 p-2 rounded border border-rose-200">
+            {speechError}
+          </div>
+        )}
 
         <div className="relative">
           <Textarea 
             data-testid="input-voice-transcript"
             placeholder={isSupported ? "e.g. 'I received 10 bags of unga and sold 2 packets of milk'" : "Type your stock changes here..."}
-            className="min-h-[120px] text-base resize-none pb-14 bg-muted/30"
+            className="min-h-[120px] text-base resize-none pb-3 sm:pb-14 bg-muted/30"
             value={transcript}
             onChange={(e) => setTranscript(e.target.value)}
             disabled={isListening || interpretMutation.isPending}
           />
           
-          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+          <div className="mt-3 flex items-center justify-end gap-2 sm:absolute sm:bottom-3 sm:right-3 sm:mt-0 z-10">
             {isSupported && (
               <Button
                 data-testid="button-toggle-listen"
                 type="button"
                 variant={isListening ? "destructive" : "secondary"}
                 onClick={toggleListen}
-                className={`gap-2 ${isListening ? "animate-pulse shadow-lg" : ""}`}
+                className={`gap-2 touch-manipulation ${isListening ? "animate-pulse shadow-lg" : ""}`}
                 disabled={interpretMutation.isPending}
               >
                 {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
