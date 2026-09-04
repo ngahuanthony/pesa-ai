@@ -1011,6 +1011,7 @@ function confirmStockMovements(businessId, items, { transcript, accountId } = {}
     // Validate and stage all changes before modifying any product. This makes
     // the JSON-file transaction all-or-nothing, including repeated products.
     const stagedStock = new Map();
+    const stagedColors = new Map();
     for (const item of items) {
       const product = state.products.find((p) => p.id === item.productId && p.businessId === businessId);
       if (!product) throw httpError(400, "Product does not belong to this business");
@@ -1024,20 +1025,56 @@ function confirmStockMovements(businessId, items, { transcript, accountId } = {}
       if (item.unit != null && String(item.unit).length > 50) {
         throw httpError(400, "Movement unit must be at most 50 characters");
       }
+      const requestedColor = item.color == null ? "" : String(item.color).trim();
+      if (requestedColor.length > 50) throw httpError(400, "Colour must be at most 50 characters");
+      if (item.color != null && !requestedColor) throw httpError(400, "Colour cannot be blank");
+
+      const existingColors = stagedColors.has(product.id)
+        ? stagedColors.get(product.id)
+        : (Array.isArray(product.colorStock) && product.colorStock.length
+          ? product.colorStock.map((entry) => ({ color: String(entry.color), quantity: Number(entry.quantity) || 0 }))
+          : (requestedColor && Number(product.stockQty) > 0
+            ? [{ color: "Unspecified", quantity: Number(product.stockQty) }]
+            : []));
+      const effectiveColor = requestedColor || (existingColors.length ? "Unspecified" : "");
       const current = stagedStock.has(product.id) ? stagedStock.get(product.id) : Number(product.stockQty);
+      let nextColors = existingColors;
+      let colorPreviousStock = null;
+      let colorResultingStock = null;
+      if (effectiveColor) {
+        nextColors = existingColors.map((entry) => ({ ...entry }));
+        const colorIndex = nextColors.findIndex((entry) => String(entry.color).toLowerCase() === effectiveColor.toLowerCase());
+        colorPreviousStock = colorIndex >= 0 ? Number(nextColors[colorIndex].quantity) : 0;
+        colorResultingStock = item.action === "adjustment"
+          ? quantity
+          : colorPreviousStock + (["sell", "damage", "missing"].includes(item.action) ? -quantity : quantity);
+        if (colorResultingStock < 0) {
+          throw httpError(400, `Stock cannot become negative for ${product.name} (${effectiveColor})`);
+        }
+        if (colorIndex >= 0) nextColors[colorIndex].quantity = colorResultingStock;
+        else nextColors.push({ color: effectiveColor, quantity: colorResultingStock });
+      }
       // An adjustment is a physical count: it sets stock to that count,
       // rather than adding another quantity to the existing balance.
-      const next = item.action === "adjustment"
-        ? quantity
-        : current + (["sell", "damage", "missing"].includes(item.action) ? -quantity : quantity);
+      const next = effectiveColor
+        ? nextColors.reduce((sum, entry) => sum + Number(entry.quantity), 0)
+        : (item.action === "adjustment"
+          ? quantity
+          : current + (["sell", "damage", "missing"].includes(item.action) ? -quantity : quantity));
       const delta = next - current;
       if (next < 0) throw httpError(400, `Stock cannot become negative for ${product.name}`);
       stagedStock.set(product.id, next);
-      movements.push({ product, item, quantity, delta, previousStock: current, proposedStock: next });
+      if (effectiveColor) stagedColors.set(product.id, nextColors);
+      movements.push({
+        product, item, quantity, delta, previousStock: current, proposedStock: next,
+        color: requestedColor || null, colorPreviousStock, colorResultingStock,
+        colorStock: effectiveColor ? nextColors : null,
+      });
     }
 
     for (const entry of movements) {
       entry.product.stockQty = entry.proposedStock;
+      if (entry.colorStock) entry.product.colorStock = entry.colorStock;
       if (!products.some((product) => product.id === entry.product.id)) products.push(entry.product);
       const movement = {
         id: id(),
@@ -1047,6 +1084,9 @@ function confirmStockMovements(businessId, items, { transcript, accountId } = {}
         action: entry.item.action,
         quantity: entry.quantity,
         unit: entry.item.unit ? String(entry.item.unit) : "units",
+        color: entry.color,
+        colorPreviousStock: entry.colorPreviousStock,
+        colorResultingStock: entry.colorResultingStock,
         delta: entry.delta,
         previousStock: entry.previousStock,
         resultingStock: entry.proposedStock,

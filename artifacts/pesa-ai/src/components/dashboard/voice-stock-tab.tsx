@@ -321,38 +321,86 @@ export function VoiceStockTab() {
   };
 
   const draftPreviews = useMemo(() => {
-    const previews = new Map<string, { current: number; proposed: number }>();
+    const previews = new Map<string, {
+      current: number;
+      proposed: number;
+      colorCurrent: number | null;
+      colorProposed: number | null;
+    }>();
     const stagedStock = new Map<string, number>();
+    const stagedColorStock = new Map<string, number>();
 
     for (const item of draftItems || []) {
       const current = item.productId
         ? (stagedStock.get(item.productId) ?? item.currentStock ?? 0)
         : (item.currentStock ?? 0);
       const quantity = item.quantity ?? 0;
-      const proposed = item.action === "receive"
-        ? current + quantity
-        : item.action === "adjustment"
+      const color = item.color?.trim();
+      const colorKey = item.productId && color ? `${item.productId}:${color.toLowerCase()}` : "";
+      const product = item.productId ? products.find((candidate) => candidate.id === item.productId) : undefined;
+      const savedColor = color
+        ? product?.colorStock?.find((entry) => entry.color.toLowerCase() === color.toLowerCase())
+        : undefined;
+      const colorCurrent = color
+        ? (stagedColorStock.get(colorKey) ?? savedColor?.quantity ?? item.colorCurrentStock ?? 0)
+        : null;
+      const colorProposed = color && item.action
+        ? (item.action === "adjustment"
           ? quantity
-          : item.action
-            ? current - quantity
-            : current;
+          : colorCurrent! + (["sell", "damage", "missing"].includes(item.action) ? -quantity : quantity))
+        : null;
+      const proposed = color
+        ? current + (colorProposed! - colorCurrent!)
+        : (item.action === "receive"
+          ? current + quantity
+          : item.action === "adjustment"
+            ? quantity
+            : item.action
+              ? current - quantity
+              : current);
 
-      previews.set(item._id, { current, proposed });
+      previews.set(item._id, { current, proposed, colorCurrent, colorProposed });
       if (item.productId && item.action && quantity > 0) {
         stagedStock.set(item.productId, proposed);
+        if (colorKey && colorProposed !== null) stagedColorStock.set(colorKey, colorProposed);
       }
     }
 
     return previews;
-  }, [draftItems]);
+  }, [draftItems, products]);
 
   const isValid = useMemo(() => {
     if (!draftItems || draftItems.length === 0) return false;
     return draftItems.every(it => {
       if (!it.productId || !it.action || it.quantity === null || it.quantity <= 0) return false;
       if (it.warning) return false;
-      return (draftPreviews.get(it._id)?.proposed ?? -1) >= 0;
+      const preview = draftPreviews.get(it._id);
+      return (preview?.proposed ?? -1) >= 0 && (preview?.colorProposed ?? 0) >= 0;
     });
+  }, [draftItems, draftPreviews]);
+
+  const colorSummaries = useMemo(() => {
+    const grouped = new Map<string, {
+      productName: string;
+      colors: Array<{ color: string; quantity: number }>;
+      total: number;
+    }>();
+    for (const item of draftItems || []) {
+      const color = item.color?.trim();
+      const preview = draftPreviews.get(item._id);
+      if (!item.productId || !color || !preview || preview.colorProposed === null) continue;
+      const existing = grouped.get(item.productId) || {
+        productName: item.productName || "Product",
+        colors: [],
+        total: preview.proposed,
+      };
+      const colorIndex = existing.colors.findIndex((entry) => entry.color.toLowerCase() === color.toLowerCase());
+      if (colorIndex >= 0) existing.colors[colorIndex] = { color, quantity: preview.colorProposed };
+      else existing.colors.push({ color, quantity: preview.colorProposed });
+      existing.total = preview.proposed;
+      grouped.set(item.productId, existing);
+    }
+    return Array.from(grouped.values());
   }, [draftItems, draftPreviews]);
 
   const handleConfirm = () => {
@@ -366,7 +414,8 @@ export function VoiceStockTab() {
           productId: it.productId!,
           action: it.action as VoiceStockConfirmInputItemsItemAction,
           quantity: it.quantity!,
-          unit: it.unit
+           unit: it.unit,
+           color: it.color?.trim() || null,
         }))
       }
     }, {
@@ -549,11 +598,13 @@ export function VoiceStockTab() {
           
           <div className="divide-y divide-border">
             {draftItems.map((item, idx) => {
-              const { current, proposed } = draftPreviews.get(item._id) ?? {
+              const { current, proposed, colorCurrent, colorProposed } = draftPreviews.get(item._id) ?? {
                 current: item.currentStock ?? 0,
                 proposed: item.currentStock ?? 0,
+                colorCurrent: item.colorCurrentStock ?? null,
+                colorProposed: item.colorProposedStock ?? null,
               };
-              const hasError = !item.productId || !item.action || !item.quantity || item.quantity <= 0 || proposed < 0;
+              const hasError = !item.productId || !item.action || !item.quantity || item.quantity <= 0 || proposed < 0 || (colorProposed !== null && colorProposed < 0);
               const hasWarning = !!item.warning;
               
               return (
@@ -586,7 +637,7 @@ export function VoiceStockTab() {
                     </div>
                     
                     {/* Product Select */}
-                    <div className="sm:col-span-5">
+                    <div className="sm:col-span-4">
                       <Select 
                         value={item.productId || "unmatched"} 
                         onValueChange={(val) => {
@@ -610,8 +661,20 @@ export function VoiceStockTab() {
                       </Select>
                     </div>
 
-                    {/* Quantity Input */}
+                    {/* Optional colour variant */}
                     <div className="sm:col-span-2">
+                      <Input
+                        data-testid={`input-draft-color-${idx}`}
+                        type="text"
+                        placeholder="Colour"
+                        className="h-9 w-full"
+                        value={item.color || ""}
+                        onChange={(e) => handleUpdateItem(item._id, { color: e.target.value || null })}
+                      />
+                    </div>
+
+                    {/* Quantity Input */}
+                    <div className="sm:col-span-1">
                       <Input 
                         data-testid={`input-draft-quantity-${idx}`}
                         type="number" 
@@ -645,14 +708,20 @@ export function VoiceStockTab() {
                   
                   {/* Stock Preview */}
                   {item.productId && item.quantity! > 0 && item.action && (
-                    <div data-testid={`text-draft-preview-${idx}`} className="mt-3 flex items-center gap-2 text-xs font-medium bg-white px-3 py-1.5 rounded border border-border w-max">
-                      <span className="text-muted-foreground">Stock preview:</span>
+                    <div data-testid={`text-draft-preview-${idx}`} className="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium bg-white px-3 py-1.5 rounded border border-border w-fit">
+                      {item.color?.trim() && colorCurrent !== null && colorProposed !== null && (
+                        <>
+                          <span className="font-semibold text-foreground">{item.color.trim()}:</span>
+                          <span>{colorCurrent}</span>
+                          <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                          <span className={colorProposed < 0 ? "text-rose-600" : "text-emerald-600"}>{colorProposed}</span>
+                          <span className="text-muted-foreground">•</span>
+                        </>
+                      )}
+                      <span className="text-muted-foreground">Total stock:</span>
                       <span>{current}</span>
                       <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                      <span className={
-                        item.action === 'receive' || item.action === 'adjustment' ? 'text-emerald-600' : 
-                        (proposed < 0 ? 'text-rose-600' : 'text-amber-600')
-                      }>
+                      <span className={proposed < 0 ? "text-rose-600" : "text-emerald-600"}>
                         {proposed}
                       </span>
                     </div>
@@ -668,6 +737,27 @@ export function VoiceStockTab() {
               </div>
             )}
           </div>
+
+          {colorSummaries.length > 0 && (
+            <div className="border-t border-border bg-emerald-50/60 px-4 py-3 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Colour stock summary</p>
+              {colorSummaries.map((summary) => (
+                <div key={summary.productName} className="rounded-lg border border-emerald-200 bg-white p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-foreground">{summary.productName}</span>
+                    <span className="text-sm font-bold text-emerald-700">Total: {summary.total} pcs</span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {summary.colors.map((entry) => (
+                      <span key={entry.color.toLowerCase()} className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-900">
+                        {entry.color}: {entry.quantity} pcs
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           
           <div className="p-4 bg-muted/20 border-t border-border flex justify-end gap-3">
             <Button 

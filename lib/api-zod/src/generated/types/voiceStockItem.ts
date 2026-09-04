@@ -13,6 +13,9 @@ export interface VoiceStockItem {
   action: VoiceStockItemAction;
   quantity: number | null;
   unit: string;
+  color?: string | null;
+  colorCurrentStock?: number | null;
+  colorProposedStock?: number | null;
   confidence: number;
   currentStock: number | null;
   proposedStock: number | null;

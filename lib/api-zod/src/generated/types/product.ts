@@ -5,6 +5,7 @@
  * Pesa AI API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProductColorStockItem } from './productColorStockItem';
 
 export interface Product {
   id: string;
@@ -12,7 +13,9 @@ export interface Product {
   name: string;
   description?: string | null;
   price: number;
+  /** Total stock; equals the sum of colorStock when colour variants are present. */
   stockQty: number;
+  colorStock?: ProductColorStockItem[];
   imageUrl?: string | null;
   active: boolean;
   createdAt: string;

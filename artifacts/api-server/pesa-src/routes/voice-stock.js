@@ -44,33 +44,70 @@ function matchProduct(candidate, products) {
   return null;
 }
 
-function proposal(candidate, action, quantity, unit, products, confidence) {
+function proposal(candidate, action, quantity, unit, products, confidence, color = null) {
   const match = matchProduct(candidate, products);
   if (!match) {
     return {
       productId: null, productName: candidate || null, action: action || null,
       quantity: Number(quantity) || null, unit: unit || "units", confidence: 0,
-      currentStock: null, proposedStock: null,
+      color: color || null, currentStock: null, proposedStock: null,
+      colorCurrentStock: null, colorProposedStock: null,
       warning: "No confident match was found in this business catalogue. Select a catalogue product before confirming.",
     };
   }
   const qty = Number(quantity);
   const current = Number(match.product.stockQty);
+  const normalizedColor = color ? String(color).trim() : null;
+  const colorEntry = normalizedColor && Array.isArray(match.product.colorStock)
+    ? match.product.colorStock.find((entry) => normalize(entry.color) === normalize(normalizedColor))
+    : null;
+  const colorCurrent = normalizedColor ? Number(colorEntry?.quantity || 0) : null;
+  const colorNext = normalizedColor
+    ? (action === "adjustment"
+      ? qty
+      : colorCurrent + (["sell", "damage", "missing"].includes(action) ? -qty : qty))
+    : null;
   const next = action === "adjustment"
-    ? qty
+    ? (normalizedColor ? current + colorNext - colorCurrent : qty)
     : current + (["sell", "damage", "missing"].includes(action) ? -qty : qty);
   return {
     productId: match.product.id, productName: match.product.name, action,
-    quantity: qty, unit: unit || "units",
+    quantity: qty, unit: unit || "units", color: normalizedColor,
     confidence: Math.min(confidence || match.confidence, match.confidence),
     currentStock: current, proposedStock: next,
+    colorCurrentStock: colorCurrent, colorProposedStock: colorNext,
     warning: !ACTIONS.includes(action) ? "Could not determine whether stock was received, sold, damaged, missing, or adjusted." :
       (!Number.isFinite(qty) || qty <= 0 ? "Could not determine a positive quantity." :
-        (next < 0 ? "This change would make stock negative." : null)),
+        (next < 0 || (colorNext !== null && colorNext < 0) ? "This change would make stock negative." : null)),
   };
 }
 
 function fallbackInterpret(transcript, products) {
+  const normalizedTranscript = normalize(transcript);
+  const mentionedProduct = products
+    .filter((product) => normalizedTranscript.includes(normalize(product.name)))
+    .sort((a, b) => normalize(b.name).length - normalize(a.name).length)[0];
+  const commonAction = actionFor(transcript);
+  const colors = "black|white|red|blue|green|yellow|orange|purple|pink|brown|grey|gray|silver|gold|beige|navy|maroon|cream|transparent";
+  const colorItems = [];
+  const seen = new Set();
+  const patterns = [
+    new RegExp(`\\b(${colors})\\s*(?:colour|color)?\\s*(\\d+(?:\\.\\d+)?)\\s*(?:pcs?|pieces?|units?|items?)?`, "gi"),
+    new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s*(?:pcs?|pieces?|units?|items?)?\\s*(?:of\\s+)?(${colors})\\b`, "gi"),
+  ];
+  for (const [patternIndex, pattern] of patterns.entries()) {
+    for (const match of transcript.matchAll(pattern)) {
+      const color = patternIndex === 0 ? match[1] : match[2];
+      const quantity = patternIndex === 0 ? match[2] : match[1];
+      const key = `${normalize(color)}:${quantity}:${match.index}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        colorItems.push(proposal(mentionedProduct?.name, commonAction, quantity, "pcs", products, 0.8, color));
+      }
+    }
+  }
+  if (mentionedProduct && commonAction && colorItems.length) return colorItems;
+
   // Split at conjunctions only when the following phrase begins another
   // stock action. This preserves product names while allowing one utterance
   // to contain, for example, both a receipt and a sale.
@@ -100,7 +137,7 @@ async function claudeInterpret(transcript, products) {
     headers: { "content-type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL, max_tokens: 600,
-      system: "Extract stock changes from English or Kiswahili. Return JSON only: {items:[{productName,action,quantity,unit,confidence}]}. action is receive, sell, damage, missing, or adjustment. For adjustment, quantity is the counted stock to set, not an amount to add. Do not invent products; use only names from this catalogue: " + JSON.stringify(catalog),
+      system: "Extract every stock change from English or Kiswahili with exact detail. Return JSON only: {items:[{productName,action,quantity,unit,color,confidence}]}. action is receive, sell, damage, missing, or adjustment. When quantities are spoken per colour, return one item per colour and do not return the spoken total as another item; the system calculates the total. Preserve each colour exactly. For adjustment, quantity is the counted stock for that colour or product, not an amount to add. Do not invent products; use only names from this catalogue: " + JSON.stringify(catalog),
       messages: [{ role: "user", content: transcript }],
     }),
   });
@@ -109,7 +146,7 @@ async function claudeInterpret(transcript, products) {
   const text = (body.content || []).filter((block) => block.type === "text").map((block) => block.text).join("");
   const json = JSON.parse(text.replace(/^```json\s*|\s*```$/g, ""));
   if (!Array.isArray(json.items)) throw new Error("Claude response has no items");
-  return json.items.map((item) => proposal(item.productName, item.action, item.quantity, item.unit, products, Number(item.confidence) || 0.8));
+  return json.items.map((item) => proposal(item.productName, item.action, item.quantity, item.unit, products, Number(item.confidence) || 0.8, item.color));
 }
 
 async function interpret({ params, body, session }) {

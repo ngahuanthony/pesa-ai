@@ -211,13 +211,21 @@ export const ListProductsParams = zod.object({
   "businessId": zod.coerce.string()
 })
 
+export const listProductsResponseColorStockItemQuantityMin = 0;
+
+
+
 export const ListProductsResponseItem = zod.object({
   "id": zod.string(),
   "businessId": zod.string(),
   "name": zod.string(),
   "description": zod.string().nullish(),
   "price": zod.number(),
-  "stockQty": zod.number(),
+  "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
+  "colorStock": zod.array(zod.object({
+  "color": zod.string(),
+  "quantity": zod.number().min(listProductsResponseColorStockItemQuantityMin)
+})).optional(),
   "imageUrl": zod.string().nullish(),
   "active": zod.boolean(),
   "createdAt": zod.string()
@@ -237,13 +245,21 @@ export const CreateProductBody = zod.object({
   "imageUrl": zod.string().optional()
 })
 
+export const createProductResponseColorStockItemQuantityMin = 0;
+
+
+
 export const CreateProductResponse = zod.object({
   "id": zod.string(),
   "businessId": zod.string(),
   "name": zod.string(),
   "description": zod.string().nullish(),
   "price": zod.number(),
-  "stockQty": zod.number(),
+  "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
+  "colorStock": zod.array(zod.object({
+  "color": zod.string(),
+  "quantity": zod.number().min(createProductResponseColorStockItemQuantityMin)
+})).optional(),
   "imageUrl": zod.string().nullish(),
   "active": zod.boolean(),
   "createdAt": zod.string()
@@ -281,13 +297,21 @@ export const UpdateProductBody = zod.object({
   "active": zod.boolean().optional()
 })
 
+export const updateProductResponseColorStockItemQuantityMin = 0;
+
+
+
 export const UpdateProductResponse = zod.object({
   "id": zod.string(),
   "businessId": zod.string(),
   "name": zod.string(),
   "description": zod.string().nullish(),
   "price": zod.number(),
-  "stockQty": zod.number(),
+  "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
+  "colorStock": zod.array(zod.object({
+  "color": zod.string(),
+  "quantity": zod.number().min(updateProductResponseColorStockItemQuantityMin)
+})).optional(),
   "imageUrl": zod.string().nullish(),
   "active": zod.boolean(),
   "createdAt": zod.string()
@@ -469,6 +493,9 @@ export const InterpretVoiceStockResponse = zod.object({
   "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']).nullable(),
   "quantity": zod.number().nullable(),
   "unit": zod.string(),
+  "color": zod.string().nullish(),
+  "colorCurrentStock": zod.number().nullish(),
+  "colorProposedStock": zod.number().nullish(),
   "confidence": zod.number(),
   "currentStock": zod.number().nullable(),
   "proposedStock": zod.number().nullable(),
@@ -487,6 +514,8 @@ export const confirmVoiceStockBodyItemsItemQuantityExclusiveMin = 0;
 
 export const confirmVoiceStockBodyItemsItemUnitMax = 50;
 
+export const confirmVoiceStockBodyItemsItemColorMax = 50;
+
 
 
 
@@ -496,9 +525,14 @@ export const ConfirmVoiceStockBody = zod.object({
   "productId": zod.string(),
   "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']),
   "quantity": zod.number().gt(confirmVoiceStockBodyItemsItemQuantityExclusiveMin),
-  "unit": zod.string().max(confirmVoiceStockBodyItemsItemUnitMax).optional()
+  "unit": zod.string().max(confirmVoiceStockBodyItemsItemUnitMax).optional(),
+  "color": zod.string().max(confirmVoiceStockBodyItemsItemColorMax).nullish()
 })).min(1)
 })
+
+export const confirmVoiceStockResponseProductsItemColorStockItemQuantityMin = 0;
+
+
 
 export const ConfirmVoiceStockResponse = zod.object({
   "products": zod.array(zod.object({
@@ -507,7 +541,11 @@ export const ConfirmVoiceStockResponse = zod.object({
   "name": zod.string(),
   "description": zod.string().nullish(),
   "price": zod.number(),
-  "stockQty": zod.number(),
+  "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
+  "colorStock": zod.array(zod.object({
+  "color": zod.string(),
+  "quantity": zod.number().min(confirmVoiceStockResponseProductsItemColorStockItemQuantityMin)
+})).optional(),
   "imageUrl": zod.string().nullish(),
   "active": zod.boolean(),
   "createdAt": zod.string()
@@ -520,6 +558,9 @@ export const ConfirmVoiceStockResponse = zod.object({
   "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']),
   "quantity": zod.number(),
   "unit": zod.string(),
+  "color": zod.string().nullish(),
+  "colorPreviousStock": zod.number().nullish(),
+  "colorResultingStock": zod.number().nullish(),
   "delta": zod.number(),
   "previousStock": zod.number(),
   "resultingStock": zod.number(),
@@ -549,6 +590,9 @@ export const GetVoiceStockHistoryResponseItem = zod.object({
   "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']),
   "quantity": zod.number(),
   "unit": zod.string(),
+  "color": zod.string().nullish(),
+  "colorPreviousStock": zod.number().nullish(),
+  "colorResultingStock": zod.number().nullish(),
   "delta": zod.number(),
   "previousStock": zod.number(),
   "resultingStock": zod.number(),

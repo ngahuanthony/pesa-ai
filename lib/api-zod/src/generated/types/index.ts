@@ -30,6 +30,7 @@ export * from './orderItem';
 export * from './orderStatusUpdate';
 export * from './planInput';
 export * from './product';
+export * from './productColorStockItem';
 export * from './productImportInput';
 export * from './productInput';
 export * from './productUpdate';

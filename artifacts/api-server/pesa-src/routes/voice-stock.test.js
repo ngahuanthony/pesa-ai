@@ -18,6 +18,7 @@ function fixture() {
     { id: "tea-a", businessId: "business-a", name: "Kenyan Tea", stockQty: 10 },
     { id: "milk-a", businessId: "business-a", name: "Milk", stockQty: 10 },
     { id: "bread-a", businessId: "business-a", name: "Bread", stockQty: 10 },
+    { id: "cable-a", businessId: "business-a", name: "Oraimo Cable", stockQty: 0 },
     { id: "tea-b", businessId: "business-b", name: "Kenyan Tea", stockQty: 20 }
     ],
     stockMovements: [],
@@ -100,4 +101,50 @@ test("history is scoped to the requested business", () => {
   });
   assert.equal(result.length, 1);
   assert.equal(result[0].businessId, "business-a");
+});
+
+test("interpret preserves quantities per colour and ignores the spoken total", async () => {
+  const result = await voiceStock.interpret({
+    params: { businessId: "business-a" }, session: session("business-a"),
+    body: { transcript: "received Oraimo Cable, black 20 pieces, white 15 pieces and blue 20 pieces, total 55" },
+  });
+  assert.deepEqual(result.items.map((item) => [item.productId, item.action, item.color, item.quantity]), [
+    ["cable-a", "receive", "black", 20],
+    ["cable-a", "receive", "white", 15],
+    ["cable-a", "receive", "blue", 20],
+  ]);
+  assert.equal(db.getProduct("cable-a").stockQty, 0);
+});
+
+test("confirmation stores colour quantities and derives the aggregate total", () => {
+  const result = voiceStock.confirm({
+    params: { businessId: "business-a" }, session: session("business-a"),
+    body: { transcript: "black 20 white 15 blue 20", items: [
+      { productId: "cable-a", action: "receive", color: "Black", quantity: 20, unit: "pcs" },
+      { productId: "cable-a", action: "receive", color: "White", quantity: 15, unit: "pcs" },
+      { productId: "cable-a", action: "receive", color: "Blue", quantity: 20, unit: "pcs" },
+    ] },
+  });
+  assert.equal(result.products[0].stockQty, 55);
+  assert.deepEqual(db.getProduct("cable-a").colorStock, [
+    { color: "Black", quantity: 20 },
+    { color: "White", quantity: 15 },
+    { color: "Blue", quantity: 20 },
+  ]);
+  assert.deepEqual(result.movements.map((movement) => movement.resultingStock), [20, 35, 55]);
+});
+
+test("colour stock cannot become negative and confirmation stays atomic", () => {
+  db.confirmStockMovements("business-a", [
+    { productId: "cable-a", action: "receive", color: "Black", quantity: 4 },
+  ]);
+  assert.throws(() => voiceStock.confirm({
+    params: { businessId: "business-a" }, session: session("business-a"),
+    body: { items: [
+      { productId: "cable-a", action: "receive", color: "Blue", quantity: 3 },
+      { productId: "cable-a", action: "sell", color: "Black", quantity: 5 },
+    ] },
+  }), { message: /cannot become negative/ });
+  assert.equal(db.getProduct("cable-a").stockQty, 4);
+  assert.deepEqual(db.getProduct("cable-a").colorStock, [{ color: "Black", quantity: 4 }]);
 });

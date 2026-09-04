@@ -808,6 +808,18 @@ components:
           type: number
         stockQty:
           type: number
+          description: Total stock; equals the sum of colorStock when colour variants are present.
+        colorStock:
+          type: array
+          items:
+            type: object
+            properties:
+              color:
+                type: string
+              quantity:
+                type: number
+                minimum: 0
+            required: [color, quantity]
         imageUrl:
           type: string
           nullable: true
@@ -850,6 +862,15 @@ components:
           nullable: true
         unit:
           type: string
+        color:
+          type: string
+          nullable: true
+        colorCurrentStock:
+          type: number
+          nullable: true
+        colorProposedStock:
+          type: number
+          nullable: true
         confidence:
           type: number
         currentStock:
@@ -897,6 +918,10 @@ components:
               unit:
                 type: string
                 maxLength: 50
+              color:
+                type: string
+                nullable: true
+                maxLength: 50
             required: [productId, action, quantity]
       required: [items]
 
@@ -918,6 +943,15 @@ components:
           type: number
         unit:
           type: string
+        color:
+          type: string
+          nullable: true
+        colorPreviousStock:
+          type: number
+          nullable: true
+        colorResultingStock:
+          type: number
+          nullable: true
         delta:
           type: number
         previousStock:

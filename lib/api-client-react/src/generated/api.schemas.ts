@@ -36,13 +36,21 @@ export interface Subscription {
   createdAt: string;
 }
 
+export type ProductColorStockItem = {
+  color: string;
+  /** @minimum 0 */
+  quantity: number;
+};
+
 export interface Product {
   id: string;
   businessId: string;
   name: string;
   description?: string | null;
   price: number;
+  /** Total stock; equals the sum of colorStock when colour variants are present. */
   stockQty: number;
+  colorStock?: ProductColorStockItem[];
   imageUrl?: string | null;
   active: boolean;
   createdAt: string;
@@ -70,6 +78,9 @@ export interface VoiceStockItem {
   action: VoiceStockItemAction;
   quantity: number | null;
   unit: string;
+  color?: string | null;
+  colorCurrentStock?: number | null;
+  colorProposedStock?: number | null;
   confidence: number;
   currentStock: number | null;
   proposedStock: number | null;
@@ -99,6 +110,8 @@ export type VoiceStockConfirmInputItemsItem = {
   quantity: number;
   /** @maxLength 50 */
   unit?: string;
+  /** @maxLength 50 */
+  color?: string | null;
 };
 
 export interface VoiceStockConfirmInput {
@@ -127,6 +140,9 @@ export interface StockMovement {
   action: StockMovementAction;
   quantity: number;
   unit: string;
+  color?: string | null;
+  colorPreviousStock?: number | null;
+  colorResultingStock?: number | null;
   delta: number;
   previousStock: number;
   resultingStock: number;

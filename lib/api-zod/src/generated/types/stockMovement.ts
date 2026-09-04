@@ -15,6 +15,9 @@ export interface StockMovement {
   action: StockMovementAction;
   quantity: number;
   unit: string;
+  color?: string | null;
+  colorPreviousStock?: number | null;
+  colorResultingStock?: number | null;
   delta: number;
   previousStock: number;
   resultingStock: number;
