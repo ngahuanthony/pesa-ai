@@ -440,6 +440,10 @@ const server = http.createServer(async (req, res) => {
 // This ensures signups, products, and orders survive a redeploy.
 persistence.init(db.DATA_FILE).then(() => {
   if (process.env.RAILWAY_ENVIRONMENT_NAME === "production") {
+    const accountRepair = db.repairSingleOrphanedAccount({
+      businessName: "Digital Nation Accessories",
+    });
+    console.log("[migration] Account-to-business integrity repair:", accountRepair);
     const reset = db.runOneTimeSafeReset({
       businessName: "Digital Nation Accessories",
       migrationId: "safe-reset-digital-nation-2026-09-04",

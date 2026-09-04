@@ -237,6 +237,46 @@ function runOneTimeSafeReset({ businessName, migrationId }) {
   });
 }
 
+function repairSingleOrphanedAccount({ businessName }) {
+  return mutate((state) => {
+    const businessIds = new Set((state.businesses || []).map((business) => business.id));
+    const orphanedAccounts = (state.accounts || []).filter(
+      (account) => !businessIds.has(account.businessId)
+    );
+    const claimedBusinessIds = new Set(
+      (state.accounts || [])
+        .filter((account) => businessIds.has(account.businessId))
+        .map((account) => account.businessId)
+    );
+    const normalizedName = String(businessName || "").trim().toLowerCase();
+    const unclaimedMatches = (state.businesses || []).filter(
+      (business) =>
+        !claimedBusinessIds.has(business.id) &&
+        String(business.name || "").trim().toLowerCase() === normalizedName
+    );
+
+    if (orphanedAccounts.length === 0) {
+      return { repaired: false, reason: "no-orphaned-accounts" };
+    }
+    if (orphanedAccounts.length !== 1 || unclaimedMatches.length !== 1) {
+      throw new Error(
+        `Account repair refused: found ${orphanedAccounts.length} orphaned account(s) and ${unclaimedMatches.length} matching unclaimed business(es)`
+      );
+    }
+
+    const account = orphanedAccounts[0];
+    const business = unclaimedMatches[0];
+    const previousBusinessId = account.businessId;
+    account.businessId = business.id;
+    for (const session of state.sessions || []) {
+      if (session.accountId === account.id || session.businessId === previousBusinessId) {
+        session.businessId = business.id;
+      }
+    }
+    return { repaired: true, accountId: account.id, businessId: business.id };
+  });
+}
+
 // --- Businesses --------------------------------------------------------
 
 function titleCase(str) {
@@ -1262,6 +1302,7 @@ module.exports = {
   load,
   mutate,
   runOneTimeSafeReset,
+  repairSingleOrphanedAccount,
   id,
   now,
   httpError,
