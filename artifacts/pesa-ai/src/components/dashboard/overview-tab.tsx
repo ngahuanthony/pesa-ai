@@ -105,11 +105,9 @@ export function OverviewTab() {
   // Setup checklist
   const setupSteps = [
     { label: "Add your first product", done: products.length > 0, href: "/dashboard/products" },
-    { label: "Connect WhatsApp", done: waConnected, href: "/dashboard/whatsapp" },
-    { label: "Get your first customer", done: orders.length > 0, href: shopUrl || "/dashboard/whatsapp" },
   ];
   const stepsDone = setupSteps.filter((s) => s.done).length;
-  const shopIsNew = stepsDone < 3;
+  const shopIsNew = stepsDone < setupSteps.length;
 
   // Human-readable activity label
   function eventLabel(e: ActivityEvent): string {
