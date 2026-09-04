@@ -237,6 +237,77 @@ function runOneTimeSafeReset({ businessName, migrationId }) {
   });
 }
 
+function restoreDeletedBusinessForSingleOrphanedAccount({ businessName, category }) {
+  return mutate((state) => {
+    const normalizedName = String(businessName || "").trim().toLowerCase();
+    const existing = (state.businesses || []).find(
+      (business) => String(business.name || "").trim().toLowerCase() === normalizedName
+    );
+    if (existing) return { restored: false, reason: "business-already-exists" };
+
+    const businessIds = new Set((state.businesses || []).map((business) => business.id));
+    const orphanedAccounts = (state.accounts || []).filter(
+      (account) => !businessIds.has(account.businessId)
+    );
+    if (orphanedAccounts.length !== 1) {
+      return {
+        restored: false,
+        reason: "ambiguous-orphaned-account",
+        orphanedAccountCount: orphanedAccounts.length,
+      };
+    }
+
+    const account = orphanedAccounts[0];
+    const business = {
+      id: account.businessId,
+      name: businessName,
+      category,
+      phone: "",
+      ownerName: null,
+      personaName: derivePersonaName(businessName, category),
+      personaInstructions: null,
+      paymentMethod: null,
+      mpesaType: null,
+      bankName: null,
+      bankAccountNumber: null,
+      paybillNumber: null,
+      paybillAccountNumber: null,
+      whatsappPhoneNumberId: null,
+      whatsappVerifyToken: crypto.randomBytes(12).toString("hex"),
+      whatsappRequestedPhone: null,
+      whatsappWabaId: null,
+      whatsappDisplayName: null,
+      buildingName: null,
+      shopNumber: null,
+      publicPhone: null,
+      idOrKraPin: null,
+      verifiedShop: false,
+      location: null,
+      deliveryAreas: null,
+      welcomeMessage: null,
+      createdAt: now(),
+    };
+    state.businesses.push(business);
+
+    if (!(state.subscriptions || []).some((subscription) => subscription.businessId === business.id)) {
+      const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      state.subscriptions.push({
+        businessId: business.id,
+        plan: DEFAULT_PLAN,
+        priceKES: PLANS[DEFAULT_PLAN].priceKES,
+        status: "trialing",
+        trialEndsAt,
+        currentPeriodEnd: trialEndsAt,
+        history: [],
+        createdAt: now(),
+        updatedAt: now(),
+      });
+    }
+
+    return { restored: true, businessId: business.id };
+  });
+}
+
 function repairSingleOrphanedAccount({ businessName }) {
   return mutate((state) => {
     const businessIds = new Set((state.businesses || []).map((business) => business.id));
@@ -1299,6 +1370,7 @@ module.exports = {
   load,
   mutate,
   runOneTimeSafeReset,
+  restoreDeletedBusinessForSingleOrphanedAccount,
   repairSingleOrphanedAccount,
   id,
   now,

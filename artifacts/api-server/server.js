@@ -440,6 +440,11 @@ const server = http.createServer(async (req, res) => {
 // This ensures signups, products, and orders survive a redeploy.
 persistence.init(db.DATA_FILE).then(() => {
   if (process.env.RAILWAY_ENVIRONMENT_NAME === "production") {
+    const businessRestore = db.restoreDeletedBusinessForSingleOrphanedAccount({
+      businessName: "Digital Nation Accessories",
+      category: "Mobile Phone Accessories",
+    });
+    console.log("[migration] Deleted business restoration:", businessRestore);
     const accountRepair = db.repairSingleOrphanedAccount({
       businessName: "Digital Nation Accessories",
     });

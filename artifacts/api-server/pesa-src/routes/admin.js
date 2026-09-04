@@ -62,13 +62,21 @@ function deleteBusiness({ params, session }) {
   db.mutate((state) => {
     const idx = state.businesses.findIndex(b => b.id === params.businessId);
     if (idx === -1) throw db.httpError(404, "Business not found");
-    state.businesses.splice(idx, 1);
-    // Cascade: remove all related data
     const bid = params.businessId;
+    const conversationIds = new Set(
+      (state.conversations || []).filter(c => c.businessId === bid).map(c => c.id)
+    );
+    state.businesses.splice(idx, 1);
+    state.accounts      = (state.accounts      || []).filter(a => a.businessId !== bid);
+    state.subscriptions = (state.subscriptions || []).filter(s => s.businessId !== bid);
     state.customers     = (state.customers     || []).filter(c => c.businessId !== bid);
     state.orders        = (state.orders        || []).filter(o => o.businessId !== bid);
     state.products      = (state.products      || []).filter(p => p.businessId !== bid);
     state.conversations = (state.conversations || []).filter(c => c.businessId !== bid);
+    state.messages      = (state.messages      || []).filter(m => !conversationIds.has(m.conversationId));
+    state.reports       = (state.reports       || []).filter(r => r.businessId !== bid);
+    state.videoScans    = (state.videoScans    || []).filter(s => s.businessId !== bid);
+    state.stockMovements = (state.stockMovements || []).filter(m => m.businessId !== bid);
     state.sessions      = (state.sessions      || []).filter(s => s.businessId !== bid);
   });
   return { ok: true };
@@ -97,7 +105,8 @@ function getStats({ session }) {
 function getPlatformDefaults({ session }) {
   auth.requireAdmin(session);
   return {
-    wabaId:   process.env.WHATSAPP_PLATFORM_WABA_ID || "",
+    wabaId:   process.env.WHATSAPP_PLATFORM_WABA_ID || "1051176054371123",
+    phoneNumberId: process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID || "1414909975031488",
     hasToken: !!process.env.WHATSAPP_PLATFORM_TOKEN,
   };
 }

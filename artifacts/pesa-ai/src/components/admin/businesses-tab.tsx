@@ -54,6 +54,7 @@ function WhatsAppDialog({ business, onClose }: { business: any; onClose: () => v
       if (defaultsRes.ok) {
         const defaults = await defaultsRes.json();
         setPlatformToken(defaults.hasToken);
+        if (defaults.phoneNumberId) setPhoneNumberId((prev) => prev || defaults.phoneNumberId);
         // Only use platform WABA ID if vendor doesn't already have one set
         if (defaults.wabaId) setWabaId((prev) => prev || defaults.wabaId);
       }
@@ -129,8 +130,8 @@ function WhatsAppDialog({ business, onClose }: { business: any; onClose: () => v
 
         {/* Instruction note */}
         <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2.5 text-xs text-gray-500 leading-relaxed">
-          Get these details from <strong className="text-gray-700">Meta Business Manager → WhatsApp → Phone Numbers</strong>.
-          The access token must be a permanent System User token.
+          The production Meta sender details are pre-filled. Enter the dedicated WhatsApp number,
+          confirm the display name, then activate the business.
         </div>
 
         {/* Form */}
@@ -451,16 +452,6 @@ export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
     });
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Permanently delete "${name}"? This removes all their products, orders, customers and conversations and cannot be undone.`)) return;
-    try {
-      const res = await fetch(`/api/admin/businesses/${id}`, { method: "DELETE", credentials: "include" });
-      if (!res.ok) { toast({ title: "Delete failed", variant: "destructive" }); return; }
-      queryClient.invalidateQueries({ queryKey: getAdminListBusinessesQueryKey() });
-      toast({ title: `${name} deleted` });
-    } catch { toast({ title: "Delete failed", variant: "destructive" }); }
-  };
-
   const filtered = (businesses || []).filter((b) =>
     b.name.toLowerCase().includes(search.toLowerCase()) ||
     b.phone.includes(search) ||
@@ -648,13 +639,6 @@ export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
                       </button>
                     )}
 
-                    <button
-                      onClick={() => handleDelete(b.id, b.name)}
-                      title="Permanently delete this business"
-                      className="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" /> Delete
-                    </button>
                   </div>
                 </div>
               );
