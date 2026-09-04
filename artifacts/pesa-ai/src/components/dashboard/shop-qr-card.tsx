@@ -75,7 +75,7 @@ export function ShopQRCard({ businessName, phone }: ShopQRCardProps) {
   const [downloading, setDownloading] = useState(false);
 
   const waPhone = normalisePhone(phone);
-  const waUrl   = `https://wa.me/${waPhone}`;
+  const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent("Hi, I'd like to shop")}`;
 
   /** Compose the full-res print card onto a canvas and return it */
   const buildCanvas = useCallback(async (W: number, H: number): Promise<HTMLCanvasElement> => {
@@ -104,30 +104,12 @@ export function ShopQRCard({ businessName, phone }: ShopQRCardProps) {
     ctx.fillRect(0, 0, W, H);
 
     // Top green header band
-    const headerH = Math.round(H * 0.22);
+    const headerH = Math.round(H * 0.16);
     ctx.fillStyle = "#25D366";
     roundRect(ctx, 0, 0, W, headerH + 40, 0);
     ctx.fill();
     ctx.fillStyle = "#25D366";
     ctx.fillRect(0, headerH, W, 40);
-
-    // WhatsApp "W" icon circle
-    const iconR = Math.round(W * 0.075);
-    const iconX = W / 2;
-    const iconY = Math.round(headerH * 0.30);
-    ctx.fillStyle = "rgba(255,255,255,0.25)";
-    ctx.beginPath();
-    ctx.arc(iconX, iconY, iconR + 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.arc(iconX, iconY, iconR, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#25D366";
-    ctx.font = `bold ${Math.round(iconR * 1.1)}px Arial`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("W", iconX, iconY + 1);
 
     // Business name
     ctx.textBaseline = "alphabetic";
@@ -135,13 +117,7 @@ export function ShopQRCard({ businessName, phone }: ShopQRCardProps) {
     ctx.font = `bold ${nameFontSize}px Arial`;
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
-    wrapCanvasText(ctx, businessName.toUpperCase(), W / 2, Math.round(headerH * 0.60), W - PAD * 2, nameFontSize * 1.25);
-
-    // "WhatsApp Shop" sub-label
-    const subFontSize = Math.round(W * 0.028);
-    ctx.font = `${subFontSize}px Arial`;
-    ctx.fillStyle = "rgba(255,255,255,0.82)";
-    ctx.fillText("WhatsApp Shop", W / 2, Math.round(headerH * 0.88));
+    wrapCanvasText(ctx, businessName.toUpperCase(), W / 2, Math.round(headerH * 0.48), W - PAD * 2, nameFontSize * 1.25);
 
     // QR code area — white card
     const qrAreaPad = PAD;
@@ -185,7 +161,7 @@ export function ShopQRCard({ businessName, phone }: ShopQRCardProps) {
     const pfSize = Math.round(W * 0.025);
     ctx.font = `${pfSize}px Arial`;
     ctx.fillStyle = "#9ca3af";
-    ctx.fillText("WhatsApp Shop  ·  Pesa AI", W / 2, H - Math.round(H * 0.04));
+    ctx.fillText("Powered by Pesa AI", W / 2, H - Math.round(H * 0.04));
 
     // Border
     ctx.strokeStyle = "#25D366";
