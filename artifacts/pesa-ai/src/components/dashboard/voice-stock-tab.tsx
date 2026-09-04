@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Mic, MicOff, Loader2, Check, AlertTriangle, Trash2, ArrowRight, Save, History, RefreshCcw, Package } from "lucide-react";
+import { Mic, MicOff, Loader2, Check, AlertTriangle, Trash2, ArrowRight, Save, History, RefreshCcw, Package, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -34,6 +34,8 @@ const ACTION_COLORS: Record<string, string> = {
   adjustment: "text-blue-700 bg-blue-50 border-blue-200",
 };
 
+type MicrophonePermission = "unknown" | "prompt" | "granted" | "denied";
+
 export function VoiceStockTab() {
   const { data: me } = useGetMe();
   const businessId = me?.business?.id || "";
@@ -58,6 +60,8 @@ export function VoiceStockTab() {
   const [isSupported, setIsSupported] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
   const [speechError, setSpeechError] = useState("");
+  const [micPermission, setMicPermission] = useState<MicrophonePermission>("unknown");
+  const [isRequestingMic, setIsRequestingMic] = useState(false);
 
   const recognitionRef = useRef<any>(null);
 
@@ -88,6 +92,10 @@ export function VoiceStockTab() {
             "network": "The phone's speech service could not connect. Check your connection or type the update instead.",
             "no-speech": "No speech was detected. Tap Speak and try again.",
           };
+          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            setMicPermission("denied");
+            window.localStorage.removeItem("pesa-voice-microphone-ready");
+          }
           setSpeechError(messages[event.error] || "Voice capture could not start. Please try again or type the update.");
           setIsListening(false);
         };
@@ -100,23 +108,90 @@ export function VoiceStockTab() {
       } else {
         setIsSupported(false);
       }
+
+      let permissionStatus: PermissionStatus | undefined;
+      if (navigator.permissions?.query) {
+        navigator.permissions.query({ name: "microphone" as PermissionName })
+          .then((status) => {
+            permissionStatus = status;
+            setMicPermission(status.state as MicrophonePermission);
+            if (status.state === "granted") {
+              window.localStorage.setItem("pesa-voice-microphone-ready", "true");
+            }
+            status.onchange = () => {
+              setMicPermission(status.state as MicrophonePermission);
+              if (status.state === "granted") {
+                window.localStorage.setItem("pesa-voice-microphone-ready", "true");
+              }
+            };
+          })
+          .catch(() => setMicPermission(
+            window.localStorage.getItem("pesa-voice-microphone-ready") === "true" ? "granted" : "prompt"
+          ));
+      } else {
+        setMicPermission(
+          window.localStorage.getItem("pesa-voice-microphone-ready") === "true" ? "granted" : "prompt"
+        );
+      }
+
+      return () => {
+        recognitionRef.current?.stop();
+        if (permissionStatus) permissionStatus.onchange = null;
+      };
+    }
+    return undefined;
+  }, []);
+
+  const startRecognition = useCallback(() => {
+    try {
+      setSpeechError("");
+      recognitionRef.current?.start();
+      setIsListening(true);
+    } catch {
+      setIsListening(false);
+      setSpeechError("Voice capture could not start. Check microphone permission, then try again.");
     }
   }, []);
+
+  const requestMicrophone = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setSpeechError("This browser cannot request microphone access. Type the stock update instead.");
+      return;
+    }
+
+    setIsRequestingMic(true);
+    setSpeechError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      setMicPermission("granted");
+      window.localStorage.setItem("pesa-voice-microphone-ready", "true");
+      startRecognition();
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      setMicPermission(name === "NotAllowedError" ? "denied" : "prompt");
+      setSpeechError(
+        name === "NotAllowedError"
+          ? "Microphone access is blocked in your phone settings. Follow the steps below, then tap Try again."
+          : "The microphone could not start. Check that another app is not using it, then try again."
+      );
+    } finally {
+      setIsRequestingMic(false);
+    }
+  }, [startRecognition]);
 
   const toggleListen = useCallback(() => {
     if (isListening) {
       recognitionRef.current?.stop();
+    } else if (micPermission !== "granted") {
+      void requestMicrophone();
     } else {
-      try {
-        setSpeechError("");
-        recognitionRef.current?.start();
-        setIsListening(true);
-      } catch {
-        setIsListening(false);
-        setSpeechError("Voice capture could not start. Check microphone permission, then try again.");
-      }
+      startRecognition();
     }
-  }, [isListening]);
+  }, [isListening, micPermission, requestMicrophone, startRecognition]);
+
+  const isAppleMobile = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
 
   const handleAnalyze = () => {
     if (!transcript.trim()) return;
@@ -224,6 +299,50 @@ export function VoiceStockTab() {
         {showSuccess && (
           <div data-testid="status-success" className="mb-3 text-sm font-medium text-emerald-700 bg-emerald-50 p-3 rounded-lg border border-emerald-200 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
             <Check className="h-4 w-4" /> Stock updated successfully.
+          </div>
+        )}
+
+        {isSupported && micPermission !== "granted" && (
+          <div data-testid="card-microphone-setup" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-emerald-950">
+                  {micPermission === "denied" ? "Allow microphone in phone settings" : "Set up voice updates"}
+                </p>
+                {micPermission === "denied" ? (
+                  <div className="mt-1 space-y-1 text-xs leading-relaxed text-emerald-900">
+                    {isAppleMobile ? (
+                      <p>Open iPhone Settings → Apps → your browser → turn on Microphone. Return here and tap Try again.</p>
+                    ) : isAndroid ? (
+                      <p>Open Settings → Apps → your browser → Permissions → Microphone → Allow. Return here and tap Try again.</p>
+                    ) : (
+                      <p>Open your browser's site settings for pesaai.africa, allow Microphone, then tap Try again.</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs leading-relaxed text-emerald-900">
+                    Tap once and approve the phone prompt. Pesa AI will start listening immediately and remember your setup.
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <Button
+                    data-testid="button-enable-microphone"
+                    type="button"
+                    size="sm"
+                    onClick={() => void requestMicrophone()}
+                    disabled={isRequestingMic}
+                    className="touch-manipulation"
+                  >
+                    {isRequestingMic ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mic className="mr-2 h-4 w-4" />}
+                    {isRequestingMic ? "Requesting access..." : micPermission === "denied" ? "Try again" : "Enable microphone"}
+                  </Button>
+                  <span className="text-xs text-emerald-800">You can always type instead.</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
