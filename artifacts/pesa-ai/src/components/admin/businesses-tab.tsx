@@ -63,7 +63,7 @@ function WhatsAppDialog({ business, onClose }: { business: any; onClose: () => v
   useEffect(() => { load(); }, []);
 
   const activate = async () => {
-    if (!phoneNumberId || !wabaId || !accessToken) {
+    if (!phoneNumberId || !wabaId || (!platformToken && !accessToken)) {
       toast({ title: "Required fields missing", description: "Phone Number ID, WABA ID and Access Token are all required.", variant: "destructive" });
       return;
     }
