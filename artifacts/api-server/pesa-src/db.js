@@ -243,29 +243,26 @@ function repairSingleOrphanedAccount({ businessName }) {
     const orphanedAccounts = (state.accounts || []).filter(
       (account) => !businessIds.has(account.businessId)
     );
-    const claimedBusinessIds = new Set(
-      (state.accounts || [])
-        .filter((account) => businessIds.has(account.businessId))
-        .map((account) => account.businessId)
-    );
     const normalizedName = String(businessName || "").trim().toLowerCase();
-    const unclaimedMatches = (state.businesses || []).filter(
+    const businessMatches = (state.businesses || []).filter(
       (business) =>
-        !claimedBusinessIds.has(business.id) &&
         String(business.name || "").trim().toLowerCase() === normalizedName
     );
 
     if (orphanedAccounts.length === 0) {
       return { repaired: false, reason: "no-orphaned-accounts" };
     }
-    if (orphanedAccounts.length !== 1 || unclaimedMatches.length !== 1) {
-      throw new Error(
-        `Account repair refused: found ${orphanedAccounts.length} orphaned account(s) and ${unclaimedMatches.length} matching unclaimed business(es)`
-      );
+    if (orphanedAccounts.length !== 1 || businessMatches.length !== 1) {
+      return {
+        repaired: false,
+        reason: "ambiguous-account-mapping",
+        orphanedAccountCount: orphanedAccounts.length,
+        matchingBusinessCount: businessMatches.length,
+      };
     }
 
     const account = orphanedAccounts[0];
-    const business = unclaimedMatches[0];
+    const business = businessMatches[0];
     const previousBusinessId = account.businessId;
     account.businessId = business.id;
     for (const session of state.sessions || []) {
