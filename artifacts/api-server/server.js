@@ -439,6 +439,13 @@ const server = http.createServer(async (req, res) => {
 // Restore database from Object Storage before accepting any requests.
 // This ensures signups, products, and orders survive a redeploy.
 persistence.init(db.DATA_FILE).then(() => {
+  if (process.env.RAILWAY_ENVIRONMENT_NAME === "production") {
+    const reset = db.runOneTimeSafeReset({
+      businessName: "Digital Nation Accessories",
+      migrationId: "safe-reset-digital-nation-2026-09-04",
+    });
+    console.log("[migration] Digital Nation Accessories safe reset:", reset);
+  }
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Pesa AI API running on port ${PORT}`);
     if (!process.env.ADMIN_PASSWORD)      console.warn("Warning: ADMIN_PASSWORD not set — admin panel disabled");

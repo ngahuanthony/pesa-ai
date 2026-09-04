@@ -174,6 +174,69 @@ function mutate(fn) {
   return result;
 }
 
+function runOneTimeSafeReset({ businessName, migrationId }) {
+  return mutate((state) => {
+    state.migrations = state.migrations && typeof state.migrations === "object"
+      ? state.migrations
+      : {};
+
+    if (state.migrations[migrationId]) {
+      return { applied: false, reason: "already-applied" };
+    }
+
+    const normalizedName = String(businessName || "").trim().toLowerCase();
+    const matches = (state.businesses || []).filter(
+      (business) => String(business.name || "").trim().toLowerCase() === normalizedName
+    );
+    if (matches.length !== 1) {
+      throw new Error(`Safe reset expected exactly one business named "${businessName}", found ${matches.length}`);
+    }
+
+    const businessId = matches[0].id;
+    const conversationIds = new Set(
+      (state.conversations || [])
+        .filter((conversation) => conversation.businessId === businessId)
+        .map((conversation) => conversation.id)
+    );
+    const countForBusiness = (items) =>
+      (Array.isArray(items) ? items : []).filter((item) => item.businessId === businessId).length;
+
+    const removed = {
+      customers: countForBusiness(state.customers),
+      conversations: countForBusiness(state.conversations),
+      messages: (state.messages || []).filter((message) => conversationIds.has(message.conversationId)).length,
+      orders: countForBusiness(state.orders),
+      reports: countForBusiness(state.reports),
+      videoScans: countForBusiness(state.videoScans),
+      stockMovements: countForBusiness(state.stockMovements),
+    };
+
+    state.customers = (state.customers || []).filter((item) => item.businessId !== businessId);
+    state.conversations = (state.conversations || []).filter((item) => item.businessId !== businessId);
+    state.messages = (state.messages || []).filter((item) => !conversationIds.has(item.conversationId));
+    state.orders = (state.orders || []).filter((item) => item.businessId !== businessId);
+    state.reports = (state.reports || []).filter((item) => item.businessId !== businessId);
+    state.videoScans = (state.videoScans || []).filter((item) => item.businessId !== businessId);
+    state.stockMovements = (state.stockMovements || []).filter((item) => item.businessId !== businessId);
+
+    let productsReset = 0;
+    for (const product of state.products || []) {
+      if (product.businessId === businessId) {
+        product.stockQty = 0;
+        productsReset += 1;
+      }
+    }
+
+    state.migrations[migrationId] = {
+      appliedAt: now(),
+      businessId,
+      removed,
+      productsReset,
+    };
+    return { applied: true, businessId, removed, productsReset };
+  });
+}
+
 // --- Businesses --------------------------------------------------------
 
 function titleCase(str) {
@@ -1198,6 +1261,7 @@ module.exports = {
   getVendorWhatsAppStatus,
   load,
   mutate,
+  runOneTimeSafeReset,
   id,
   now,
   httpError,
