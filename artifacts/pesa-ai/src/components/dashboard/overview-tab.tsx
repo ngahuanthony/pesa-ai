@@ -1,5 +1,5 @@
 import { useGetMe, useListOrders, useListProducts, useGetSalesSummary, getListOrdersQueryKey, getListProductsQueryKey, getGetSalesSummaryQueryKey } from "@workspace/api-client-react";
-import { ShoppingCart, DollarSign, Package, Bot, AlertTriangle, CheckCircle2, Circle, ExternalLink, Copy, Check, Wifi, QrCode } from "lucide-react";
+import { ShoppingCart, DollarSign, Package, Bot, AlertTriangle, CheckCircle2, Circle, ExternalLink, Copy, Check, Wifi, QrCode, Mic, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -139,6 +139,24 @@ export function OverviewTab() {
             ? "Your WhatsApp shop is live. Share your link and the AI handles the rest."
             : "You're almost set up. Connect WhatsApp to start selling — the AI does the rest."}
         </p>
+
+        <Link
+          data-testid="button-dashboard-voice-stock"
+          href="/dashboard/voice-stock"
+          className="mb-5 flex w-full items-center gap-3 rounded-xl bg-[#25D366] px-4 py-3.5 text-white shadow-lg transition-colors hover:bg-[#1ebe5d] sm:inline-flex sm:w-auto"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20">
+            <Mic className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold">Update stock by voice</span>
+            <span className="block text-xs text-white/80">Speak, review and confirm in seconds</span>
+          </span>
+          <span className="hidden rounded-full bg-white/20 px-2 py-1 text-[10px] font-bold uppercase tracking-wide sm:inline-flex">
+            Recommended
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0" />
+        </Link>
 
         {waConnected && shopUrl ? (
           /* Connected: show shop link in hero */

@@ -140,6 +140,27 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       {/* Nav */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
         {navLink("/dashboard", "Dashboard", LayoutDashboard)}
+        <Link
+          href="/dashboard/voice-stock"
+          onClick={closeMobile}
+          className={`mt-2 flex items-center gap-2.5 rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
+            isActive("/dashboard/voice-stock")
+              ? "border-primary bg-primary text-white shadow-sm"
+              : "border-emerald-200 bg-emerald-50 text-emerald-950 hover:border-emerald-300 hover:bg-emerald-100"
+          }`}
+        >
+          <span className={`flex h-7 w-7 items-center justify-center rounded-full ${
+            isActive("/dashboard/voice-stock") ? "bg-white/20" : "bg-white text-primary"
+          }`}>
+            <Mic className="h-4 w-4" />
+          </span>
+          <span className="flex-1">Voice to Stock</span>
+          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+            isActive("/dashboard/voice-stock") ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
+          }`}>
+            Main
+          </span>
+        </Link>
 
         {/* BUSINESS section */}
         <p className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
@@ -155,7 +176,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         )}
 
         {navLink("/dashboard/products",   "Products",  Package)}
-        {navLink("/dashboard/voice-stock", "Voice to Stock", Mic)}
         {navLink("/dashboard/video-scan", "Stock Scanner", ScanLine)}
 
         {expandable(
