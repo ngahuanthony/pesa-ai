@@ -29,7 +29,12 @@ export function WhatsAppAccountTab() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [businessId]);
+  useEffect(() => {
+    if (!businessId) return;
+    void load();
+    const timer = window.setInterval(() => { void load(); }, 10000);
+    return () => window.clearInterval(timer);
+  }, [businessId]);
 
 
   const handleRequest = async () => {
@@ -196,7 +201,7 @@ export function WhatsAppAccountTab() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-2 text-xs font-semibold text-white hover:bg-[#1ebe5d] transition-colors"
                     >
-                      <Share2 className="h-3.5 w-3.5" /> Open in WhatsApp
+                      <Share2 className="h-3.5 w-3.5" /> Test My Shop
                     </a>
                   </div>
                 </div>
@@ -318,12 +323,14 @@ export function WhatsAppAccountTab() {
         <div className="w-full rounded-xl border border-amber-200 bg-amber-50 p-5 text-left space-y-3">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-amber-600" />
-            <span className="text-sm font-semibold text-amber-700">Setup in progress</span>
+            <span className="text-sm font-semibold text-amber-700">{status.connectionStatus === "failed" ? "Needs attention" : status.connectionStatus === "connecting" ? "Connecting…" : "Request received"}</span>
           </div>
           <p className="text-sm text-amber-800 leading-relaxed">
-            We received your request for <strong>{status.requestedPhone}</strong>. Our team is
-            connecting your WhatsApp Business number — this usually takes a few minutes. We'll notify
-            you once it's live.
+            We received your request for <strong>{status.requestedPhone}</strong>. {status.connectionStatus === "failed"
+              ? "We need to check the WhatsApp connection before it can go live."
+              : status.connectionStatus === "connecting"
+                ? "Our team is connecting your WhatsApp Business number now."
+                : "Our team is connecting your WhatsApp Business number — usually within a few minutes."} {status.connectionStatus !== "failed" && "We'll notify you once it's live."}
           </p>
           <div className="flex items-start gap-2 mt-1">
             <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />

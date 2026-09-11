@@ -278,6 +278,7 @@ function restoreDeletedBusinessForSingleOrphanedAccount({ businessName, category
       whatsappPhoneNumberId: null,
       whatsappVerifyToken: crypto.randomBytes(12).toString("hex"),
       whatsappRequestedPhone: null,
+      whatsappConnectionStatus: null,
       whatsappWabaId: null,
       whatsappDisplayName: null,
       buildingName: null,
@@ -582,7 +583,8 @@ function requestWhatsAppConnection(businessId, phone) {
     const b = state.businesses.find((b) => b.id === businessId);
     if (!b) throw httpError(404, "Business not found");
     b.whatsappRequestedPhone = phone || null;
-    return { ok: true, requestedPhone: b.whatsappRequestedPhone };
+    b.whatsappConnectionStatus = "requested";
+    return { ok: true, requestedPhone: b.whatsappRequestedPhone, connectionStatus: b.whatsappConnectionStatus };
   });
 }
 
@@ -591,6 +593,10 @@ function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verify
   return mutate((state) => {
     const b = state.businesses.find((b) => b.id === businessId);
     if (!b) throw httpError(404, "Business not found");
+    if (phoneNumberId) {
+      const duplicate = state.businesses.find((other) => other.id !== businessId && other.whatsappPhoneNumberId === phoneNumberId);
+      if (duplicate) throw httpError(409, "This Meta Phone Number ID is already connected to another shop");
+    }
     if (phoneNumberId !== undefined) b.whatsappPhoneNumberId = phoneNumberId || null;
     if (phoneNumberId && accessToken) b.shopNumberStatus = "meta_connected";
     if (verifyToken !== undefined) b.whatsappVerifyToken = verifyToken;
@@ -602,6 +608,7 @@ function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verify
     }
     // Auto-generate the customer welcome message on first connection
     const isNowConnected = !!(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc);
+    b.whatsappConnectionStatus = isNowConnected ? "live" : (b.whatsappConnectionStatus || "connecting");
     if (isNowConnected && !b.welcomeMessage) {
       b.welcomeMessage = generateWelcomeMessage(b);
     }
@@ -626,14 +633,14 @@ function getWhatsAppStatus(businessId) {
 // Vendor view: only shows status safe for the business owner to see
 function getVendorWhatsAppStatus(businessId) {
   const b = getBusiness(businessId);
+  const digits = String(b.pesaAiNumber || b.shopNumber || b.whatsappRequestedPhone || "").replace(/[^0-9]/g, "").replace(/^0/, "254");
   return {
     requestedPhone: b.whatsappRequestedPhone || null,
-    connected: !!(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc),
-    phoneNumberId: b.whatsappPhoneNumberId || null,
-    wabaId: b.whatsappWabaId || null,
+    connectionStatus: b.whatsappConnectionStatus || null,
+    connected: b.whatsappConnectionStatus === "live" || Boolean(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc),
     displayName: b.whatsappDisplayName || null,
-    verifyToken: b.whatsappVerifyToken || null,
     welcomeMessage: b.welcomeMessage || null,
+    testShopUrl: digits ? "https://wa.me/" + digits + "?text=Hi%2C%20I%27d%20like%20to%20shop" : null,
   };
 }
 

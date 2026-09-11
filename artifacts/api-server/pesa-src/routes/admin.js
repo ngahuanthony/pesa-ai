@@ -115,10 +115,6 @@ async function setWhatsAppCredentials({ params, body, session }) {
   auth.requireAdmin(session);
   let { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone, profileImageDataUrl } = body || {};
   const business = db.getBusiness(params.businessId);
-
-  // Use platform credentials and the configured platform phone as defaults.
-  // A merchant cannot become "connected" without a Phone Number ID because
-  // Meta includes that ID in every webhook event used for routing.
   if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID;
   if (!accessToken) accessToken = process.env.WHATSAPP_PLATFORM_TOKEN;
   if (!wabaId) wabaId = process.env.WHATSAPP_PLATFORM_WABA_ID;
@@ -131,9 +127,15 @@ async function setWhatsAppCredentials({ params, body, session }) {
   const result = db.setWhatsAppCredentials(params.businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone });
   let profilePictureUpdated = false;
   let webhookSubscribed = false;
+  let vendorAlertSent = false;
+  const savedBusiness = db.getBusiness(params.businessId);
+
   if (result.connected) {
-    const savedBusiness = db.getBusiness(params.businessId);
-    await whatsapp.updateWhatsAppBusinessProfile(savedBusiness, phoneNumberId, accessToken);
+    try {
+      await whatsapp.updateWhatsAppBusinessProfile(savedBusiness, phoneNumberId, accessToken);
+    } catch (err) {
+      console.warn(`[whatsapp] Business profile update failed: ${err.message}`);
+    }
     if (profileImageDataUrl) {
       try {
         profilePictureUpdated = await whatsapp.updateWhatsAppProfilePicture(phoneNumberId, accessToken, profileImageDataUrl);
@@ -148,9 +150,26 @@ async function setWhatsAppCredentials({ params, body, session }) {
         console.warn(`[whatsapp] WABA subscription failed: ${err.message}`);
       }
     }
+    const vendorPhone = savedBusiness.personalPhone || null;
+    const shopDigits = String(savedBusiness.pesaAiNumber || savedBusiness.shopNumber || waPhone || "").replace(/[^0-9]/g, "").replace(/^0/, "254");
+    if (vendorPhone) {
+      const shareLink = shopDigits ? " https://wa.me/" + shopDigits + "?text=Hi%2C%20I%27d%20like%20to%20shop" : "";
+      try {
+        await whatsapp.sendMessage(phoneNumberId, vendorPhone, "Shop yako " + savedBusiness.name + " iko LIVE!" + shareLink, accessToken);
+        vendorAlertSent = true;
+      } catch (err) {
+        console.warn(`[whatsapp] Vendor live alert failed: ${err.message}`);
+      }
+    }
   }
 
-  return { ...result, profilePictureUpdated, webhookSubscribed, welcomeMessageReady: Boolean(db.getBusiness(params.businessId).welcomeMessage) };
+  return {
+    ...result,
+    profilePictureUpdated,
+    webhookSubscribed,
+    vendorAlertSent,
+    welcomeMessageReady: Boolean(db.getBusiness(params.businessId).welcomeMessage),
+  };
 }
 
 function getWhatsAppStatus({ params, session }) {
