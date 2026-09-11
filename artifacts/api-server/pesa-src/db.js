@@ -761,6 +761,10 @@ function markPersonalPhoneVerified(businessId) {
   });
 }
 
+function getAccountById(accountId) {
+  return load().accounts.find((a) => a.id === accountId);
+}
+
 function resetAccountPasswordByBusinessId(businessId, passwordHash, passwordSalt) {
   return mutate((state) => {
     const idx = state.accounts.findIndex((a) => a.businessId === businessId);
