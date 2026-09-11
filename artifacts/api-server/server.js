@@ -84,8 +84,21 @@ const videoProcessor = require("./pesa-src/video-processor");
 const whatsapp = require("./pesa-src/whatsapp");
 const mpesa = require("./pesa-src/mpesa");
 const mpesaApiRoutes = require("./pesa-src/routes/mpesa");
+const dailyReports = require("./cron/dailyReport");
 
 const PORT = Number(process.env.PORT) || 8080;
+
+function startDailyReportScheduler() {
+  if (process.env.DAILY_REPORT_CRON_ENABLED === "false") return;
+  setInterval(async () => {
+    const currentTime = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Nairobi", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+    for (const business of db.listBusinesses()) {
+      if ((business.dailyReportTime || "19:00") !== currentTime) continue;
+      try { await dailyReports.runDailyReports({ businessId: business.id }); } catch (error) { console.error("[daily report]", business.id, error.message); }
+    }
+  }, 60 * 1000);
+}
+
 
 // --- route table ----------------------------------------------------------
 
@@ -470,6 +483,7 @@ persistence.init(db.DATA_FILE).then(() => {
     });
     console.log("[migration] Digital Nation Accessories safe reset:", reset);
   }
+  startDailyReportScheduler();
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Pesa AI API running on port ${PORT}`);
     if (!process.env.ADMIN_PASSWORD)      console.warn("Warning: ADMIN_PASSWORD not set — admin panel disabled");

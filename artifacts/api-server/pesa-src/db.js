@@ -41,6 +41,7 @@ function emptyState() {
     mpesaTransactions: [],
     deniBook: [],
     sales: [],
+    dailyReportRuns: [],
   };
 }
 
@@ -1693,6 +1694,18 @@ function recordSaleForOrder(order, paymentMeta = {}) {
     return { duplicate: false, sale };
   });
 }
+
+function wasDailyReportSent(businessId, date) {
+  return (load().dailyReportRuns || []).some((item) => item.businessId === businessId && item.date === date);
+}
+
+function markDailyReportSent(businessId, date) {
+  return mutate((state) => {
+    state.dailyReportRuns = Array.isArray(state.dailyReportRuns) ? state.dailyReportRuns : [];
+    if (!state.dailyReportRuns.some((item) => item.businessId === businessId && item.date === date)) state.dailyReportRuns.push({ businessId, date, sentAt: now() });
+    return true;
+  });
+}
 module.exports = {
   DATA_FILE,
   loadRaw,
@@ -1730,6 +1743,7 @@ module.exports = {
   createDeniEntry, listDeniEntries, updateDeniEntry,
   getDailyReportSettings, updateDailyReportSettings, getDailyReportData,
   createDeniRequest, approveLatestDeniRequest, recordSaleForOrder,
+  wasDailyReportSent, markDailyReportSent,
   clearMpesaCredentials,
   getMpesaStatus,
   getMpesaCredentialsDecrypted,

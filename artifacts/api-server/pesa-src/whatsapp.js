@@ -163,7 +163,7 @@ function resolveAccessToken(business) {
 async function sendMessage(phoneNumberId, to, text, accessToken) {
   if (!accessToken) {
     console.warn("[whatsapp] No access token available — skipping send. Reply was:", text);
-    return;
+    return false;
   }
   const res = await fetch(
     `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`,
@@ -184,7 +184,9 @@ async function sendMessage(phoneNumberId, to, text, accessToken) {
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
     console.error(`[whatsapp] Send failed (${res.status}): ${errText}`);
+    return false;
   }
+  return true;
 }
 
 async function sendPlatformOtp(to, code, context = {}) {
