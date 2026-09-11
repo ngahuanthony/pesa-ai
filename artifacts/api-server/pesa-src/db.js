@@ -27,6 +27,8 @@ function emptyState() {
     businesses: [],
     accounts: [],
     sessions: [],
+    otpChallenges: [],
+    pendingSignups: [],
     subscriptions: [],
     products: [],
     customers: [],
@@ -46,6 +48,7 @@ function emptyState() {
 // prices/features here in sync with those if you change them (this file
 // stays the source of truth for the actual billed amount either way).
 const PLANS = {
+  free_trial: { id: "free_trial", name: "Free trial", priceKES: 0, billingCycleDays: 5, features: ["WhatsApp shop", "Product catalogue", "Customer questions", "Orders"] },
   starter: {
     id: "starter",
     name: "Starter",
@@ -86,9 +89,9 @@ const PLANS = {
   },
 };
 
-const PLAN_ORDER = ["starter", "business", "pro"];
-const DEFAULT_PLAN = "starter";
-const TRIAL_DAYS = 14; // also hardcoded in public/landing.html's copy — keep in sync if you change it
+const PLAN_ORDER = ["free_trial", "starter", "business", "pro"];
+const DEFAULT_PLAN = "free_trial";
+const TRIAL_DAYS = 5; // also hardcoded in public/landing.html's copy — keep in sync if you change it
 
 function getPlan(planId) {
   return PLANS[planId] || PLANS[DEFAULT_PLAN];
@@ -424,6 +427,7 @@ function createBusiness(
     category,
     phone,
     personalPhone: personalPhone || phone,
+    personalPhoneVerified: false,
     pesaAiNumber: pesaAiNumber || null,
     pesaAiNumberVerified: false,
     ownerName: ownerName || null,
@@ -655,33 +659,106 @@ function getMpesaCredentialsDecrypted(businessId) {
 
 // --- Accounts (login for a business owner) --------------------------------
 
-function createAccount(state, { businessId, email, passwordHash, passwordSalt, consentedAt }) {
-  const normalizedEmail = email.trim().toLowerCase();
-  if (state.accounts.some((a) => a.email === normalizedEmail)) {
-    throw httpError(409, "An account with this email already exists");
-  }
-  const account = {
-    id: id(),
-    businessId,
-    email: normalizedEmail,
-    passwordHash,
-    passwordSalt,
-    // When they agreed to the Privacy Policy at signup — demonstrable
-    // proof of consent (DPA-relevant), not just a UI checkbox that leaves
-    // no trace. Never null for accounts created after this field existed.
-    consentedAt: consentedAt || null,
-    createdAt: now(),
-  };
+function createAccount(state, { businessId, email = null, passwordHash = null, passwordSalt = null, consentedAt = null }) {
+  const normalizedEmail = email ? email.trim().toLowerCase() : null;
+  if (normalizedEmail && state.accounts.some((a) => a.email === normalizedEmail)) throw httpError(409, "An account with this email already exists");
+  const account = { id: id(), businessId, email: normalizedEmail, passwordHash, passwordSalt, consentedAt, createdAt: now() };
   state.accounts.push(account);
   return account;
 }
 
 function getAccountByEmail(email) {
-  return load().accounts.find((a) => a.email === email.trim().toLowerCase());
+  if (!email) return undefined;
+  return load().accounts.find((a) => a.email && a.email === email.trim().toLowerCase());
 }
 
-function getAccountById(accountId) {
-  return load().accounts.find((a) => a.id === accountId);
+function normalizePhone(phone) {
+  const digits = String(phone || "").replace(/[^0-9]/g, "");
+  if (digits.startsWith("254")) return digits;
+  if (digits.startsWith("0")) return "254" + digits.slice(1);
+  return digits;
+}
+
+function getAccountByPersonalPhone(phone) {
+  const normalized = normalizePhone(phone);
+  const state = load();
+  const business = (state.businesses || []).find((b) => normalizePhone(b.personalPhone || b.phone) === normalized);
+  return business ? state.accounts.find((a) => a.businessId === business.id) : undefined;
+}
+
+function createOtpChallenge(phone, purpose = "login", metadata = {}) {
+  return mutate((state) => {
+    if (!Array.isArray(state.otpChallenges)) state.otpChallenges = [];
+    const normalizedPhone = normalizePhone(phone);
+    state.otpChallenges = state.otpChallenges.filter((item) => item.phone !== normalizedPhone || item.purpose !== purpose);
+    const code = String(crypto.randomInt(100000, 1000000));
+    const challenge = { id: id(), phone: normalizedPhone, purpose, metadata, codeHash: crypto.createHash("sha256").update(code).digest("hex"), attempts: 0, createdAt: now(), expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() };
+    state.otpChallenges.push(challenge);
+    return { phone: normalizedPhone, code, expiresAt: challenge.expiresAt };
+  });
+}
+
+function verifyOtpChallenge(phone, code, purpose = "login") {
+  return mutate((state) => {
+    const normalizedPhone = normalizePhone(phone);
+    const challenge = (state.otpChallenges || []).slice().reverse().find((item) => item.phone === normalizedPhone && item.purpose === purpose);
+    if (!challenge || new Date(challenge.expiresAt).getTime() < Date.now()) throw httpError(400, "This code has expired. Request a new one.");
+    if (challenge.attempts >= 5) throw httpError(429, "Too many attempts. Request a new code.");
+    const candidateHash = crypto.createHash("sha256").update(String(code || "")).digest("hex");
+    if (candidateHash !== challenge.codeHash) { challenge.attempts += 1; throw httpError(400, "That code is not correct."); }
+    state.otpChallenges = state.otpChallenges.filter((item) => item.id !== challenge.id);
+    return true;
+  });
+}
+
+function createPendingSignup(state, { businessName, personalPhone, pesaAiNumber }) {
+  const normalizedPersonalPhone = normalizePhone(personalPhone);
+  const normalizedShopNumber = normalizePhone(pesaAiNumber);
+  if ((state.businesses || []).some((b) => normalizePhone(b.pesaAiNumber) === normalizedShopNumber)) throw httpError(409, "This number is already on WhatsApp or is already registered as a shop number");
+  if ((state.pendingSignups || []).some((p) => p.pesaAiNumber === normalizedShopNumber && !p.finalizedAt)) throw httpError(409, "This number is already being verified");
+  const pending = { id: id(), businessName: String(businessName).trim(), personalPhone: normalizedPersonalPhone, pesaAiNumber: normalizedShopNumber, personalVerified: false, shopVerified: false, status: "pending_verification", createdAt: now(), expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
+  if (!Array.isArray(state.pendingSignups)) state.pendingSignups = [];
+  state.pendingSignups.push(pending);
+  return pending;
+}
+
+function getPendingSignup(pendingId) {
+  return (load().pendingSignups || []).find((item) => item.id === pendingId);
+}
+
+function markPendingSignupChannelVerified(pendingId, channel) {
+  return mutate((state) => {
+    const pending = (state.pendingSignups || []).find((item) => item.id === pendingId);
+    if (!pending || new Date(pending.expiresAt).getTime() < Date.now()) throw httpError(400, "This signup has expired. Please start again.");
+    if (channel === "personal") pending.personalVerified = true;
+    if (channel === "shop") pending.shopVerified = true;
+    return pending;
+  });
+}
+
+function finalizePendingSignup(pendingId) {
+  return mutate((state) => {
+    const pending = (state.pendingSignups || []).find((item) => item.id === pendingId);
+    if (!pending || !pending.personalVerified || !pending.shopVerified) throw httpError(400, "Both phone numbers must be verified first");
+    if (pending.finalizedAt) throw httpError(409, "This signup has already been completed");
+    const business = createBusiness(state, { name: pending.businessName, category: null, phone: pending.personalPhone, personalPhone: pending.personalPhone, pesaAiNumber: pending.pesaAiNumber, plan: "free_trial" });
+    business.personalPhoneVerified = true;
+    business.pesaAiNumberVerified = true;
+    business.shopNumberVerificationStatus = "verified";
+    const account = createAccount(state, { businessId: business.id });
+    pending.finalizedAt = now();
+    pending.status = "verified";
+    return { business, account };
+  });
+}
+
+function markPersonalPhoneVerified(businessId) {
+  return mutate((state) => {
+    const business = state.businesses.find((item) => item.id === businessId);
+    if (!business) throw httpError(404, "Business not found");
+    business.personalPhoneVerified = true;
+    return business;
+  });
 }
 
 function resetAccountPasswordByBusinessId(businessId, passwordHash, passwordSalt) {
@@ -1444,6 +1521,15 @@ module.exports = {
   getMpesaCredentialsDecrypted,
   createAccount,
   getAccountByEmail,
+  getAccountByPersonalPhone,
+  normalizePhone,
+  createOtpChallenge,
+  verifyOtpChallenge,
+  markPersonalPhoneVerified,
+  createPendingSignup,
+  getPendingSignup,
+  markPendingSignupChannelVerified,
+  finalizePendingSignup,
   getAccountById,
   resetAccountPasswordByBusinessId,
   createSession,

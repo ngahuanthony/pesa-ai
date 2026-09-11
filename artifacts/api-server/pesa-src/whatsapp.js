@@ -146,6 +146,18 @@ async function sendMessage(phoneNumberId, to, text, accessToken) {
   }
 }
 
+async function sendPlatformOtp(to, code, context = {}) {
+  const accessToken = process.env.WHATSAPP_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if (!accessToken || !phoneNumberId) throw new Error("WhatsApp OTP sender is not configured");
+  const templateName = process.env.WHATSAPP_OTP_TEMPLATE_NAME || "pesa_ai_otp";
+  const languageCode = process.env.WHATSAPP_OTP_LANGUAGE || "en_US";
+  const message = context.shopName ? "Pesa AI code is " + code + ". Enter it to create " + context.shopName + " shop." : "Pesa AI login code: " + code;
+  const res = await fetch("https://graph.facebook.com/" + GRAPH_API_VERSION + "/" + phoneNumberId + "/messages", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + accessToken }, body: JSON.stringify({ messaging_product: "whatsapp", to, type: "template", template: { name: templateName, language: { code: languageCode }, components: [{ type: "body", parameters: [{ type: "text", text: code }, { type: "text", text: context.shopName || "Pesa AI" }] }] } }) });
+  if (!res.ok) { const errorText = await res.text().catch(() => ""); throw new Error("WhatsApp OTP send failed (" + res.status + "): " + errorText.slice(0, 300)); }
+  return { message };
+}
+
 // Maps Pesa AI business categories to WhatsApp vertical codes
 function getWhatsAppVertical(category) {
   if (!category) return "OTHER";
@@ -257,6 +269,7 @@ module.exports = {
   verifyWebhook,
   handleIncomingWebhook,
   sendMessage,
+  sendPlatformOtp,
   resolveAccessToken,
   updateWhatsAppBusinessProfile,
   updateWhatsAppProfilePicture,

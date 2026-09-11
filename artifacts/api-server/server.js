@@ -88,6 +88,9 @@ const PORT = Number(process.env.PORT) || 8080;
 // --- route table ----------------------------------------------------------
 
 router.post("/api/auth/signup", authRoutes.signup);
+router.post("/api/auth/verify-signup-otp", authRoutes.verifySignupOtp);
+router.post("/api/auth/request-otp", authRoutes.requestLoginOtp);
+router.post("/api/auth/verify-otp", authRoutes.verifyOtp);
 router.post("/api/auth/login", authRoutes.login);
 router.post("/api/auth/logout", authRoutes.logout);
 router.get("/api/auth/me", authRoutes.me);

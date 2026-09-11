@@ -25,7 +25,7 @@ export interface Business {
 
 export interface Account {
   id: string;
-  email: string;
+  email?: string | null;
 }
 
 export interface Subscription {
@@ -271,15 +271,8 @@ export interface AuthResult {
 
 export interface SignupInput {
   businessName: string;
-  category: string;
-  businessPhone: string;
-  personalPhone?: string;
-  pesaAiNumber?: string;
-  paybillNumber?: string;
-  email: string;
-  password: string;
-  consent: boolean;
-  plan?: string;
+  pesaAiNumber: string;
+  personalPhone: string;
 }
 
 export interface LoginInput {

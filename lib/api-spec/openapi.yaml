@@ -1269,31 +1269,14 @@ components:
       properties:
         businessName:
           type: string
-        category:
-          type: string
-        businessPhone:
+        pesaAiNumber:
           type: string
         personalPhone:
           type: string
-        pesaAiNumber:
-          type: string
-        paybillNumber:
-          type: string
-        email:
-          type: string
-        password:
-          type: string
-        consent:
-          type: boolean
-        plan:
-          type: string
       required:
         - businessName
-        - category
-        - businessPhone
-        - email
-        - password
-        - consent
+        - pesaAiNumber
+        - personalPhone
 
     LoginInput:
       type: object
