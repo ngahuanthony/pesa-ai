@@ -30,6 +30,7 @@ function Router() {
         <Route path="/login" component={LoginPage} />
         <Route path="/signup" component={SignupPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
+        <Route path="/settings/mpesa" component={DashboardPage} />
         <Route path="/dashboard" component={DashboardPage} />
         <Route path="/dashboard/:section" component={DashboardPage} />
         <Route path="/dashboard/:section/:sub" component={DashboardPage} />

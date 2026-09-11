@@ -1656,6 +1656,43 @@ function getDailyReportData(businessId, dateString = null) {
   const lowStock = (state.products || []).filter((product) => product.businessId === businessId && Number(product.stock || 0) <= threshold).map((product) => ({ name: product.name, stock: Number(product.stock || 0) }));
   return { date, businessName: business.name, shopNumber: business.pesaAiNumber || business.shopNumber || null, salesCount: orders.length, totalSales: total, mpesaTotal: mpesaOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0), mpesaCount: mpesaOrders.length, deniTotal: deni.reduce((sum, entry) => sum + Number(entry.amount || 0), 0), deniCount: deni.length, deni, lowStock };
 }
+
+function createDeniRequest({ businessId, customerPhone, customerName = null, amount, product = null, orderId = null }) {
+  const normalizedPhone = normalizePhone(customerPhone);
+  const numericAmount = Number(amount);
+  if (!normalizedPhone || !Number.isFinite(numericAmount) || numericAmount <= 0) throw httpError(400, "Invalid Deni request");
+  return mutate((state) => {
+    state.deniBook = Array.isArray(state.deniBook) ? state.deniBook : [];
+    const existing = state.deniBook.slice().reverse().find((item) => item.businessId === businessId && item.orderId === orderId && item.status === "pending_approval");
+    if (existing) return existing;
+    const entry = { id: id(), businessId, orderId, customerPhone: normalizedPhone, customerName: customerName ? String(customerName).slice(0, 120) : null, amount: Math.round(numericAmount * 100) / 100, product: product ? String(product).slice(0, 200) : null, status: "pending_approval", createdAt: now(), updatedAt: now() };
+    state.deniBook.push(entry);
+    return entry;
+  });
+}
+
+function approveLatestDeniRequest(businessId) {
+  return mutate((state) => {
+    const entry = (state.deniBook || []).slice().reverse().find((item) => item.businessId === businessId && item.status === "pending_approval");
+    if (!entry) return null;
+    entry.status = "unpaid";
+    entry.updatedAt = now();
+    return entry;
+  });
+}
+
+function recordSaleForOrder(order, paymentMeta = {}) {
+  if (!order || !order.id) throw httpError(400, "Order is required");
+  return mutate((state) => {
+    state.sales = Array.isArray(state.sales) ? state.sales : [];
+    const existing = state.sales.find((sale) => sale.orderId === order.id);
+    if (existing) return { duplicate: true, sale: existing };
+    const customer = (state.customers || []).find((item) => item.id === order.customerId);
+    const sale = { id: id(), businessId: order.businessId, orderId: order.id, amount: order.totalAmount, mpesaMethod: paymentMeta.paymentMethod || null, mpesaRef: paymentMeta.mpesaTxnId || null, items: order.items || [], customerPhone: customer ? customer.phone : null, createdAt: now() };
+    state.sales.push(sale);
+    return { duplicate: false, sale };
+  });
+}
 module.exports = {
   DATA_FILE,
   loadRaw,
@@ -1692,6 +1729,7 @@ module.exports = {
   recordMpesaTransaction,
   createDeniEntry, listDeniEntries, updateDeniEntry,
   getDailyReportSettings, updateDailyReportSettings, getDailyReportData,
+  createDeniRequest, approveLatestDeniRequest, recordSaleForOrder,
   clearMpesaCredentials,
   getMpesaStatus,
   getMpesaCredentialsDecrypted,

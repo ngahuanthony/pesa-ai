@@ -83,6 +83,7 @@ const voiceStockRoutes  = require("./pesa-src/routes/voice-stock");
 const videoProcessor = require("./pesa-src/video-processor");
 const whatsapp = require("./pesa-src/whatsapp");
 const mpesa = require("./pesa-src/mpesa");
+const mpesaApiRoutes = require("./pesa-src/routes/mpesa");
 
 const PORT = Number(process.env.PORT) || 8080;
 
@@ -144,6 +145,8 @@ router.delete("/api/businesses/:businessId/products/:productId", productRoutes.r
 router.get("/api/businesses/:businessId/orders", orderRoutes.list);
 router.put("/api/businesses/:businessId/orders/:orderId/status", orderRoutes.updateStatus);
 router.post("/api/businesses/:businessId/orders/:orderId/mpesa",      orderRoutes.payWithMpesa);
+router.post("/api/mpesa/stkpush", mpesaApiRoutes.stkPush);
+router.post("/api/mpesa/callback", mpesaApiRoutes.callback);
 router.post("/api/businesses/:businessId/orders/:orderId/mark-paid",  orderRoutes.markPaid);
 
 router.get("/api/businesses/:businessId/mpesa/status", mpesaSettingsRoutes.status);

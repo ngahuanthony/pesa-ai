@@ -22,6 +22,17 @@ const HANDOVER_TRIGGERS = [
   "nahitaji mtu", "talk to owner", "speak to owner",
 ];
 
+
+function orderActions(replyText, order) {
+  if (!order || order.error || !order.id) return { replyText, interactiveButtons: null };
+  const total = Number(order.totalAmount || 0).toLocaleString("en-KE");
+  return { replyText: (replyText || "Order received!") + "\n\nTotal: KSh " + total + "\nChoose an option below:", interactiveButtons: [
+    { id: "mpesa_pay:" + order.id, title: "Lipa na M-Pesa" },
+    { id: "deni_request:" + order.id, title: "Deni / Lipa Baadaye" },
+    { id: "receipt:" + order.id, title: "Naomba Receipt" },
+  ] };
+}
+
 function isHandoverRequest(text) {
   const lower = (text || "").toLowerCase();
   return HANDOVER_TRIGGERS.some((t) => lower.includes(t));
@@ -76,13 +87,9 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
         });
       }
 
-      const { replyText: catalogReply, order } = await getAssistantReply(
-        business, customer.id, [], text,
-        { shopEntry: true }
-      );
-      db.mutate((state) => {
-        db.addMessage(state, conversation.id, "assistant", catalogReply);
-      });
+      const { replyText: catalogReply, order } = await getAssistantReply(business, customer.id, [], text, { shopEntry: true });
+      const prepared = orderActions(catalogReply, order);
+      db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", prepared.replyText); });
 
       // Return both so the WhatsApp sender can send them in order.
       return {
@@ -105,12 +112,9 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
   }
 
   const { replyText, order } = await getAssistantReply(business, customer.id, priorHistory, text);
-
-  db.mutate((state) => {
-    db.addMessage(state, conversation.id, "assistant", replyText);
-  });
-
-  return { replyText, order, customer, conversation };
+  const prepared = orderActions(replyText, order);
+  db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", prepared.replyText); });
+  return { replyText: prepared.replyText, interactiveButtons: prepared.interactiveButtons, order, customer, conversation };
 }
 
 module.exports = { handleCustomerMessage };

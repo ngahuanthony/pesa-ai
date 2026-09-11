@@ -22,6 +22,7 @@ import { PaymentsTab }        from "@/components/dashboard/payments-tab";
 
 // Normalise path → section key
 function getSection(location: string): string {
+  if (location === "/settings/mpesa") return "payments";
   const raw = location.replace(/^\/dashboard\/?/, "");
   if (!raw) return "overview";
   if (raw === "voice-stock") return "voice-stock";

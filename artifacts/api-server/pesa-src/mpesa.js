@@ -28,7 +28,7 @@ const db = require("./db");
 const whatsapp = require("./whatsapp");
 
 const DARAJA_BASE =
-  process.env.MPESA_ENV === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke";
+  (process.env.DARAJA_ENV || process.env.MPESA_ENV) === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke";
 
 function darajaTimestamp() {
   const d = new Date();
@@ -146,7 +146,16 @@ function handleStkCallback(payload) {
     });
     if (meta.mpesaTxnId) {
       const recorded = db.recordMpesaTransaction({ businessId: order.businessId, transactionId: meta.mpesaTxnId, orderId: order.id, amount: meta.mpesaAmount, phone: meta.mpesaPhone, method: "stk" });
-      if (!recorded.duplicate && order.status !== "paid" && order.status !== "fulfilled") db.updateOrderStatus(order.id, "paid", meta);
+      if (!recorded.duplicate && order.status !== "paid" && order.status !== "fulfilled") {
+        const paidOrder = db.updateOrderStatus(order.id, "paid", meta);
+        db.recordSaleForOrder(paidOrder, meta);
+        const business = db.getBusiness(order.businessId);
+        const customer = db.listOrders(order.businessId).find((item) => item.id === order.id);
+        const token = whatsapp.resolveAccessToken(business);
+        if (business.whatsappPhoneNumberId && customer && customer.customerPhone && token) {
+          whatsapp.sendMessage(business.whatsappPhoneNumberId, customer.customerPhone, "✅ Payment received\nOrder: " + order.id.slice(0, 8) + "\nAmount: KSh " + Number(meta.mpesaAmount || order.totalAmount).toLocaleString("en-KE") + "\nRef: " + (meta.mpesaTxnId || "N/A") + "\nThank you!", token).catch((error) => console.warn("[mpesa] Receipt send failed: " + error.message));
+        }
+      }
     }
   } else {
     // Customer cancelled, entered the wrong PIN, insufficient funds, etc.
@@ -271,12 +280,13 @@ async function handleC2BConfirmation(payload) {
 
   // 3. Update order ──────────────────────────────────────────────────────────
   if (matched) {
-    db.updateOrderStatus(matched.id, "paid", {
+    const paidOrder = db.updateOrderStatus(matched.id, "paid", {
       paymentMethod: "mpesa-c2b",
-      mpesaTxnId:    TransID  || null,
+      mpesaTxnId:    TransID,
       mpesaAmount:   amount,
       mpesaPhone:    customerPhone || null,
     });
+    db.recordSaleForOrder(paidOrder, { paymentMethod: "mpesa-c2b", mpesaTxnId: TransID });
     console.log(`[mpesa c2b] Order ${matched.id} → paid (KES ${amount} from ${customerPhone})`);
   } else {
     console.log(`[mpesa c2b] No matching order for shortcode=${BusinessShortCode} amount=${amount} phone=${customerPhone} ref=${ref}`);

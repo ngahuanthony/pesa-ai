@@ -187,7 +187,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         {navLink("/dashboard/prices",    "Prices",    Tag)}
         {navLink("/dashboard/customers", "Customers", Users)}
         {navLink("/dashboard/orders",    "Orders",    ShoppingCart)}
-        {navLink("/dashboard/payments",  "Payments",  CreditCard)}
+        {navLink("/settings/mpesa",       "M-Pesa",   CreditCard)}
         {navLink("/dashboard/sales",     "Reports",   BarChart2)}
         {navLink("/dashboard/settings",  "Settings",  Settings)}
       </nav>

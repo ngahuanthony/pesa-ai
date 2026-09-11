@@ -12,6 +12,7 @@
 const db = require("./db");
 const fieldCrypto = require("./crypto");
 const { handleCustomerMessage } = require("./core");
+const mpesa = require("./mpesa");
 
 const GRAPH_API_VERSION = "v21.0";
 
@@ -52,6 +53,40 @@ function verifyWebhook(query) {
 // POST /webhook/whatsapp — called for every inbound message.
 // Note: raw-body signature validation happens BEFORE this function is called,
 // in server.js (which has access to the raw Buffer before JSON parsing).
+
+async function sendButtonsMessage(phoneNumberId, to, body, buttons, accessToken) {
+  if (!accessToken || !buttons || !buttons.length) return;
+  const res = await fetch("https://graph.facebook.com/" + GRAPH_API_VERSION + "/" + phoneNumberId + "/messages", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + accessToken }, body: JSON.stringify({ messaging_product: "whatsapp", to, type: "interactive", interactive: { type: "button", body: { text: body }, action: { buttons: buttons.slice(0, 3).map((button) => ({ type: "reply", reply: { id: button.id, title: button.title } })) } } }) });
+  if (!res.ok) console.error("[whatsapp] Interactive message failed (" + res.status + "): " + await res.text().catch(() => ""));
+}
+
+function normalizeIncomingPhone(phone) { return String(phone || "").replace(/\D/g, ""); }
+
+async function handleButtonAction({ business, phoneNumberId, from, buttonId, accessToken }) {
+  const [action, orderId] = String(buttonId || "").split(":");
+  const order = db.getOrder(orderId);
+  if (!order || order.businessId !== business.id) { await sendMessage(phoneNumberId, from, "This order is no longer available.", accessToken); return; }
+  if (action === "mpesa_pay") {
+    try {
+      const result = await mpesa.initiateStkPush({ orderId, phone: from });
+      await sendMessage(phoneNumberId, from, result.simulated ? "Sandbox mode: no money was charged. The payment request is only being simulated." : "M-Pesa prompt sent to your phone. Enter your PIN there; we’ll confirm the order after Safaricom verifies the payment.", accessToken);
+    } catch (error) { await sendMessage(phoneNumberId, from, error.message || "M-Pesa payment could not be started.", accessToken); }
+    return;
+  }
+  if (action === "deni_request") {
+    const customer = db.listOrders(business.id).find((item) => item.id === order.id);
+    const entry = db.createDeniRequest({ businessId: business.id, customerPhone: from, customerName: customer && customer.customerName, amount: order.totalAmount, product: (order.items || []).map((item) => item.productName + " x" + item.quantity).join(", "), orderId: order.id });
+    if (business.personalPhone && business.whatsappPhoneNumberId) await sendMessage(phoneNumberId, business.personalPhone, "Sale " + Number(entry.amount).toLocaleString("en-KE") + " KSh — " + (entry.product || "order") + " for " + (entry.customerName || entry.customerPhone) + ". Reply DENI to approve or IGNORE.", accessToken);
+    await sendMessage(phoneNumberId, from, "Nimeuliza mwenye shop kuhusu deni lako. Tutakujibu likikubaliwa.", accessToken);
+    return;
+  }
+  if (action === "receipt") {
+    const method = order.paymentMeta && order.paymentMeta.paymentMethod;
+    const ref = order.paymentMeta && order.paymentMeta.mpesaTxnId;
+    await sendMessage(phoneNumberId, from, "Receipt\nOrder: " + order.id.slice(0, 8) + "\nTotal: KSh " + Number(order.totalAmount).toLocaleString("en-KE") + "\nStatus: " + order.status + (method ? "\nPayment: " + method : "") + (ref ? "\nRef: " + ref : ""), accessToken);
+  }
+}
+
 async function handleIncomingWebhook(body) {
   const entry  = body.entry?.[0];
   const change = entry?.changes?.[0];
@@ -69,15 +104,25 @@ async function handleIncomingWebhook(body) {
   }
 
   const from        = message.from; // customer's phone number (MSISDN)
+  const buttonId = message.interactive?.button_reply?.id || null;
   const text        = message.text?.body || message.interactive?.button_reply?.title || message.button?.text || null;
-  if (!text) {
+  if (!text && !buttonId) {
     if (message.type === "audio") console.warn("[whatsapp] Audio message received but no transcription adapter is configured");
     return;
   }
 
   const contactName = value.contacts?.[0]?.profile?.name;
+  const accessToken = resolveAccessToken(business);
 
-  const { replyText, extraReplies } = await handleCustomerMessage({
+  if (buttonId) { await handleButtonAction({ business, phoneNumberId, from, buttonId, accessToken }); return; }
+  if (business.personalPhone && normalizeIncomingPhone(from) === normalizeIncomingPhone(business.personalPhone) && String(text).trim().toLowerCase() === "deni") {
+    const approved = db.approveLatestDeniRequest(business.id);
+    if (approved) { await sendMessage(phoneNumberId, from, "Deni imehifadhiwa: KSh " + Number(approved.amount).toLocaleString("en-KE") + ".", accessToken); await sendMessage(phoneNumberId, approved.customerPhone, "Deni imekubaliwa na shop. Kiasi: KSh " + Number(approved.amount).toLocaleString("en-KE") + ". Tutaendelea na order yako.", accessToken); }
+    else await sendMessage(phoneNumberId, from, "Hakuna ombi la deni linalosubiri.", accessToken);
+    return;
+  }
+
+  const { replyText, extraReplies, interactiveButtons } = await handleCustomerMessage({
     business,
     customerPhone: from,
     customerName:  contactName,
@@ -86,17 +131,13 @@ async function handleIncomingWebhook(body) {
   });
 
   // Resolve the access token for THIS business (per-business, decrypted)
-  const accessToken = resolveAccessToken(business);
 
   // replyText is null when AI is paused (human handover active) — skip sending
   if (replyText) await sendMessage(phoneNumberId, from, replyText, accessToken);
 
   // Shop-link entry: send the catalog message immediately after the welcome
-  if (extraReplies && extraReplies.length) {
-    for (const extra of extraReplies) {
-      if (extra) await sendMessage(phoneNumberId, from, extra, accessToken);
-    }
-  }
+  if (extraReplies && extraReplies.length) { for (const extra of extraReplies) if (extra) await sendMessage(phoneNumberId, from, extra, accessToken); }
+  if (interactiveButtons) await sendButtonsMessage(phoneNumberId, from, "Choose a payment option:", interactiveButtons, accessToken);
 }
 
 // Decrypt and return the per-business WhatsApp access token.
