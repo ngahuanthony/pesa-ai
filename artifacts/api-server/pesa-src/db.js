@@ -1706,6 +1706,20 @@ function markDailyReportSent(businessId, date) {
     return true;
   });
 }
+
+function runOneTimePhoneCorrection({ shopPhone, personalPhone, personalPhoneRaw, shopPhoneRaw, whatsappNumber, whatsappRequestedPhone, migrationId }) {
+  return mutate((state) => {
+    state.migrations = state.migrations && typeof state.migrations === "object" ? state.migrations : {};
+    if (state.migrations[migrationId]) return { applied: false, reason: "already-applied", businessId: state.migrations[migrationId].businessId };
+    const target = normalizePhone(shopPhone);
+    const matches = (state.businesses || []).filter((business) => [business.shopPhone, business.shopPhoneRaw, business.whatsappNumber, business.whatsappRequestedPhone, business.shopNumber, business.phone].some((value) => normalizePhone(value) === target));
+    if (matches.length !== 1) throw new Error("Phone correction expected exactly one matching business, found " + matches.length);
+    const business = matches[0];
+    Object.assign(business, { personalPhone: normalizePhone(personalPhone), personalPhoneRaw, shopPhone: normalizePhone(shopPhone), shopPhoneRaw, whatsappNumber: normalizePhone(whatsappNumber), whatsappRequestedPhone: normalizePhone(whatsappRequestedPhone) });
+    state.migrations[migrationId] = { appliedAt: now(), businessId: business.id, fields: ["personalPhone", "personalPhoneRaw", "shopPhone", "shopPhoneRaw", "whatsappNumber", "whatsappRequestedPhone"] };
+    return { applied: true, businessId: business.id };
+  });
+}
 module.exports = {
   DATA_FILE,
   loadRaw,
@@ -1714,6 +1728,7 @@ module.exports = {
   load,
   mutate,
   runOneTimeSafeReset,
+  runOneTimePhoneCorrection,
   restoreDeletedBusinessForSingleOrphanedAccount,
   repairSingleOrphanedAccount,
   id,

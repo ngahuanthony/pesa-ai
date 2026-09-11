@@ -482,6 +482,8 @@ persistence.init(db.DATA_FILE).then(() => {
       migrationId: "safe-reset-digital-nation-2026-09-04",
     });
     console.log("[migration] Digital Nation Accessories safe reset:", reset);
+    const phoneCorrection = db.runOneTimePhoneCorrection({ shopPhone: "0792717918", personalPhone: "254722542810", personalPhoneRaw: "0722542810", shopPhoneRaw: "0792717918", whatsappNumber: "254792717918", whatsappRequestedPhone: "254792717918", migrationId: "phone-correction-shop-0792717918-2026-09-11" });
+    console.log("[migration] Shop phone correction:", phoneCorrection);
   }
   startDailyReportScheduler();
   server.listen(PORT, "0.0.0.0", () => {
