@@ -414,10 +414,13 @@ function createBusiness(
   state,
   { name, category, phone, personalPhone, pesaAiNumber, paybillNumber, plan, buildingName, shopNumber, publicPhone, idOrKraPin, ownerName, personaInstructions, location, deliveryAreas }
 ) {
-  if (state.businesses.some((b) => b.phone === phone)) {
+  const normalizedPhone = normalizePhone(phone);
+  const normalizedPersonalPhone = normalizePhone(personalPhone || phone);
+  const normalizedShopNumber = pesaAiNumber ? normalizePhone(pesaAiNumber) : null;
+  if (state.businesses.some((b) => normalizePhone(b.phone) === normalizedPhone)) {
     throw httpError(409, "A business with this phone number already exists");
   }
-  if (pesaAiNumber && state.businesses.some((b) => b.pesaAiNumber === pesaAiNumber)) {
+  if (normalizedShopNumber && state.businesses.some((b) => normalizePhone(b.pesaAiNumber) === normalizedShopNumber)) {
     throw httpError(409, "This number is already on WhatsApp or is already registered as a shop number");
   }
 
@@ -425,11 +428,13 @@ function createBusiness(
     id: id(),
     name,
     category,
-    phone,
-    personalPhone: personalPhone || phone,
+    phone: normalizedPhone,
+    personalPhone: normalizedPersonalPhone,
     personalPhoneVerified: false,
-    pesaAiNumber: pesaAiNumber || null,
+    pesaAiNumber: normalizedShopNumber,
     pesaAiNumberVerified: false,
+    shopNumberStatus: "reserved",
+    plan: DEFAULT_PLAN,
     ownerName: ownerName || null,
     personaName: derivePersonaName(name, category),
     personaInstructions: personaInstructions || null,
@@ -479,6 +484,7 @@ function createBusiness(
     createdAt: now(),
     updatedAt: now(),
   });
+  business.trial_ends_at = trialEndsAt;
 
   return business;
 }
@@ -531,6 +537,10 @@ function sanitizeBusiness(business) {
   const { mpesaCredentials, changeLog, idOrKraPin, ...rest } = business;
   return {
     ...rest,
+    phone: maskPhone(rest.phone),
+    personalPhone: maskPhone(rest.personalPhone),
+    pesaAiNumber: maskPhone(rest.pesaAiNumber),
+    publicPhone: maskPhone(rest.publicPhone),
     mpesaConnected: Boolean(mpesaCredentials),
     mpesaShortcodeMasked: mpesaCredentials ? fieldCrypto.maskShortcode(mpesaCredentials.shortcode) : null,
   };
@@ -582,6 +592,7 @@ function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verify
     const b = state.businesses.find((b) => b.id === businessId);
     if (!b) throw httpError(404, "Business not found");
     if (phoneNumberId !== undefined) b.whatsappPhoneNumberId = phoneNumberId || null;
+    if (phoneNumberId) b.shopNumberStatus = "meta_connected";
     if (verifyToken !== undefined) b.whatsappVerifyToken = verifyToken;
     if (wabaId !== undefined) b.whatsappWabaId = wabaId || null;
     if (displayName !== undefined) b.whatsappDisplayName = displayName || null;
@@ -659,10 +670,12 @@ function getMpesaCredentialsDecrypted(businessId) {
 
 // --- Accounts (login for a business owner) --------------------------------
 
-function createAccount(state, { businessId, email = null, passwordHash = null, passwordSalt = null, consentedAt = null }) {
+function createAccount(state, { businessId, email = null, recoveryEmail = null, personalPhone = null, passwordHash = null, passwordSalt = null, consentedAt = null }) {
   const normalizedEmail = email ? email.trim().toLowerCase() : null;
+  const normalizedRecoveryEmail = recoveryEmail ? recoveryEmail.trim().toLowerCase() : normalizedEmail;
+  const normalizedPersonalPhone = personalPhone ? normalizePhone(personalPhone) : null;
   if (normalizedEmail && state.accounts.some((a) => a.email === normalizedEmail)) throw httpError(409, "An account with this email already exists");
-  const account = { id: id(), businessId, email: normalizedEmail, passwordHash, passwordSalt, consentedAt, createdAt: now() };
+  const account = { id: id(), businessId, email: normalizedEmail, recoveryEmail: normalizedRecoveryEmail, personalPhone: normalizedPersonalPhone, personalPhoneVerified: false, authMethod: normalizedPersonalPhone ? "phone_otp" : "legacy_email_password", passwordHash, passwordSalt, consentedAt, createdAt: now() };
   state.accounts.push(account);
   return account;
 }
@@ -679,34 +692,51 @@ function normalizePhone(phone) {
   return digits;
 }
 
+function maskPhone(phone) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return null;
+  return normalized.length > 6 ? normalized.slice(0, 4) + "***" + normalized.slice(-3) : "***";
+}
+
 function getAccountByPersonalPhone(phone) {
   const normalized = normalizePhone(phone);
   const state = load();
+  const direct = (state.accounts || []).find((a) => normalizePhone(a.personalPhone) === normalized);
+  if (direct) return direct;
   const business = (state.businesses || []).find((b) => normalizePhone(b.personalPhone || b.phone) === normalized);
   return business ? state.accounts.find((a) => a.businessId === business.id) : undefined;
 }
 
-function createOtpChallenge(phone, purpose = "login", metadata = {}) {
+function otpChannelForPurpose(purpose) {
+  return purpose === "signup_shop" ? "sms" : "whatsapp";
+}
+
+function createOtpChallenge(phone, purpose = "login", metadata = {}, channel = null) {
   return mutate((state) => {
     if (!Array.isArray(state.otpChallenges)) state.otpChallenges = [];
     const normalizedPhone = normalizePhone(phone);
-    state.otpChallenges = state.otpChallenges.filter((item) => item.phone !== normalizedPhone || item.purpose !== purpose);
+    const resolvedChannel = channel || otpChannelForPurpose(purpose);
+    const hourAgo = Date.now() - 60 * 60 * 1000;
+    const recent = state.otpChallenges.filter((item) => item.phone === normalizedPhone && item.channel === resolvedChannel && new Date(item.createdAt).getTime() > hourAgo);
+    if (recent.length >= 3) throw httpError(429, "Too many codes requested. Try again later.");
     const code = String(crypto.randomInt(100000, 1000000));
-    const challenge = { id: id(), phone: normalizedPhone, purpose, metadata, codeHash: crypto.createHash("sha256").update(code).digest("hex"), attempts: 0, createdAt: now(), expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() };
+    const challenge = { id: id(), phone: normalizedPhone, channel: resolvedChannel, purpose, metadata, codeHash: crypto.createHash("sha256").update(code).digest("hex"), expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), used: false, usedAt: null, attempts: 0, createdAt: now() };
     state.otpChallenges.push(challenge);
-    return { phone: normalizedPhone, code, expiresAt: challenge.expiresAt };
+    return { phone: normalizedPhone, code, expiresAt: challenge.expiresAt, channel: resolvedChannel };
   });
 }
 
 function verifyOtpChallenge(phone, code, purpose = "login") {
   return mutate((state) => {
     const normalizedPhone = normalizePhone(phone);
-    const challenge = (state.otpChallenges || []).slice().reverse().find((item) => item.phone === normalizedPhone && item.purpose === purpose);
+    const channel = otpChannelForPurpose(purpose);
+    const challenge = (state.otpChallenges || []).slice().reverse().find((item) => item.phone === normalizedPhone && item.purpose === purpose && item.channel === channel && item.used !== true);
     if (!challenge || new Date(challenge.expiresAt).getTime() < Date.now()) throw httpError(400, "This code has expired. Request a new one.");
     if (challenge.attempts >= 5) throw httpError(429, "Too many attempts. Request a new code.");
     const candidateHash = crypto.createHash("sha256").update(String(code || "")).digest("hex");
     if (candidateHash !== challenge.codeHash) { challenge.attempts += 1; throw httpError(400, "That code is not correct."); }
-    state.otpChallenges = state.otpChallenges.filter((item) => item.id !== challenge.id);
+    challenge.used = true;
+    challenge.usedAt = now();
     return true;
   });
 }
@@ -744,8 +774,10 @@ function finalizePendingSignup(pendingId) {
     const business = createBusiness(state, { name: pending.businessName, category: null, phone: pending.personalPhone, personalPhone: pending.personalPhone, pesaAiNumber: pending.pesaAiNumber, plan: "free_trial" });
     business.personalPhoneVerified = true;
     business.pesaAiNumberVerified = true;
+    business.shopNumberStatus = "sms_verified";
     business.shopNumberVerificationStatus = "verified";
-    const account = createAccount(state, { businessId: business.id });
+    const account = createAccount(state, { businessId: business.id, personalPhone: pending.personalPhone });
+    account.personalPhoneVerified = true;
     pending.finalizedAt = now();
     pending.status = "verified";
     return { business, account };
@@ -757,6 +789,8 @@ function markPersonalPhoneVerified(businessId) {
     const business = state.businesses.find((item) => item.id === businessId);
     if (!business) throw httpError(404, "Business not found");
     business.personalPhoneVerified = true;
+    const account = state.accounts.find((item) => item.businessId === businessId);
+    if (account) { account.personalPhoneVerified = true; account.authMethod = "phone_otp"; }
     return business;
   });
 }
@@ -1527,6 +1561,7 @@ module.exports = {
   getAccountByEmail,
   getAccountByPersonalPhone,
   normalizePhone,
+  maskPhone,
   createOtpChallenge,
   verifyOtpChallenge,
   markPersonalPhoneVerified,

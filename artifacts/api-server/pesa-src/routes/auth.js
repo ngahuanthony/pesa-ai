@@ -2,6 +2,10 @@ const db = require("../db");
 const auth = require("../auth");
 const whatsapp = require("../whatsapp");
 
+function accountView(account) {
+  return { id: account.id, email: account.email || null, recoveryEmail: account.recoveryEmail || account.email || null, personalPhone: db.maskPhone(account.personalPhone), personalPhoneVerified: Boolean(account.personalPhoneVerified), authMethod: account.authMethod || (account.passwordHash ? "legacy_email_password" : "phone_otp") };
+}
+
 function requireShopFields(body) {
   if (!body?.businessName || !body?.personalPhone || !body?.pesaAiNumber) throw db.httpError(400, "Shop name, new shop number, and personal WhatsApp are required");
 }
@@ -35,7 +39,7 @@ async function signup({ body }) {
   let smsPending = false;
   const shopChallenge = db.createOtpChallenge(pending.pesaAiNumber, "signup_shop", { pendingSignupId: pending.id });
   try { await sendShopSmsOtp(pending.pesaAiNumber, shopChallenge); } catch (error) { smsPending = true; console.warn("[auth] Shop SMS OTP pending:", error.message); }
-  return { status: 202, data: { verificationRequired: true, pendingSignupId: pending.id, personalPhone: pending.personalPhone, shopPhone: pending.pesaAiNumber, smsPending, message: smsPending ? "Personal WhatsApp verified request sent. Shop-number SMS verification is pending." : "Enter both verification codes to create your shop." } };
+  return { status: 202, data: { verificationRequired: true, pendingSignupId: pending.id, personalPhone: db.maskPhone(pending.personalPhone), shopPhone: db.maskPhone(pending.pesaAiNumber), smsPending, message: smsPending ? "Personal WhatsApp verified request sent. Shop-number SMS verification is pending." : "Enter both verification codes to create your shop." } };
 }
 
 async function verifySignupOtp({ body }) {
@@ -48,7 +52,7 @@ async function verifySignupOtp({ body }) {
   if (!updated.personalVerified || !updated.shopVerified) return { data: { verificationRequired: true, next: updated.personalVerified ? "shop" : "personal", pendingSignupId: updated.id } };
   const { business, account } = db.finalizePendingSignup(updated.id);
   const session = db.createSession({ accountId: account.id, businessId: business.id });
-  return { cookie: auth.sessionCookieHeader(session.token), data: { business: db.sanitizeBusiness(business), account: { id: account.id, email: account.email }, subscription: db.getSubscription(business.id) } };
+  return { cookie: auth.sessionCookieHeader(session.token), data: { business: db.sanitizeBusiness(business), account: accountView(account), subscription: db.getSubscription(business.id) } };
 }
 
 async function requestLoginOtp({ body }) {
@@ -57,7 +61,7 @@ async function requestLoginOtp({ body }) {
   const account = db.getAccountByPersonalPhone(phone);
   if (!account) throw db.httpError(404, "No shop was found for that WhatsApp number");
   const challenge = await sendPersonalOtp(phone, "login");
-  return { data: { verificationRequired: true, phone: challenge.phone, expiresAt: challenge.expiresAt } };
+  return { data: { verificationRequired: true, phone: db.maskPhone(challenge.phone), expiresAt: challenge.expiresAt } };
 }
 
 async function verifyOtp({ body }) {
@@ -67,9 +71,10 @@ async function verifyOtp({ body }) {
   const account = db.getAccountByPersonalPhone(phone);
   if (!account) throw db.httpError(404, "No shop was found for that WhatsApp number");
   db.markPersonalPhoneVerified(account.businessId);
-  const session = db.createSession({ accountId: account.id, businessId: account.businessId });
-  const business = db.getBusiness(account.businessId);
-  return { cookie: auth.sessionCookieHeader(session.token), data: { business: db.sanitizeBusiness(business), account: { id: account.id, email: account.email }, subscription: db.getSubscription(business.id) } };
+  const verifiedAccount = db.getAccountByPersonalPhone(phone);
+  const session = db.createSession({ accountId: verifiedAccount.id, businessId: verifiedAccount.businessId });
+  const business = db.getBusiness(verifiedAccount.businessId);
+  return { cookie: auth.sessionCookieHeader(session.token), data: { business: db.sanitizeBusiness(business), account: accountView(verifiedAccount), subscription: db.getSubscription(business.id) } };
 }
 
 function login({ body }) {
@@ -79,8 +84,14 @@ function login({ body }) {
   if (!account || !auth.verifyPassword(password, account.passwordHash, account.passwordSalt)) throw db.httpError(401, "Invalid credentials");
   const session = db.createSession({ accountId: account.id, businessId: account.businessId });
   const business = db.getBusiness(account.businessId);
-  return { cookie: auth.sessionCookieHeader(session.token), data: { business: db.sanitizeBusiness(business), account: { id: account.id, email: account.email }, subscription: db.getSubscription(business.id) } };
+  return { cookie: auth.sessionCookieHeader(session.token), data: { business: db.sanitizeBusiness(business), account: accountView(account), subscription: db.getSubscription(business.id) } };
 }
 function logout({ session }) { if (session) db.deleteSession(session.token); return { cookie: auth.sessionCookieHeader(null, { clear: true }), data: { ok: true } }; }
-function me({ session }) { if (!session) return { authenticated: false }; if (session.isAdmin) return { authenticated: true, isAdmin: true }; const account = db.getAccountById(session.accountId); const business = db.getBusiness(session.businessId); return { authenticated: true, isAdmin: false, account: { id: account.id, email: account.email }, business: db.sanitizeBusiness(business), subscription: db.getSubscription(business.id) }; }
+function me({ session }) {
+  if (!session) return { authenticated: false };
+  if (session.isAdmin) return { authenticated: true, isAdmin: true };
+  const account = db.getAccountById(session.accountId);
+  const business = db.getBusiness(session.businessId);
+  return { authenticated: true, isAdmin: false, account: accountView(account), business: db.sanitizeBusiness(business), subscription: db.getSubscription(business.id) };
+}
 module.exports = { signup, verifySignupOtp, requestLoginOtp, verifyOtp, login, logout, me };
