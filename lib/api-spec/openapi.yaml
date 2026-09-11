@@ -736,6 +736,13 @@ components:
           type: string
         phone:
           type: string
+        personalPhone:
+          type: string
+        pesaAiNumber:
+          type: string
+          nullable: true
+        pesaAiNumberVerified:
+          type: boolean
         paybillNumber:
           type: string
           nullable: true
@@ -1265,6 +1272,10 @@ components:
         category:
           type: string
         businessPhone:
+          type: string
+        personalPhone:
+          type: string
+        pesaAiNumber:
           type: string
         paybillNumber:
           type: string

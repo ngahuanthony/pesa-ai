@@ -10,6 +10,8 @@ export interface SignupInput {
   businessName: string;
   category: string;
   businessPhone: string;
+  personalPhone?: string;
+  pesaAiNumber?: string;
   paybillNumber?: string;
   email: string;
   password: string;

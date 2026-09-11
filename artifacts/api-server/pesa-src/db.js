@@ -49,14 +49,14 @@ const PLANS = {
   starter: {
     id: "starter",
     name: "Starter",
-    priceKES: 2999,
+    priceKES: 600,
     billingCycleDays: 30,
     features: ["WhatsApp AI", "Product catalogue", "Customer questions", "Orders", "Basic analytics"],
   },
   business: {
     id: "business",
     name: "Business",
-    priceKES: 4999,
+    priceKES: 1000,
     billingCycleDays: 30,
     features: [
       "Everything in Starter",
@@ -71,7 +71,7 @@ const PLANS = {
   pro: {
     id: "pro",
     name: "Pro",
-    priceKES: 9999,
+    priceKES: 1500,
     billingCycleDays: 30,
     features: [
       "Everything in Business",
@@ -409,10 +409,13 @@ function generateWelcomeMessage(business) {
 
 function createBusiness(
   state,
-  { name, category, phone, paybillNumber, plan, buildingName, shopNumber, publicPhone, idOrKraPin, ownerName, personaInstructions, location, deliveryAreas }
+  { name, category, phone, personalPhone, pesaAiNumber, paybillNumber, plan, buildingName, shopNumber, publicPhone, idOrKraPin, ownerName, personaInstructions, location, deliveryAreas }
 ) {
   if (state.businesses.some((b) => b.phone === phone)) {
     throw httpError(409, "A business with this phone number already exists");
+  }
+  if (pesaAiNumber && state.businesses.some((b) => b.pesaAiNumber === pesaAiNumber)) {
+    throw httpError(409, "That WhatsApp Shop number is already registered");
   }
 
   const business = {
@@ -420,6 +423,9 @@ function createBusiness(
     name,
     category,
     phone,
+    personalPhone: personalPhone || phone,
+    pesaAiNumber: pesaAiNumber || null,
+    pesaAiNumberVerified: false,
     ownerName: ownerName || null,
     personaName: derivePersonaName(name, category),
     personaInstructions: personaInstructions || null,

@@ -15,6 +15,9 @@ export interface Business {
   personaName: string;
   category: string;
   phone: string;
+  personalPhone?: string | null;
+  pesaAiNumber?: string | null;
+  pesaAiNumberVerified?: boolean;
   paybillNumber?: string | null;
   whatsappPhoneNumberId?: string | null;
   createdAt: string;
@@ -270,6 +273,8 @@ export interface SignupInput {
   businessName: string;
   category: string;
   businessPhone: string;
+  personalPhone?: string;
+  pesaAiNumber?: string;
   paybillNumber?: string;
   email: string;
   password: string;
