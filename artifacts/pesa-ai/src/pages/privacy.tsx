@@ -10,7 +10,7 @@ export default function PrivacyPage() {
           <p className="text-gray-600 leading-relaxed">
             Pesa AI is a product of <strong>Adplay Media Ltd</strong>, a company registered in Kenya.
             We provide an AI-powered WhatsApp sales assistant platform for Kenyan small and medium businesses.
-            Contact us at <a href="mailto:info@pesaai.africa" className="text-green-600 underline">info@pesaai.africa</a>.
+            Contact us at <a href="tel:+254741387785" className="text-green-600 underline">+254 741 387 785</a>.
           </p>
         </section>
 
@@ -73,7 +73,7 @@ export default function PrivacyPage() {
           <h2 className="text-xl font-semibold text-gray-800 mb-3">7. Data Deletion</h2>
           <p className="text-gray-600 leading-relaxed">
             You may request deletion of your data at any time by emailing{" "}
-            <a href="mailto:info@pesaai.africa" className="text-green-600 underline">info@pesaai.africa</a>.
+            <a href="tel:+254741387785" className="text-green-600 underline">+254 741 387 785</a>.
             We will process deletion requests within 30 days. Some data may be retained where required by
             Kenyan law or legitimate business records obligations.
           </p>
@@ -93,7 +93,7 @@ export default function PrivacyPage() {
           <p className="text-gray-600 leading-relaxed">
             You have the right to access, correct, or delete personal data we hold about you.
             To exercise these rights, contact us at{" "}
-            <a href="mailto:info@pesaai.africa" className="text-green-600 underline">info@pesaai.africa</a>.
+            <a href="tel:+254741387785" className="text-green-600 underline">+254 741 387 785</a>.
           </p>
         </section>
 
@@ -108,7 +108,7 @@ export default function PrivacyPage() {
         <div className="border-t border-gray-200 pt-8 mt-8">
           <p className="text-sm text-gray-500">
             <strong>Adplay Media Ltd</strong> · Nairobi, Kenya ·{" "}
-            <a href="mailto:info@pesaai.africa" className="text-green-600 underline">info@pesaai.africa</a>
+            <a href="tel:+254741387785" className="text-green-600 underline">+254 741 387 785</a>
           </p>
         </div>
       </div>
