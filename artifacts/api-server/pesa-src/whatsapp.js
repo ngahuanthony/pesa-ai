@@ -148,7 +148,7 @@ async function sendMessage(phoneNumberId, to, text, accessToken) {
 
 async function sendPlatformOtp(to, code, context = {}) {
   const accessToken = process.env.WHATSAPP_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.WHATSAPP_SENDER_ID;
   if (!accessToken || !phoneNumberId) throw new Error("WhatsApp OTP sender is not configured");
   const templateName = process.env.WHATSAPP_OTP_TEMPLATE_NAME || "pesa_ai_otp";
   const languageCode = process.env.WHATSAPP_OTP_LANGUAGE || "en_US";

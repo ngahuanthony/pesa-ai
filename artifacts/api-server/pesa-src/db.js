@@ -692,6 +692,13 @@ function normalizePhone(phone) {
   return digits;
 }
 
+function maskEmail(email) {
+  if (!email || typeof email !== "string" || !email.includes("@")) return null;
+  const [local, domain] = email.trim().toLowerCase().split("@");
+  if (!local || !domain) return null;
+  return local.slice(0, 2) + "****@" + domain;
+}
+
 function maskPhone(phone) {
   const normalized = normalizePhone(phone);
   if (!normalized) return null;
@@ -813,6 +820,15 @@ function resetAccountPasswordByBusinessId(businessId, passwordHash, passwordSalt
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SESSION_COOKIE_NAME = "pesaai_session";
+
+function updateAccountRecoveryEmail(accountId, recoveryEmail) {
+  return mutate((state) => {
+    const account = state.accounts.find((item) => item.id === accountId);
+    if (!account) throw httpError(404, "Account not found");
+    account.recoveryEmail = recoveryEmail || null;
+    return account;
+  });
+}
 
 function createSession({ accountId = null, businessId = null, isAdmin = false }) {
   return mutate((state) => {
@@ -1562,6 +1578,8 @@ module.exports = {
   getAccountByPersonalPhone,
   normalizePhone,
   maskPhone,
+  maskEmail,
+  updateAccountRecoveryEmail,
   createOtpChallenge,
   verifyOtpChallenge,
   markPersonalPhoneVerified,

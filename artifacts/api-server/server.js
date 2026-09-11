@@ -94,6 +94,7 @@ router.post("/api/auth/verify-otp", authRoutes.verifyOtp);
 router.post("/api/auth/login", authRoutes.login);
 router.post("/api/auth/logout", authRoutes.logout);
 router.get("/api/auth/me", authRoutes.me);
+router.patch("/api/auth/recovery-email", authRoutes.updateRecoveryEmail);
 
 router.post("/api/admin/login", adminRoutes.login);
 router.get("/api/admin/businesses", adminRoutes.listBusinesses);

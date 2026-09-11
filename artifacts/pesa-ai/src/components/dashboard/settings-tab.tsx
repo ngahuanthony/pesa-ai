@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Store, Bot, CreditCard, CheckCircle2, Headphones, MapPin } from "lucide-react";
+import { Store, Bot, CreditCard, CheckCircle2, Headphones, MapPin, Mail } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const CATEGORIES = [
@@ -78,6 +78,31 @@ export function SettingsTab() {
   const businessId = business?.id || "";
 
   const updateBiz   = useUpdateBusiness();
+
+  const account = (me as any)?.account;
+  const maskedRecoveryEmail = account?.recoveryEmail || null;
+
+  async function saveRecoveryEmail() {
+    setRecoveryEmailSaving(true);
+    try {
+      const response = await fetch("/api/auth/recovery-email", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ recoveryEmail: recoveryEmailInput.trim() }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Could not save recovery email");
+      await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      setRecoveryEmailInput("");
+      setEditingRecoveryEmail(false);
+      toast({ title: "Recovery email updated", description: payload.data?.recoveryEmail ? "Your masked recovery email is now shown here." : "Recovery email removed." });
+    } catch (error) {
+      toast({ title: "Could not update recovery email", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } finally {
+      setRecoveryEmailSaving(false);
+    }
+  }
   const queryClient = useQueryClient();
   const { toast }   = useToast();
 
@@ -85,6 +110,10 @@ export function SettingsTab() {
   const [bizName,    setBizName]   = useState("");
   const [ownerName,  setOwnerName] = useState("");
   const [category,   setCategory]  = useState("");
+
+  const [recoveryEmailInput, setRecoveryEmailInput] = useState("");
+  const [editingRecoveryEmail, setEditingRecoveryEmail] = useState(false);
+  const [recoveryEmailSaving, setRecoveryEmailSaving] = useState(false);
 
   const [personaName,         setPersonaName]         = useState("");
   const [personaInstructions, setPersonaInstructions] = useState("");
@@ -196,6 +225,47 @@ export function SettingsTab() {
       </div>
 
       {/* 1. Shop Info */}
+
+
+      <Section icon={Mail} title="Recovery Email" sub="Optional backup for account recovery.">
+        {!editingRecoveryEmail ? (
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">{maskedRecoveryEmail || "No recovery email added"}</p>
+              <p className="text-xs text-muted-foreground mt-1">Your Personal WhatsApp remains the primary login.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setRecoveryEmailInput(""); setEditingRecoveryEmail(true); }}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
+            >
+              Edit recovery email
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <Input
+              type="email"
+              value={recoveryEmailInput}
+              onChange={(e) => setRecoveryEmailInput(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+            />
+            <p className="text-xs text-muted-foreground">Optional. Leave blank to remove the recovery email.</p>
+            <div className="flex items-center gap-3">
+              <SaveButton onClick={saveRecoveryEmail} isPending={recoveryEmailSaving} label="Save recovery email" />
+              <button
+                type="button"
+                onClick={() => { setRecoveryEmailInput(""); setEditingRecoveryEmail(false); }}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </Section>
+
       <Section icon={Store} title="Shop Info" sub="Your business name and what you sell.">
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">

@@ -5,7 +5,7 @@ const whatsapp = require("../whatsapp");
 function accountView(account) {
   const business = db.getBusiness(account.businessId);
   const rawPersonalPhone = account.personalPhone || business.personalPhone;
-  return { id: account.id, email: account.email || null, recoveryEmail: account.recoveryEmail || account.email || null, personalPhone: db.maskPhone(rawPersonalPhone), personalPhoneVerified: Boolean(account.personalPhoneVerified), authMethod: account.authMethod || (account.passwordHash ? "legacy_email_password" : "phone_otp") };
+  return { id: account.id, email: account.email || null, recoveryEmail: db.maskEmail(account.recoveryEmail), personalPhone: db.maskPhone(rawPersonalPhone), personalPhoneVerified: Boolean(account.personalPhoneVerified), authMethod: account.authMethod || (account.passwordHash ? "legacy_email_password" : "phone_otp") };
 }
 
 function requireShopFields(body) {
@@ -22,7 +22,8 @@ async function sendShopSmsOtp(phone, challenge) {
   const url = process.env.SMS_PROVIDER_URL;
   if (!url) throw new Error("SMS provider is not configured");
   const headers = { "content-type": "application/json" };
-  if (process.env.SMS_PROVIDER_TOKEN) headers.authorization = "Bearer " + process.env.SMS_PROVIDER_TOKEN;
+  const smsToken = process.env.SMS_PROVIDER_TOKEN || process.env.SMS_API_KEY;
+  if (smsToken) headers.authorization = "Bearer " + smsToken;
   const response = await fetch(url, { method: "POST", headers, body: JSON.stringify({ to: phone, message: "Pesa AI: " + challenge.code + " is your verification code to reserve " + phone + " as your shop number." }) });
   if (!response.ok) throw new Error("SMS provider returned " + response.status);
   return true;
@@ -88,6 +89,17 @@ function login({ body }) {
   const business = db.getBusiness(account.businessId);
   return { cookie: auth.sessionCookieHeader(session.token), data: { business: db.sanitizeBusiness(business), account: accountView(account), subscription: db.getSubscription(business.id) } };
 }
+
+async function updateRecoveryEmail({ body, session }) {
+  if (!session || session.isAdmin) throw db.httpError(401, "Authentication required");
+  const recoveryEmail = String(body?.recoveryEmail || "").trim().toLowerCase();
+  if (recoveryEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail)) {
+    throw db.httpError(400, "Enter a valid recovery email or leave it blank");
+  }
+  const account = db.updateAccountRecoveryEmail(session.accountId, recoveryEmail || null);
+  return { data: { recoveryEmail: db.maskEmail(account.recoveryEmail) } };
+}
+
 function logout({ session }) { if (session) db.deleteSession(session.token); return { cookie: auth.sessionCookieHeader(null, { clear: true }), data: { ok: true } }; }
 function me({ session }) {
   if (!session) return { authenticated: false };
@@ -96,4 +108,4 @@ function me({ session }) {
   const business = db.getBusiness(session.businessId);
   return { authenticated: true, isAdmin: false, account: accountView(account), business: db.sanitizeBusiness(business), subscription: db.getSubscription(business.id) };
 }
-module.exports = { signup, verifySignupOtp, requestLoginOtp, verifyOtp, login, logout, me };
+module.exports = { signup, verifySignupOtp, requestLoginOtp, verifyOtp, login, updateRecoveryEmail, logout, me };
