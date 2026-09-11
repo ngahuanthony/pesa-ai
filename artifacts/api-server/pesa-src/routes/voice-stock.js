@@ -1,5 +1,6 @@
 const db = require("../db");
 const auth = require("../auth");
+const { normalizeTranscript } = require("../transcriptNormalizer");
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929";
@@ -152,16 +153,17 @@ async function claudeInterpret(transcript, products) {
 async function interpret({ params, body, session }) {
   auth.requireOwnBusiness(session, params.businessId);
   db.getBusiness(params.businessId);
-  const transcript = body && typeof body.transcript === "string" ? body.transcript.trim() : "";
-  if (!transcript) throw db.httpError(400, "transcript is required");
-  if (transcript.length > 4000) throw db.httpError(400, "transcript must be at most 4000 characters");
+  const rawTranscript = body && typeof body.transcript === "string" ? body.transcript.trim() : "";
+  if (!rawTranscript) throw db.httpError(400, "transcript is required");
+  if (rawTranscript.length > 4000) throw db.httpError(400, "transcript must be at most 4000 characters");
+  const transcript = normalizeTranscript(rawTranscript);
   const products = db.listProducts(params.businessId);
   let items;
   if (ANTHROPIC_API_KEY) {
     try { items = await claudeInterpret(transcript, products); }
     catch (_) { items = fallbackInterpret(transcript, products); }
   } else items = fallbackInterpret(transcript, products);
-  return { transcript, items };
+  return { transcript: rawTranscript, normalizedTranscript: transcript, items };
 }
 
 function confirm({ params, body, session }) {

@@ -148,3 +148,8 @@ test("colour stock cannot become negative and confirmation stays atomic", () => 
   assert.equal(db.getProduct("cable-a").stockQty, 4);
   assert.deepEqual(db.getProduct("cable-a").colorStock, [{ color: "Black", quantity: 4 }]);
 });
+const { normalizeTranscript } = require("../transcriptNormalizer");
+test("normalizes Swahili, Sheng, and common ASR variants", () => {
+  assert.equal(normalizeTranscript("Samsung fold five Five black pieces five green pieces five block pieces"), "samsung fold 5 5 black pieces 5 green pieces 5 black pieces");
+  assert.equal(normalizeTranscript("Shati tano nyeusi size L"), "shati 5 black size l");
+});
