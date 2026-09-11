@@ -69,9 +69,9 @@ async function handleIncomingWebhook(body) {
   }
 
   const from        = message.from; // customer's phone number (MSISDN)
-  const text        = message.text?.body;
+  const text        = message.text?.body || message.interactive?.button_reply?.title || message.button?.text || null;
   if (!text) {
-    // Silently ignore media/buttons/reactions for now
+    if (message.type === "audio") console.warn("[whatsapp] Audio message received but no transcription adapter is configured");
     return;
   }
 
@@ -265,6 +265,19 @@ async function updateWhatsAppProfilePicture(phoneNumberId, accessToken, imageDat
   return true;
 }
 
+async function subscribeWaba(wabaId, accessToken) {
+  if (!wabaId || !accessToken) return false;
+  const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${wabaId}/subscribed_apps`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(`WABA subscription failed (${response.status}): ${errorText.slice(0, 300)}`);
+  }
+  return true;
+}
+
 module.exports = {
   verifyWebhook,
   handleIncomingWebhook,
@@ -273,4 +286,5 @@ module.exports = {
   resolveAccessToken,
   updateWhatsAppBusinessProfile,
   updateWhatsAppProfilePicture,
+  subscribeWaba,
 };

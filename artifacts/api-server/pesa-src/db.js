@@ -592,7 +592,7 @@ function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verify
     const b = state.businesses.find((b) => b.id === businessId);
     if (!b) throw httpError(404, "Business not found");
     if (phoneNumberId !== undefined) b.whatsappPhoneNumberId = phoneNumberId || null;
-    if (phoneNumberId) b.shopNumberStatus = "meta_connected";
+    if (phoneNumberId && accessToken) b.shopNumberStatus = "meta_connected";
     if (verifyToken !== undefined) b.whatsappVerifyToken = verifyToken;
     if (wabaId !== undefined) b.whatsappWabaId = wabaId || null;
     if (displayName !== undefined) b.whatsappDisplayName = displayName || null;

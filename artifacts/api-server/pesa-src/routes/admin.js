@@ -114,44 +114,43 @@ function getPlatformDefaults({ session }) {
 async function setWhatsAppCredentials({ params, body, session }) {
   auth.requireAdmin(session);
   let { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone, profileImageDataUrl } = body || {};
+  const business = db.getBusiness(params.businessId);
 
-  // Fall back to platform-level credentials if admin left them blank
-  if (!accessToken && process.env.WHATSAPP_PLATFORM_TOKEN) {
-    accessToken = process.env.WHATSAPP_PLATFORM_TOKEN;
-  }
-  if (!wabaId && process.env.WHATSAPP_PLATFORM_WABA_ID) {
-    wabaId = process.env.WHATSAPP_PLATFORM_WABA_ID;
-  }
-
-  // Auto-derive display name from business name if admin didn't set one
-  if (!displayName) {
-    const business = db.getBusiness(params.businessId);
-    displayName = business.name;
-  }
+  // Use platform credentials and the configured platform phone as defaults.
+  // A merchant cannot become "connected" without a Phone Number ID because
+  // Meta includes that ID in every webhook event used for routing.
+  if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID;
+  if (!accessToken) accessToken = process.env.WHATSAPP_PLATFORM_TOKEN;
+  if (!wabaId) wabaId = process.env.WHATSAPP_PLATFORM_WABA_ID;
+  if (!verifyToken) verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
+  if (!waPhone) waPhone = business.pesaAiNumber || business.shopNumber || business.publicPhone || null;
+  if (!displayName) displayName = business.name;
+  if (!phoneNumberId) throw db.httpError(400, "WhatsApp Phone Number ID is required");
+  if (!accessToken) throw db.httpError(503, "WhatsApp access token is not configured");
 
   const result = db.setWhatsAppCredentials(params.businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone });
-
-  // After credentials are saved, push the business profile to Meta so
-  // customers see the correct name, category and description on WhatsApp.
-  // Do this in the background — don't let a Meta API hiccup block the response.
   let profilePictureUpdated = false;
-  if (result.connected && phoneNumberId && accessToken) {
-    const business = db.getBusiness(params.businessId);
-    await whatsapp.updateWhatsAppBusinessProfile(business, phoneNumberId, accessToken);
+  let webhookSubscribed = false;
+  if (result.connected) {
+    const savedBusiness = db.getBusiness(params.businessId);
+    await whatsapp.updateWhatsAppBusinessProfile(savedBusiness, phoneNumberId, accessToken);
     if (profileImageDataUrl) {
       try {
-        profilePictureUpdated = await whatsapp.updateWhatsAppProfilePicture(
-          phoneNumberId,
-          accessToken,
-          profileImageDataUrl
-        );
+        profilePictureUpdated = await whatsapp.updateWhatsAppProfilePicture(phoneNumberId, accessToken, profileImageDataUrl);
       } catch (err) {
         console.warn(`[whatsapp] QR profile picture update failed: ${err.message}`);
       }
     }
+    if (wabaId) {
+      try {
+        webhookSubscribed = await whatsapp.subscribeWaba(wabaId, accessToken);
+      } catch (err) {
+        console.warn(`[whatsapp] WABA subscription failed: ${err.message}`);
+      }
+    }
   }
 
-  return { ...result, profilePictureUpdated };
+  return { ...result, profilePictureUpdated, webhookSubscribed, welcomeMessageReady: Boolean(db.getBusiness(params.businessId).welcomeMessage) };
 }
 
 function getWhatsAppStatus({ params, session }) {
