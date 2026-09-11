@@ -124,7 +124,14 @@ async function setWhatsAppCredentials({ params, body, session }) {
   if (!phoneNumberId) throw db.httpError(400, "WhatsApp Phone Number ID is required");
   if (!accessToken) throw db.httpError(503, "WhatsApp access token is not configured");
 
-  const result = db.setWhatsAppCredentials(params.businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone });
+  db.setWhatsAppConnectionStatus(params.businessId, "connecting");
+  let result;
+  try {
+    result = db.setWhatsAppCredentials(params.businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone });
+  } catch (error) {
+    db.setWhatsAppConnectionStatus(params.businessId, "failed", error.message);
+    throw error;
+  }
   let profilePictureUpdated = false;
   let webhookSubscribed = false;
   let vendorAlertSent = false;
@@ -150,7 +157,9 @@ async function setWhatsAppCredentials({ params, body, session }) {
         console.warn(`[whatsapp] WABA subscription failed: ${err.message}`);
       }
     }
-    const vendorPhone = savedBusiness.personalPhone || null;
+    const setupLive = !wabaId || webhookSubscribed;
+    db.setWhatsAppConnectionStatus(params.businessId, setupLive ? "live" : "failed", setupLive ? null : "Meta WABA subscription did not complete");
+    const vendorPhone = setupLive ? (savedBusiness.personalPhone || null) : null;
     const shopDigits = String(savedBusiness.pesaAiNumber || savedBusiness.shopNumber || waPhone || "").replace(/[^0-9]/g, "").replace(/^0/, "254");
     if (vendorPhone) {
       const shareLink = shopDigits ? " https://wa.me/" + shopDigits + "?text=Hi%2C%20I%27d%20like%20to%20shop" : "";

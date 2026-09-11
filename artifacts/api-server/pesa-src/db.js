@@ -589,6 +589,18 @@ function requestWhatsAppConnection(businessId, phone) {
 }
 
 // Admin activates a business's WhatsApp by setting Meta API credentials
+function setWhatsAppConnectionStatus(businessId, status, error = null) {
+  const allowed = ["requested", "connecting", "live", "failed"];
+  if (!allowed.includes(status)) throw httpError(400, "Invalid WhatsApp connection status");
+  return mutate((state) => {
+    const business = state.businesses.find((item) => item.id === businessId);
+    if (!business) throw httpError(404, "Business not found");
+    business.whatsappConnectionStatus = status;
+    business.whatsappConnectionError = error ? String(error).slice(0, 300) : null;
+    return { connectionStatus: status, error: business.whatsappConnectionError };
+  });
+}
+
 function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone }) {
   return mutate((state) => {
     const b = state.businesses.find((b) => b.id === businessId);
@@ -1574,6 +1586,7 @@ module.exports = {
   getBusinessByWhatsappPhoneNumberId,
   updateBusiness,
   setWhatsAppCredentials,
+  setWhatsAppConnectionStatus,
   getWhatsAppStatus,
   sanitizeBusiness,
   setMpesaCredentials,
