@@ -66,17 +66,12 @@ async function initiateStkPush({ orderId, phone }) {
   const credentials = db.getMpesaCredentialsDecrypted(order.businessId);
 
   if (!credentials) {
-    // No business-owned M-Pesa connection yet — keep the order flow
-    // unblocked with the original simulated experience rather than
-    // forcing payments setup before a business can test anything.
-    const updated = db.updateOrderStatus(orderId, "paid");
-    return {
-      simulated: true,
-      checkoutRequestId: `SIM-${order.id.slice(0, 8)}`,
-      order: updated,
-      note: "This business hasn't connected their own M-Pesa paybill yet (Settings tab) — this is a simulated payment for demo purposes.",
-    };
+    const simulationAllowed = process.env.MPESA_ALLOW_SIMULATION === "true" && process.env.NODE_ENV !== "production";
+    if (!simulationAllowed) throw db.httpError(503, "M-Pesa is not connected and simulated payments are disabled");
+    return { simulated: true, checkoutRequestId: null, order, note: "Sandbox simulation only — no payment was recorded and stock was not reduced." };
   }
+
+  if (!credentials.verified) throw db.httpError(409, "M-Pesa credentials are awaiting admin verification");
 
   if (!phone) throw db.httpError(400, "Customer phone number is required to send a real M-Pesa STK push");
 
@@ -93,13 +88,13 @@ async function initiateStkPush({ orderId, phone }) {
       BusinessShortCode: credentials.shortcode,
       Password: password,
       Timestamp: timestamp,
-      TransactionType: "CustomerPayBillOnline",
+      TransactionType: credentials.method === "till" ? "CustomerBuyGoodsOnline" : "CustomerPayBillOnline",
       Amount: Math.max(1, Math.round(order.totalAmount)),
       PartyA: msisdn,
-      PartyB: credentials.shortcode,
+      PartyB: credentials.method === "till" ? credentials.tillNumber : credentials.paybillNumber || credentials.shortcode,
       PhoneNumber: msisdn,
       CallBackURL: `${callbackBase}/webhook/mpesa`,
-      AccountReference: order.id.slice(0, 12),
+      AccountReference: credentials.accountMode === "dynamic_customer_phone" ? msisdn : (credentials.accountNumber || order.id.slice(0, 12)),
       TransactionDesc: `Order ${order.id.slice(0, 8)}`,
     }),
   });
@@ -149,7 +144,10 @@ function handleStkCallback(payload) {
       if (Name === "MpesaReceiptNumber")  meta.mpesaTxnId   = String(Value);
       if (Name === "PhoneNumber")         meta.mpesaPhone   = String(Value);
     });
-    db.updateOrderStatus(order.id, "paid", meta);
+    if (meta.mpesaTxnId) {
+      const recorded = db.recordMpesaTransaction({ businessId: order.businessId, transactionId: meta.mpesaTxnId, orderId: order.id, amount: meta.mpesaAmount, phone: meta.mpesaPhone, method: "stk" });
+      if (!recorded.duplicate && order.status !== "paid" && order.status !== "fulfilled") db.updateOrderStatus(order.id, "paid", meta);
+    }
   } else {
     // Customer cancelled, entered the wrong PIN, insufficient funds, etc.
     // Leave the order as-is (not "cancelled") so the business can see it
@@ -237,9 +235,13 @@ async function handleC2BConfirmation(payload) {
   }
 
   const amount        = parseFloat(TransAmount) || 0;
+  if (!TransID || amount <= 0) { console.warn("[mpesa c2b] Missing transaction ID or invalid amount — ignoring."); return; }
   const customerPhone = normalizeMsisdn(MSISDN || "");
   const ref           = (BillRefNumber || "").trim().toLowerCase();
   const customerName  = [FirstName, LastName].filter(Boolean).join(" ") || "Customer";
+
+  const recorded = db.recordMpesaTransaction({ businessId: business.id, transactionId: TransID, amount, phone: customerPhone, method: "c2b" });
+  if (recorded.duplicate) { console.log(`[mpesa c2b] Duplicate transaction ${TransID} — ignoring.`); return; }
 
   // 2. Match to an open order ────────────────────────────────────────────────
   const pending = db.getPendingOrdersForBusiness(business.id);

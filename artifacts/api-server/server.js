@@ -109,6 +109,7 @@ router.post("/api/admin/businesses/:businessId/whatsapp", adminRoutes.setWhatsAp
 router.get("/api/admin/businesses/:businessId/whatsapp",  adminRoutes.getWhatsAppStatus);
 router.post("/api/admin/businesses/:businessId/mpesa", adminRoutes.setMpesaCredentials);
 router.get("/api/admin/businesses/:businessId/mpesa", adminRoutes.getMpesaStatus);
+router.post("/api/admin/businesses/:businessId/mpesa/verify", adminRoutes.verifyMpesa);
 router.delete("/api/admin/businesses/:businessId/mpesa", adminRoutes.disconnectMpesa);
 router.post("/api/admin/businesses/:businessId/reset-password", adminRoutes.resetPassword);
 router.post("/api/admin/businesses/:businessId/welcome-message", adminRoutes.regenerateWelcomeMessage);

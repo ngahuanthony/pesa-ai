@@ -191,11 +191,11 @@ async function setMpesaCredentials({ params, body, session }) {
   if (!fieldCrypto.isConfigured()) {
     throw db.httpError(503, "ENCRYPTION_KEY is not set on the server — add it in environment secrets before saving M-Pesa credentials.");
   }
-  const { consumerKey, consumerSecret, passkey, shortcode } = body || {};
+  const { consumerKey, consumerSecret, passkey, shortcode, method, tillNumber, paybillNumber, accountNumber, accountMode } = body || {};
   if (!consumerKey || !consumerSecret || !passkey || !shortcode) {
     throw db.httpError(400, "consumerKey, consumerSecret, passkey and shortcode are all required");
   }
-  const result = db.setMpesaCredentials(params.businessId, { consumerKey, consumerSecret, passkey, shortcode }, "admin");
+  const result = db.setMpesaCredentials(params.businessId, { consumerKey, consumerSecret, passkey, shortcode, method, tillNumber, paybillNumber, accountNumber, accountMode }, "admin");
 
   // Register C2B webhook URLs with Safaricom in the background so we're
   // notified whenever a customer manually pays to this business's paybill/till.
@@ -209,6 +209,11 @@ async function setMpesaCredentials({ params, body, session }) {
   }
 
   return result;
+}
+
+function verifyMpesa({ params, session }) {
+  auth.requireAdmin(session);
+  return db.verifyMpesaCredentials(params.businessId, "admin");
 }
 
 function getMpesaStatus({ params, session }) {
@@ -244,6 +249,6 @@ module.exports = {
   importDb,
   login, listBusinesses, chargeSubscription, deleteBusiness, suspendBusiness, unsuspendBusiness,
   getStats, getPlatformDefaults, setWhatsAppCredentials, getWhatsAppStatus,
-  setMpesaCredentials, getMpesaStatus, disconnectMpesa, resetPassword,
+  setMpesaCredentials, verifyMpesa, getMpesaStatus, disconnectMpesa, resetPassword,
   regenerateWelcomeMessage,
 };

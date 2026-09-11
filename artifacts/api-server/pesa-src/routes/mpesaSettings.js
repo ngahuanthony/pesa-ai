@@ -32,13 +32,13 @@ function connect({ params, body, session }) {
     );
   }
 
-  const { consumerKey, consumerSecret, passkey, shortcode } = body || {};
+  const { consumerKey, consumerSecret, passkey, shortcode, method, tillNumber, paybillNumber, accountNumber, accountMode } = body || {};
   if (!consumerKey || !consumerSecret || !passkey || !shortcode) {
     throw db.httpError(400, "consumerKey, consumerSecret, passkey and shortcode are all required");
   }
 
   const actor = session.accountId || "admin";
-  return { status: 201, data: db.setMpesaCredentials(params.businessId, { consumerKey, consumerSecret, passkey, shortcode }, actor) };
+  return { status: 201, data: db.setMpesaCredentials(params.businessId, { consumerKey, consumerSecret, passkey, shortcode, method, tillNumber, paybillNumber, accountNumber, accountMode }, actor) };
 }
 
 function disconnect({ params, session }) {

@@ -38,6 +38,9 @@ function emptyState() {
     reports: [],
     videoScans: [],
     stockMovements: [],
+    mpesaTransactions: [],
+    deniBook: [],
+    sales: [],
   };
 }
 
@@ -559,15 +562,19 @@ function sanitizeBusiness(business) {
 // the client once saved — only sanitizeBusiness()'s connected/masked
 // summary is.
 
-function setMpesaCredentials(businessId, { consumerKey, consumerSecret, passkey, shortcode }, actor) {
+function setMpesaCredentials(businessId, { consumerKey, consumerSecret, passkey, shortcode, method = "paybill", tillNumber = null, paybillNumber = null, accountNumber = null, accountMode = "static" }, actor) {
   return mutate((state) => {
     const business = state.businesses.find((b) => b.id === businessId);
     if (!business) throw httpError(404, "Business not found");
+    if (!["till", "paybill", "paybill_account", "sendmoney"].includes(method)) throw httpError(400, "Invalid M-Pesa method");
+    if (!["static", "dynamic_customer_phone"].includes(accountMode)) throw httpError(400, "Invalid M-Pesa account mode");
+    business.mpesa = { method, tillNumber: tillNumber || (method === "till" ? String(shortcode) : null), paybillNumber: paybillNumber || (method !== "till" ? String(shortcode) : null), accountNumber: accountNumber || null, accountMode, enabled: true, verified: false, updatedAt: now() };
     business.mpesaCredentials = {
       consumerKeyEnc: fieldCrypto.encrypt(consumerKey),
       consumerSecretEnc: fieldCrypto.encrypt(consumerSecret),
       passkeyEnc: fieldCrypto.encrypt(passkey),
       shortcode: String(shortcode),
+      verified: false,
       updatedAt: now(),
     };
     appendChangeLog(business, "mpesaCredentials", actor);
@@ -668,8 +675,34 @@ function clearMpesaCredentials(businessId, actor) {
 
 function getMpesaStatus(businessId) {
   const business = getBusiness(businessId);
-  if (!business.mpesaCredentials) return { connected: false };
-  return { connected: true, shortcodeMasked: fieldCrypto.maskShortcode(business.mpesaCredentials.shortcode) };
+  if (!business.mpesaCredentials) return { connected: false, verified: false, method: null };
+  const config = business.mpesa || {};
+  return { connected: true, verified: business.mpesaCredentials.verified === true && config.verified !== false, method: config.method || "paybill", accountMode: config.accountMode || "static", shortcodeMasked: fieldCrypto.maskShortcode(config.method === "till" ? config.tillNumber : config.paybillNumber || business.mpesaCredentials.shortcode) };
+}
+
+function verifyMpesaCredentials(businessId, actor) {
+  return mutate((state) => {
+    const business = state.businesses.find((item) => item.id === businessId);
+    if (!business || !business.mpesaCredentials) throw httpError(404, "M-Pesa credentials not found");
+    business.mpesaCredentials.verified = true;
+    business.mpesaCredentials.verifiedAt = now();
+    business.mpesa = { ...(business.mpesa || {}), enabled: true, verified: true, verifiedAt: now() };
+    appendChangeLog(business, "mpesaCredentialsVerified", actor || "admin");
+    return { connected: true, verified: true, method: business.mpesa.method || "paybill", shortcodeMasked: fieldCrypto.maskShortcode(business.mpesa.method === "till" ? business.mpesa.tillNumber : business.mpesa.paybillNumber || business.mpesaCredentials.shortcode) };
+  });
+}
+
+function recordMpesaTransaction({ businessId, transactionId, orderId = null, amount = null, phone = null, method = null }) {
+  const txId = String(transactionId || "").trim();
+  if (!txId) throw httpError(400, "M-Pesa transaction ID is required");
+  return mutate((state) => {
+    state.mpesaTransactions = Array.isArray(state.mpesaTransactions) ? state.mpesaTransactions : [];
+    const existing = state.mpesaTransactions.find((item) => item.transactionId === txId);
+    if (existing) return { duplicate: true, transaction: existing };
+    const transaction = { id: id(), businessId, transactionId: txId, orderId, amount, phone, method, createdAt: now() };
+    state.mpesaTransactions.push(transaction);
+    return { duplicate: false, transaction };
+  });
 }
 
 // Internal only — decrypts real credentials to actually call Daraja.
@@ -684,6 +717,8 @@ function getMpesaCredentialsDecrypted(businessId) {
     consumerSecret: fieldCrypto.decrypt(c.consumerSecretEnc),
     passkey: fieldCrypto.decrypt(c.passkeyEnc),
     shortcode: c.shortcode,
+    verified: c.verified === true,
+    ...(business.mpesa || {}),
   };
 }
 
@@ -1590,6 +1625,8 @@ module.exports = {
   getWhatsAppStatus,
   sanitizeBusiness,
   setMpesaCredentials,
+  verifyMpesaCredentials,
+  recordMpesaTransaction,
   clearMpesaCredentials,
   getMpesaStatus,
   getMpesaCredentialsDecrypted,
