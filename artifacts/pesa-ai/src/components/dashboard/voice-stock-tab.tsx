@@ -312,6 +312,27 @@ export function VoiceStockTab() {
     });
   };
 
+
+  const handleStartAgain = useCallback(() => {
+    stopVoiceCapture();
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    audioChunksRef.current = [];
+    transcriptRef.current = "";
+    recognitionBaseRef.current = "";
+    recordingSecondsRef.current = 0;
+    setTranscript("");
+    setDraftItems(null);
+    setConfirmedTranscript("");
+    setAudioUrl("");
+    setPlaybackUnavailable(false);
+    setSpeechError("");
+    setRecordingSeconds(0);
+    setShowSuccess(false);
+    interpretMutation.reset();
+    confirmMutation.reset();
+    toast({ title: "Ready for a retake", description: "The previous recording and analysis were cleared." });
+  }, [audioUrl, confirmMutation, interpretMutation, stopVoiceCapture, toast]);
+
   const handleUpdateItem = (id: string, updates: Partial<VoiceStockItem>) => {
     setDraftItems(prev => prev ? prev.map(item => item._id === id ? { ...item, ...updates, warning: undefined } : item) : null);
   };
@@ -538,6 +559,17 @@ export function VoiceStockTab() {
                 {isRequestingMic ? "Starting..." : isListening ? "Stop Listening" : "Speak"}
               </Button>
             )}
+            <Button
+              data-testid="button-start-again"
+              type="button"
+              variant="outline"
+              onClick={handleStartAgain}
+              disabled={interpretMutation.isPending || confirmMutation.isPending || (!transcript.trim() && !audioUrl && !draftItems)}
+              className="gap-2"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Start Again
+            </Button>
             <Button 
               data-testid="button-analyze-transcript"
               type="button" 
