@@ -415,7 +415,7 @@ function createBusiness(
     throw httpError(409, "A business with this phone number already exists");
   }
   if (pesaAiNumber && state.businesses.some((b) => b.pesaAiNumber === pesaAiNumber)) {
-    throw httpError(409, "That WhatsApp Shop number is already registered");
+    throw httpError(409, "This number is already on WhatsApp or is already registered as a shop number");
   }
 
   const business = {
