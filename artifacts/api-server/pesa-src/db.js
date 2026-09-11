@@ -790,7 +790,7 @@ function markPersonalPhoneVerified(businessId) {
     if (!business) throw httpError(404, "Business not found");
     business.personalPhoneVerified = true;
     const account = state.accounts.find((item) => item.businessId === businessId);
-    if (account) { account.personalPhoneVerified = true; account.authMethod = "phone_otp"; }
+    if (account) { account.personalPhone = account.personalPhone || business.personalPhone; account.personalPhoneVerified = true; account.authMethod = "phone_otp"; }
     return business;
   });
 }

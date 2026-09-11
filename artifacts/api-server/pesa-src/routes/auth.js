@@ -3,7 +3,9 @@ const auth = require("../auth");
 const whatsapp = require("../whatsapp");
 
 function accountView(account) {
-  return { id: account.id, email: account.email || null, recoveryEmail: account.recoveryEmail || account.email || null, personalPhone: db.maskPhone(account.personalPhone), personalPhoneVerified: Boolean(account.personalPhoneVerified), authMethod: account.authMethod || (account.passwordHash ? "legacy_email_password" : "phone_otp") };
+  const business = db.getBusiness(account.businessId);
+  const rawPersonalPhone = account.personalPhone || business.personalPhone;
+  return { id: account.id, email: account.email || null, recoveryEmail: account.recoveryEmail || account.email || null, personalPhone: db.maskPhone(rawPersonalPhone), personalPhoneVerified: Boolean(account.personalPhoneVerified), authMethod: account.authMethod || (account.passwordHash ? "legacy_email_password" : "phone_otp") };
 }
 
 function requireShopFields(body) {
