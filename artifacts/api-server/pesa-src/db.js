@@ -1593,6 +1593,69 @@ function httpError(statusCode, message) {
   return err;
 }
 
+
+function createDeniEntry(businessId, { customerPhone, customerName = null, amount, product = null, dueDate = null }, actor = "vendor") {
+  const normalizedPhone = normalizePhone(customerPhone);
+  const numericAmount = Number(amount);
+  if (!normalizedPhone || normalizedPhone.length < 10) throw httpError(400, "A valid customer phone number is required");
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) throw httpError(400, "amount must be a positive number");
+  return mutate((state) => {
+    if (!state.businesses.some((item) => item.id === businessId)) throw httpError(404, "Business not found");
+    state.deniBook = Array.isArray(state.deniBook) ? state.deniBook : [];
+    const entry = { id: id(), businessId, customerPhone: normalizedPhone, customerName: customerName ? String(customerName).trim().slice(0, 120) : null, amount: Math.round(numericAmount * 100) / 100, product: product ? String(product).trim().slice(0, 200) : null, status: "unpaid", createdAt: now(), dueDate: dueDate || null, updatedAt: now() };
+    state.deniBook.push(entry);
+    return entry;
+  });
+}
+
+function listDeniEntries(businessId, status = null) {
+  const entries = (load().deniBook || []).filter((item) => item.businessId === businessId);
+  return status ? entries.filter((item) => item.status === status) : entries;
+}
+
+function updateDeniEntry(businessId, entryId, { status, amount, dueDate }, actor = "vendor") {
+  if (status !== undefined && !["unpaid", "partial", "paid"].includes(status)) throw httpError(400, "status must be unpaid, partial, or paid");
+  if (amount !== undefined && (!Number.isFinite(Number(amount)) || Number(amount) <= 0)) throw httpError(400, "amount must be a positive number");
+  return mutate((state) => {
+    const entry = (state.deniBook || []).find((item) => item.id === entryId && item.businessId === businessId);
+    if (!entry) throw httpError(404, "Deni entry not found");
+    if (status !== undefined) entry.status = status;
+    if (amount !== undefined) entry.amount = Math.round(Number(amount) * 100) / 100;
+    if (dueDate !== undefined) entry.dueDate = dueDate || null;
+    entry.updatedAt = now();
+    return entry;
+  });
+}
+
+function getDailyReportSettings(businessId) {
+  const business = getBusiness(businessId);
+  return { enabled: business.dailyReportEnabled === true, time: business.dailyReportTime || "19:00", optIn: business.reportWhatsAppOptIn === true, reportPhoneMasked: business.reportWhatsAppOptIn === true ? maskPhone(business.personalPhone) : null, lowStockThreshold: Number.isFinite(Number(business.stockAlerts && business.stockAlerts.lowThreshold)) ? Number(business.stockAlerts.lowThreshold) : 5 };
+}
+
+function updateDailyReportSettings(businessId, { enabled, time, optIn, lowStockThreshold }, actor = "vendor") {
+  if (time !== undefined && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(time))) throw httpError(400, "time must use HH:MM format");
+  if (lowStockThreshold !== undefined && (!Number.isInteger(Number(lowStockThreshold)) || Number(lowStockThreshold) < 0 || Number(lowStockThreshold) > 100000)) throw httpError(400, "lowStockThreshold must be a whole number from 0 to 100000");
+  const patch = {};
+  if (enabled !== undefined) patch.dailyReportEnabled = Boolean(enabled);
+  if (time !== undefined) patch.dailyReportTime = String(time);
+  if (optIn !== undefined) patch.reportWhatsAppOptIn = Boolean(optIn);
+  if (lowStockThreshold !== undefined) patch.stockAlerts = { lowThreshold: Number(lowStockThreshold) };
+  return updateBusiness(businessId, patch, actor);
+}
+
+function getDailyReportData(businessId, dateString = null) {
+  const business = getBusiness(businessId);
+  const date = dateString || new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date());
+  const state = load();
+  const dayOf = (value) => value ? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date(value)) : null;
+  const orders = (state.orders || []).filter((order) => order.businessId === businessId && ["paid", "fulfilled"].includes(order.status) && dayOf((order.paymentMeta && order.paymentMeta.paidAt) || order.updatedAt || order.createdAt) === date);
+  const total = orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+  const mpesaOrders = orders.filter((order) => String(order.paymentMeta && order.paymentMeta.paymentMethod || "").startsWith("mpesa"));
+  const deni = (state.deniBook || []).filter((entry) => entry.businessId === businessId && dayOf(entry.createdAt) === date && entry.status !== "paid");
+  const threshold = Number(business.stockAlerts && business.stockAlerts.lowThreshold) || 5;
+  const lowStock = (state.products || []).filter((product) => product.businessId === businessId && Number(product.stock || 0) <= threshold).map((product) => ({ name: product.name, stock: Number(product.stock || 0) }));
+  return { date, businessName: business.name, shopNumber: business.pesaAiNumber || business.shopNumber || null, salesCount: orders.length, totalSales: total, mpesaTotal: mpesaOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0), mpesaCount: mpesaOrders.length, deniTotal: deni.reduce((sum, entry) => sum + Number(entry.amount || 0), 0), deniCount: deni.length, deni, lowStock };
+}
 module.exports = {
   DATA_FILE,
   loadRaw,
@@ -1627,6 +1690,8 @@ module.exports = {
   setMpesaCredentials,
   verifyMpesaCredentials,
   recordMpesaTransaction,
+  createDeniEntry, listDeniEntries, updateDeniEntry,
+  getDailyReportSettings, updateDailyReportSettings, getDailyReportData,
   clearMpesaCredentials,
   getMpesaStatus,
   getMpesaCredentialsDecrypted,

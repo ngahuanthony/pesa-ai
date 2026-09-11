@@ -75,6 +75,7 @@ const salesRoutes = require("./pesa-src/routes/sales");
 const mpesaSettingsRoutes = require("./pesa-src/routes/mpesaSettings");
 const adminRoutes = require("./pesa-src/routes/admin");
 const reportsRoutes = require("./pesa-src/routes/reports");
+const financeRoutes = require("./pesa-src/routes/merchant-finance");
 const videoScanRoutes    = require("./pesa-src/routes/video-scan");
 const conversationRoutes = require("./pesa-src/routes/conversations");
 const photoScanRoutes   = require("./pesa-src/routes/photo-scan");
@@ -117,6 +118,12 @@ router.post("/api/admin/businesses/:businessId/welcome-message", adminRoutes.reg
 router.post("/api/reports", reportsRoutes.create);
 router.get("/api/admin/reports", reportsRoutes.list);
 router.patch("/api/admin/reports/:id", reportsRoutes.updateStatus);
+
+router.get("/api/businesses/:businessId/deni", financeRoutes.listDeni);
+router.post("/api/businesses/:businessId/deni", financeRoutes.createDeni);
+router.patch("/api/businesses/:businessId/deni/:entryId", financeRoutes.updateDeni);
+router.get("/api/businesses/:businessId/reports/settings", financeRoutes.reportSettings);
+router.patch("/api/businesses/:businessId/reports/settings", financeRoutes.updateReportSettings);
 
 router.get("/api/businesses/:id", businessRoutes.get);
 router.put("/api/businesses/:id", businessRoutes.update);
