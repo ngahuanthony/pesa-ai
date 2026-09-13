@@ -484,6 +484,8 @@ persistence.init(db.DATA_FILE).then(() => {
     console.log("[migration] Digital Nation Accessories safe reset:", reset);
     const phoneCorrection = db.runOneTimePhoneCorrection({ shopPhone: "0792717918", personalPhone: "254722542810", personalPhoneRaw: "0722542810", shopPhoneRaw: "0792717918", whatsappNumber: "254792717918", whatsappRequestedPhone: "254792717918", migrationId: "phone-correction-shop-0792717918-2026-09-11" });
     console.log("[migration] Shop phone correction:", phoneCorrection);
+    const whatsappRoutingCorrection = db.runOneTimeWhatsAppRoutingCorrection({ businessName: "Digital Nation Accessories", phoneNumberId: process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || "1414909975031488", wabaId: process.env.WHATSAPP_PLATFORM_WABA_ID || "1051176054371123", whatsappNumber: process.env.WHATSAPP_PLATFORM_DISPLAY_NUMBER || "254792717918", migrationId: "whatsapp-routing-production-number-2026-09-13" });
+    console.log("[migration] WhatsApp production routing correction:", whatsappRoutingCorrection);
   }
   startDailyReportScheduler();
   server.listen(PORT, "0.0.0.0", () => {
