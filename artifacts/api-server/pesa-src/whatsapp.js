@@ -163,6 +163,11 @@ async function handleIncomingWebhook(body) {
 // Falls back to the global WHATSAPP_TOKEN env var if none is stored
 // (e.g. during dev/testing before admin has configured the business).
 function resolveAccessToken(business) {
+  const platformPhoneNumberId = String(process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || "1414909975031488");
+  if (String(business.whatsappPhoneNumberId || "") === platformPhoneNumberId) {
+    const platformToken = process.env.WHATSAPP_PLATFORM_TOKEN || process.env.WHATSAPP_TOKEN;
+    if (platformToken) return platformToken;
+  }
   if (business.whatsappAccessTokenEnc) {
     try {
       return fieldCrypto.decrypt(business.whatsappAccessTokenEnc);
