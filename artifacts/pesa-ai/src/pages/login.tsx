@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<OtpStep>("phone");
+  const [serviceWindow, setServiceWindow] = useState<{ required: boolean; link: string; message: string }>({ required: false, link: "", message: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -58,6 +59,7 @@ export default function LoginPage() {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Could not send your code");
+      setServiceWindow({ required: Boolean(body.serviceWindowRequired), link: body.whatsappLink || "", message: body.message || "" });
       setStep("otp");
     } catch (err: any) {
       setError(err.message);
@@ -92,6 +94,7 @@ export default function LoginPage() {
     setError("");
     setStep("phone");
     setOtp("");
+    setServiceWindow({ required: false, link: "", message: "" });
   };
 
   return (
@@ -133,11 +136,19 @@ export default function LoginPage() {
             </form>
           ) : (
             <form onSubmit={verifyOtp} className="mt-7 space-y-5">
-              <p className="text-sm text-slate-600">Enter the six-digit code sent to {maskPhone(phone)}.</p>
+              {serviceWindow.required ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+                  <p>{serviceWindow.message}</p>
+                  <a href={serviceWindow.link} target="_blank" rel="noreferrer" className="mt-3 block rounded-xl bg-[#25D366] px-4 py-3 text-center font-bold text-white">Open WhatsApp and send LOGIN</a>
+                  <p className="mt-3 text-xs text-emerald-800">Return here after the code arrives.</p>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600">Enter the six-digit code sent to {maskPhone(phone)}.</p>
+              )}
               <input inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" className="w-full rounded-xl border px-4 py-3.5 text-center text-2xl tracking-[0.5em]" required />
               {error && <div className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
               <button type="submit" disabled={busy || otp.length !== 6} className="w-full rounded-xl bg-[#0a4a3a] py-3.5 text-sm font-bold text-white disabled:opacity-60">{busy ? "Checking code…" : "Log in"}</button>
-              <button type="button" onClick={() => { setStep("phone"); setOtp(""); setError(""); }} className="w-full text-sm font-semibold text-primary underline">Use a different number</button>
+              <button type="button" onClick={() => { setStep("phone"); setOtp(""); setError(""); setServiceWindow({ required: false, link: "", message: "" }); }} className="w-full text-sm font-semibold text-primary underline">Use a different number</button>
             </form>
           )}
 
