@@ -505,7 +505,19 @@ function getBusiness(businessId) {
 }
 
 function getBusinessByWhatsappPhoneNumberId(phoneNumberId) {
-  return load().businesses.find((b) => b.whatsappPhoneNumberId === phoneNumberId);
+  const incomingId = String(phoneNumberId || "");
+  const businesses = load().businesses || [];
+  const exact = businesses.find((b) => String(b.whatsappPhoneNumberId || "") === incomingId);
+  if (exact) return exact;
+
+  // Self-heal routing for the platform number when persisted data still has
+  // an older Meta test-number ID. Restrict the fallback to one unambiguous
+  // business whose saved WhatsApp number matches the platform display number.
+  const platformPhoneNumberId = String(process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || "1414909975031488");
+  if (incomingId !== platformPhoneNumberId) return undefined;
+  const platformPhone = normalizePhone(process.env.WHATSAPP_PLATFORM_DISPLAY_NUMBER || "254792717918");
+  const matches = businesses.filter((b) => [b.whatsappNumber, b.whatsappRequestedPhone, b.pesaAiNumber, b.shopPhone].some((value) => normalizePhone(value) === platformPhone));
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 function updateBusiness(businessId, patch, actor) {
@@ -653,9 +665,11 @@ function getWhatsAppStatus(businessId) {
 // Vendor view: only shows status safe for the business owner to see
 function getVendorWhatsAppStatus(businessId) {
   const b = getBusiness(businessId);
-  const digits = String(b.pesaAiNumber || b.shopNumber || b.whatsappRequestedPhone || "").replace(/[^0-9]/g, "").replace(/^0/, "254");
+  // A physical shop/unit number must never become a wa.me destination.
+  const connectedPhone = b.whatsappNumber || b.whatsappRequestedPhone || b.pesaAiNumber || b.shopPhone || null;
+  const digits = normalizePhone(connectedPhone);
   return {
-    requestedPhone: b.whatsappRequestedPhone || null,
+    requestedPhone: connectedPhone,
     connectionStatus: b.whatsappConnectionStatus || null,
     connected: b.whatsappConnectionStatus === "live" || Boolean(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc),
     displayName: b.whatsappDisplayName || null,
@@ -1707,6 +1721,23 @@ function markDailyReportSent(businessId, date) {
   });
 }
 
+function runOneTimeWhatsAppRoutingCorrection({ businessName, phoneNumberId, wabaId, whatsappNumber, migrationId }) {
+  return mutate((state) => {
+    state.migrations = state.migrations && typeof state.migrations === "object" ? state.migrations : {};
+    if (state.migrations[migrationId]) return { applied: false, reason: "already-applied", businessId: state.migrations[migrationId].businessId };
+    const matches = (state.businesses || []).filter((business) => business.name === businessName);
+    if (matches.length !== 1) throw new Error("WhatsApp routing correction expected exactly one business named " + businessName + ", found " + matches.length);
+    const business = matches[0];
+    business.whatsappPhoneNumberId = String(phoneNumberId);
+    business.whatsappWabaId = String(wabaId);
+    business.whatsappNumber = normalizePhone(whatsappNumber);
+    business.whatsappRequestedPhone = normalizePhone(whatsappNumber);
+    if (business.whatsappAccessTokenEnc) business.whatsappConnectionStatus = "live";
+    state.migrations[migrationId] = { appliedAt: now(), businessId: business.id, fields: ["whatsappPhoneNumberId", "whatsappWabaId", "whatsappNumber", "whatsappRequestedPhone"] };
+    return { applied: true, businessId: business.id };
+  });
+}
+
 function runOneTimePhoneCorrection({ shopPhone, personalPhone, personalPhoneRaw, shopPhoneRaw, whatsappNumber, whatsappRequestedPhone, migrationId }) {
   return mutate((state) => {
     state.migrations = state.migrations && typeof state.migrations === "object" ? state.migrations : {};
@@ -1729,6 +1760,7 @@ module.exports = {
   mutate,
   runOneTimeSafeReset,
   runOneTimePhoneCorrection,
+  runOneTimeWhatsAppRoutingCorrection,
   restoreDeletedBusinessForSingleOrphanedAccount,
   repairSingleOrphanedAccount,
   id,
