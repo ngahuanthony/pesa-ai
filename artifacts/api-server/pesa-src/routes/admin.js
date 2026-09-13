@@ -160,7 +160,7 @@ async function setWhatsAppCredentials({ params, body, session }) {
     const setupLive = !wabaId || webhookSubscribed;
     db.setWhatsAppConnectionStatus(params.businessId, setupLive ? "live" : "failed", setupLive ? null : "Meta WABA subscription did not complete");
     const vendorPhone = setupLive ? (savedBusiness.personalPhone || null) : null;
-    const shopDigits = String(savedBusiness.pesaAiNumber || savedBusiness.shopNumber || waPhone || "").replace(/[^0-9]/g, "").replace(/^0/, "254");
+    const shopDigits = db.normalizePhone(savedBusiness.whatsappNumber || savedBusiness.whatsappRequestedPhone || savedBusiness.pesaAiNumber || savedBusiness.shopPhone || waPhone || "");
     if (vendorPhone) {
       const shareLink = shopDigits ? " https://wa.me/" + shopDigits + "?text=Hi%2C%20I%27d%20like%20to%20shop" : "";
       try {
