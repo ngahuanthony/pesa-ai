@@ -113,6 +113,25 @@ async function handleIncomingWebhook(body) {
 
   const contactName = value.contacts?.[0]?.profile?.name;
   const accessToken = resolveAccessToken(business);
+  const normalizedText = String(text || "").trim().toLowerCase();
+
+  if (normalizedText === "login") {
+    const account = db.getAccountByPersonalPhone(from);
+    if (!account) {
+      await sendMessage(phoneNumberId, from, "We could not start login for this number. Send LOGIN from the personal WhatsApp number registered to your Pesa AI shop.", accessToken);
+      return;
+    }
+    try {
+      const challenge = db.createOtpChallenge(from, "login", { source: "whatsapp_service_window" });
+      const sent = await sendMessage(phoneNumberId, from, "Pesa AI login code: " + challenge.code + ". It expires in 5 minutes. Do not share this code.", accessToken);
+      if (!sent) console.error("[whatsapp] Could not send service-window login OTP to " + db.maskPhone(from));
+    } catch (error) {
+      const status = error?.status || error?.statusCode;
+      const reply = status === 429 ? "Too many login codes were requested. Please wait and try again later." : "We could not create a login code right now. Please try again shortly.";
+      await sendMessage(phoneNumberId, from, reply, accessToken);
+    }
+    return;
+  }
 
   if (buttonId) { await handleButtonAction({ business, phoneNumberId, from, buttonId, accessToken }); return; }
   if (business.personalPhone && normalizeIncomingPhone(from) === normalizeIncomingPhone(business.personalPhone) && String(text).trim().toLowerCase() === "deni") {
