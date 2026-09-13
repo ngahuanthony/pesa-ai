@@ -149,7 +149,62 @@ test("colour stock cannot become negative and confirmation stays atomic", () => 
   assert.deepEqual(db.getProduct("cable-a").colorStock, [{ color: "Black", quantity: 4 }]);
 });
 const { normalizeTranscript } = require("../transcriptNormalizer");
+const { fallbackInterpret } = require("../universalParser");
 test("normalizes Swahili, Sheng, and common ASR variants", () => {
   assert.equal(normalizeTranscript("Samsung fold five Five black pieces five green pieces five block pieces"), "samsung fold 5 5 black pieces 5 green pieces 5 black pieces");
-  assert.equal(normalizeTranscript("Shati tano nyeusi size L"), "shati 5 black size l");
+  assert.equal(normalizeTranscript("Shati tano nyeusi size L"), "shirt 5 black size l");
+});
+
+test("universal parser separates similar phone models and repeated colour variants", () => {
+  const business = { id: "phones", category: "phone_accessories" };
+  const products = [
+    { id: "fold-5", businessId: "phones", name: "Samsung Fold 5", stockQty: 0 },
+    { id: "fold-6", businessId: "phones", name: "Samsung Fold 6", stockQty: 0 },
+  ];
+  const items = fallbackInterpret(
+    "Samsung fold five black 5 green 5 block 5 fold six blue 10",
+    business,
+    products,
+  );
+  assert.deepEqual(items.map((item) => [item.productId, item.color, item.quantity, item.action]), [
+    ["fold-5", "black", 5, "receive"],
+    ["fold-5", "green", 5, "receive"],
+    ["fold-5", "black", 5, "receive"],
+    ["fold-6", "blue", 10, "receive"],
+  ]);
+  assert.ok(items.every((item) => item.confidenceLevel !== "blocked"));
+});
+
+test("universal parser applies category-specific size and unit attributes", () => {
+  const mitumba = fallbackInterpret(
+    "Shati tano nyeusi size L",
+    { id: "clothes", category: "mitumba" },
+    [{ id: "shirt", businessId: "clothes", name: "Shati", stockQty: 2 }],
+  );
+  assert.deepEqual(
+    [mitumba[0].productId, mitumba[0].color, mitumba[0].quantity, mitumba[0].size],
+    ["shirt", "black", 5, "L"],
+  );
+
+  const hardware = fallbackInterpret(
+    "Misumari kg tano inch mbili",
+    { id: "hardware", category: "hardware" },
+    [{ id: "nails", businessId: "hardware", name: "Misumari", stockQty: 10 }],
+  );
+  assert.deepEqual(
+    [hardware[0].productId, hardware[0].quantity, hardware[0].unit, hardware[0].size],
+    ["nails", 5, "kg", "2 inch"],
+  );
+});
+
+test("confirmation request IDs prevent duplicate stock updates", () => {
+  const first = db.confirmStockMovements("business-a", [
+    { productId: "milk-a", action: "receive", quantity: 5, unit: "packets" },
+  ], { requestId: "voice-request-1", accountId: "account-business-a" });
+  const repeated = db.confirmStockMovements("business-a", [
+    { productId: "milk-a", action: "receive", quantity: 5, unit: "packets" },
+  ], { requestId: "voice-request-1", accountId: "account-business-a" });
+  assert.equal(first.duplicate, undefined);
+  assert.equal(repeated.duplicate, true);
+  assert.equal(db.getProduct("milk-a").stockQty, 15);
 });

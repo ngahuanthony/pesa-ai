@@ -56,7 +56,8 @@ import type {
   VoiceStockConfirmInput,
   VoiceStockConfirmResult,
   VoiceStockInterpretInput,
-  VoiceStockInterpretation
+  VoiceStockInterpretation,
+  VoiceStockTranscription
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1794,6 +1795,46 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getInterpretVoiceStockMutationOptions(options));
     }
+
+export const getTranscribeVoiceStockUrl = (businessId: string,) => {
+  return `/api/businesses/${businessId}/voice-stock/transcribe`
+}
+
+export const transcribeVoiceStock = async (businessId: string,
+    transcribeVoiceStockBody: Blob, options?: Parameters<typeof customFetch>[1]): Promise<VoiceStockTranscription> => {
+  return customFetch<VoiceStockTranscription>(getTranscribeVoiceStockUrl(businessId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': transcribeVoiceStockBody.type || 'application/octet-stream', ...options?.headers },
+    body: transcribeVoiceStockBody
+  }
+);}
+
+export const getTranscribeVoiceStockMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transcribeVoiceStock>>, TError,{businessId: string;data: BodyType<Blob>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof transcribeVoiceStock>>, TError,{businessId: string;data: BodyType<Blob>}, TContext> => {
+  const mutationKey = ['transcribeVoiceStock'];
+  const {mutation: mutationOptions, request: requestOptions} = options ?
+    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+    options : {...options, mutation: {...options.mutation, mutationKey}}
+    : {mutation: { mutationKey, }, request: undefined};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof transcribeVoiceStock>>, {businessId: string;data: BodyType<Blob>}> = (props) => {
+    const {businessId,data} = props ?? {};
+    return transcribeVoiceStock(businessId,data,requestOptions)
+  }
+  return { mutationFn, ...mutationOptions }
+}
+
+export type TranscribeVoiceStockMutationResult = NonNullable<Awaited<ReturnType<typeof transcribeVoiceStock>>>
+export type TranscribeVoiceStockMutationBody = BodyType<Blob>
+export type TranscribeVoiceStockMutationError = ErrorType<unknown>
+
+export const useTranscribeVoiceStock = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transcribeVoiceStock>>, TError,{businessId: string;data: BodyType<Blob>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationResult<Awaited<ReturnType<typeof transcribeVoiceStock>>, TError, {businessId: string;data: BodyType<Blob>}, TContext> => {
+  return useMutation(getTranscribeVoiceStockMutationOptions(options));
+}
 
 export const getConfirmVoiceStockUrl = (businessId: string,) => {
 

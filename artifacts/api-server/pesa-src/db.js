@@ -1205,12 +1205,29 @@ function ensureStockMovements(state) {
   return state.stockMovements;
 }
 
-function confirmStockMovements(businessId, items, { transcript, accountId } = {}) {
+function confirmStockMovements(businessId, items, { transcript, accountId, requestId } = {}) {
   return mutate((state) => {
     if (!state.businesses.some((business) => business.id === businessId)) {
       throw httpError(404, "Business not found");
     }
     ensureStockMovements(state);
+    const normalizedRequestId = requestId == null ? null : String(requestId).trim();
+    if (normalizedRequestId && normalizedRequestId.length > 100) {
+      throw httpError(400, "Request ID must be at most 100 characters");
+    }
+    if (normalizedRequestId) {
+      const previous = state.stockMovements.filter((movement) =>
+        movement.businessId === businessId && movement.requestId === normalizedRequestId
+      );
+      if (previous.length) {
+        const productIds = [...new Set(previous.map((movement) => movement.productId))];
+        return {
+          products: state.products.filter((product) => product.businessId === businessId && productIds.includes(product.id)),
+          movements: previous,
+          duplicate: true,
+        };
+      }
+    }
     const products = [];
     const movements = [];
 
@@ -1232,8 +1249,10 @@ function confirmStockMovements(businessId, items, { transcript, accountId } = {}
         throw httpError(400, "Movement unit must be at most 50 characters");
       }
       const requestedColor = item.color == null ? "" : String(item.color).trim();
+      const requestedSize = item.size == null ? "" : String(item.size).trim();
       if (requestedColor.length > 50) throw httpError(400, "Colour must be at most 50 characters");
       if (item.color != null && !requestedColor) throw httpError(400, "Colour cannot be blank");
+      if (requestedSize.length > 50) throw httpError(400, "Size must be at most 50 characters");
 
       const existingColors = stagedColors.has(product.id)
         ? stagedColors.get(product.id)
@@ -1273,7 +1292,7 @@ function confirmStockMovements(businessId, items, { transcript, accountId } = {}
       if (effectiveColor) stagedColors.set(product.id, nextColors);
       movements.push({
         product, item, quantity, delta, previousStock: current, proposedStock: next,
-        color: requestedColor || null, colorPreviousStock, colorResultingStock,
+        color: requestedColor || null, size: requestedSize || null, colorPreviousStock, colorResultingStock,
         colorStock: effectiveColor ? nextColors : null,
       });
     }
@@ -1291,6 +1310,7 @@ function confirmStockMovements(businessId, items, { transcript, accountId } = {}
         quantity: entry.quantity,
         unit: entry.item.unit ? String(entry.item.unit) : "units",
         color: entry.color,
+        size: entry.size,
         colorPreviousStock: entry.colorPreviousStock,
         colorResultingStock: entry.colorResultingStock,
         delta: entry.delta,
@@ -1298,6 +1318,7 @@ function confirmStockMovements(businessId, items, { transcript, accountId } = {}
         resultingStock: entry.proposedStock,
         transcript: transcript ? String(transcript) : null,
         accountId: accountId || null,
+        requestId: normalizedRequestId,
         createdAt: now(),
       };
       state.stockMovements.push(movement);

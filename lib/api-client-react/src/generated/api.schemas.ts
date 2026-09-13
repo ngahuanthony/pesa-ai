@@ -75,6 +75,14 @@ export const VoiceStockItemAction = {
   adjustment: 'adjustment',
 } as const;
 
+export type VoiceStockItemConfidenceLevel = typeof VoiceStockItemConfidenceLevel[keyof typeof VoiceStockItemConfidenceLevel];
+
+export const VoiceStockItemConfidenceLevel = {
+  high: 'high',
+  review: 'review',
+  blocked: 'blocked',
+} as const;
+
 export interface VoiceStockItem {
   productId: string | null;
   productName: string | null;
@@ -82,6 +90,9 @@ export interface VoiceStockItem {
   quantity: number | null;
   unit: string;
   color?: string | null;
+  size?: string | null;
+  evidence?: string | null;
+  confidenceLevel: VoiceStockItemConfidenceLevel;
   colorCurrentStock?: number | null;
   colorProposedStock?: number | null;
   confidence: number;
@@ -92,7 +103,20 @@ export interface VoiceStockItem {
 
 export interface VoiceStockInterpretation {
   transcript: string;
+  normalizedTranscript: string;
   items: VoiceStockItem[];
+}
+
+export type VoiceStockTranscriptionProvider = typeof VoiceStockTranscriptionProvider[keyof typeof VoiceStockTranscriptionProvider];
+
+export const VoiceStockTranscriptionProvider = {
+  openai: 'openai',
+} as const;
+
+export interface VoiceStockTranscription {
+  transcript: string;
+  normalizedTranscript: string;
+  provider: VoiceStockTranscriptionProvider;
 }
 
 export type VoiceStockConfirmInputItemsItemAction = typeof VoiceStockConfirmInputItemsItemAction[keyof typeof VoiceStockConfirmInputItemsItemAction];
@@ -115,11 +139,15 @@ export type VoiceStockConfirmInputItemsItem = {
   unit?: string;
   /** @maxLength 50 */
   color?: string | null;
+  /** @maxLength 50 */
+  size?: string | null;
 };
 
 export interface VoiceStockConfirmInput {
   /** @maxLength 4000 */
   transcript?: string;
+  /** @maxLength 100 */
+  requestId?: string;
   /** @minItems 1 */
   items: VoiceStockConfirmInputItemsItem[];
 }
@@ -144,6 +172,8 @@ export interface StockMovement {
   quantity: number;
   unit: string;
   color?: string | null;
+  size?: string | null;
+  requestId?: string | null;
   colorPreviousStock?: number | null;
   colorResultingStock?: number | null;
   delta: number;

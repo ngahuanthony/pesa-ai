@@ -262,12 +262,15 @@ function readBody(req) {
 
 // Reads the raw body as a Buffer — used for the WhatsApp webhook so we can
 // validate X-Hub-Signature-256 before parsing JSON.
-function readRawBody(req) {
+function readRawBody(req, maxBytes = 2_000_000) {
   return new Promise((resolve, reject) => {
     const chunks = [];
+    let total = 0;
     req.on("data", (c) => {
-      chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
-      if (chunks.reduce((n, b) => n + b.length, 0) > 2_000_000) {
+      const chunk = Buffer.isBuffer(c) ? c : Buffer.from(c);
+      total += chunk.length;
+      chunks.push(chunk);
+      if (total > maxBytes) {
         reject(db.httpError(413, "Request body too large"));
         req.destroy();
       }
@@ -307,6 +310,31 @@ function parseQuery(queryString) {
 const server = http.createServer(async (req, res) => {
   const parsed   = url.parse(req.url);
   const pathname = parsed.pathname;
+
+  // ── Voice stock audio transcription ──────────────────────────────────
+  // Audio is processed in memory and is never written to disk or storage.
+  const voiceUploadMatch = req.method === "POST" &&
+    pathname.match(/^\/api\/businesses\/([^/]+)\/voice-stock\/transcribe$/);
+  if (voiceUploadMatch) {
+    const businessId = voiceUploadMatch[1];
+    try {
+      const session = auth.resolveSession(req);
+      auth.requireOwnBusiness(session, businessId);
+      const contentType = String(req.headers["content-type"] || "audio/webm").split(";")[0];
+      if (!["audio/webm", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/wav", "audio/x-m4a"].includes(contentType)) {
+        sendJson(res, 415, { error: "Unsupported audio format" });
+        return;
+      }
+      const audioBuffer = await readRawBody(req, 15 * 1024 * 1024);
+      const result = await voiceStockRoutes.transcribeAudio(audioBuffer, contentType, db.getBusiness(businessId));
+      sendJson(res, 200, result);
+    } catch (err) {
+      const status = err.statusCode || 500;
+      console.error("[voice-stock] transcription error:", err.message);
+      sendJson(res, status, { error: err.message || "Voice transcription failed" });
+    }
+    return;
+  }
 
   // ── Video upload ──────────────────────────────────────────────────────
   // Handled before the generic router so we can read raw binary bytes

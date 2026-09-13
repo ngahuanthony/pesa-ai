@@ -512,6 +512,35 @@ paths:
               schema:
                 $ref: "#/components/schemas/VoiceStockInterpretation"
 
+  /businesses/{businessId}/voice-stock/transcribe:
+    post:
+      operationId: transcribeVoiceStock
+      tags: [voice-stock]
+      parameters:
+        - $ref: "#/components/parameters/BusinessId"
+      requestBody:
+        required: true
+        content:
+          audio/webm:
+            schema:
+              type: string
+              format: binary
+          audio/mp4:
+            schema:
+              type: string
+              format: binary
+          audio/mpeg:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Audio transcription. Audio is processed in memory and not retained.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceStockTranscription"
+
   /businesses/{businessId}/voice-stock/confirm:
     post:
       operationId: confirmVoiceStock
@@ -851,6 +880,18 @@ components:
           maxLength: 4000
       required: [transcript]
 
+    VoiceStockTranscription:
+      type: object
+      properties:
+        transcript:
+          type: string
+        normalizedTranscript:
+          type: string
+        provider:
+          type: string
+          enum: [openai]
+      required: [transcript, normalizedTranscript, provider]
+
     VoiceStockItem:
       type: object
       properties:
@@ -872,6 +913,15 @@ components:
         color:
           type: string
           nullable: true
+        size:
+          type: string
+          nullable: true
+        confidenceLevel:
+          type: string
+          enum: [high, review, blocked]
+        evidence:
+          type: string
+          nullable: true
         colorCurrentStock:
           type: number
           nullable: true
@@ -889,18 +939,20 @@ components:
         warning:
           type: string
           nullable: true
-      required: [productId, productName, action, quantity, unit, confidence, currentStock, proposedStock]
+      required: [productId, productName, action, quantity, unit, confidence, confidenceLevel, currentStock, proposedStock]
 
     VoiceStockInterpretation:
       type: object
       properties:
         transcript:
           type: string
+        normalizedTranscript:
+          type: string
         items:
           type: array
           items:
             $ref: "#/components/schemas/VoiceStockItem"
-      required: [transcript, items]
+      required: [transcript, normalizedTranscript, items]
 
     VoiceStockConfirmInput:
       type: object
@@ -908,6 +960,9 @@ components:
         transcript:
           type: string
           maxLength: 4000
+        requestId:
+          type: string
+          maxLength: 100
         items:
           type: array
           minItems: 1
@@ -926,6 +981,10 @@ components:
                 type: string
                 maxLength: 50
               color:
+                type: string
+                nullable: true
+                maxLength: 50
+              size:
                 type: string
                 nullable: true
                 maxLength: 50
@@ -951,6 +1010,12 @@ components:
         unit:
           type: string
         color:
+          type: string
+          nullable: true
+        size:
+          type: string
+          nullable: true
+        requestId:
           type: string
           nullable: true
         colorPreviousStock:
