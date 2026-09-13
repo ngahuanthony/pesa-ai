@@ -63,8 +63,25 @@ async function requestLoginOtp({ body }) {
   if (!phone) throw db.httpError(400, "Personal WhatsApp number is required");
   const account = db.getAccountByPersonalPhone(phone);
   if (!account) throw db.httpError(404, "No shop was found for that WhatsApp number");
-  const challenge = await sendPersonalOtp(phone, "login");
-  return { data: { verificationRequired: true, phone: db.maskPhone(challenge.phone), expiresAt: challenge.expiresAt } };
+  try {
+    const challenge = await sendPersonalOtp(phone, "login");
+    return { data: { verificationRequired: true, phone: db.maskPhone(challenge.phone), expiresAt: challenge.expiresAt, serviceWindowRequired: false } };
+  } catch (error) {
+    const message = String(error?.message || "");
+    if (!message.includes("132001") && !message.toLowerCase().includes("template name does not exist")) throw error;
+    const displayNumber = String(process.env.WHATSAPP_DISPLAY_NUMBER || "254792717918").replace(/\D/g, "");
+    return {
+      status: 202,
+      data: {
+        verificationRequired: true,
+        serviceWindowRequired: true,
+        phone: db.maskPhone(phone),
+        whatsappNumber: displayNumber,
+        whatsappLink: "https://wa.me/" + displayNumber + "?text=LOGIN",
+        message: "Send LOGIN from your registered WhatsApp number. Pesa AI will reply with a five-minute login code.",
+      },
+    };
+  }
 }
 
 async function verifyOtp({ body }) {
