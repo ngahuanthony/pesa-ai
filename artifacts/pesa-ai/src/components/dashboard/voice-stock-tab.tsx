@@ -62,8 +62,8 @@ export function VoiceStockTab() {
     if (!activeRecorder || activeRecorder.state === "inactive") return;
     setRecording(false);
     if (timer.current) clearInterval(timer.current);
-    stream.current?.getTracks().forEach((track) => track.stop());
-    stream.current = null;
+    // Safari needs the MediaRecorder to finalize the MP4 container before its
+    // tracks are stopped. Stopping tracks first can send Groq an invalid file.
     activeRecorder.stop();
   }, []);
 
@@ -84,6 +84,9 @@ export function VoiceStockTab() {
       recorder.current = next;
       next.ondataavailable = (event) => { if (event.data.size) chunks.current.push(event.data); };
       next.onstop = () => {
+        // Finalize the container first, then release the input tracks.
+        liveStream.getTracks().forEach((track) => track.stop());
+        if (stream.current === liveStream) stream.current = null;
         const blob = new Blob(chunks.current, { type: next.mimeType || mimeType || "audio/webm" });
         chunks.current = [];
         if (!blob.size) { setMicError("No audio was captured. Hold the button while speaking, then release it."); return; }
