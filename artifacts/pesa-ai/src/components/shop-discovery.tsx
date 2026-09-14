@@ -10,7 +10,6 @@ type PublicShop = {
   imageUrl: string | null;
   slug: string;
   url: string;
-  whatsappUrl: string | null;
 };
 
 function extractShopSlug(value: string): string | null {
@@ -29,8 +28,6 @@ function ShopSearch() {
   const [state, setState] = useState<"idle" | "loading" | "empty" | "error">("idle");
   const [, setLocation] = useLocation();
 
-  function openShop(shop: PublicShop) { if (shop.whatsappUrl) { window.location.assign(shop.whatsappUrl); return; } setLocation(`/shop/${encodeURIComponent(shop.slug)}`); }
-
   async function search(event: React.FormEvent) {
     event.preventDefault();
     setState("loading");
@@ -43,7 +40,7 @@ function ShopSearch() {
       setShops(foundShops);
       setState(foundShops.length ? "idle" : "empty");
       if (foundShops.length === 1) {
-        openShop(foundShops[0]);
+        setLocation(`/shop/${encodeURIComponent(foundShops[0].slug)}`);
       }
     } catch {
       setState("error");
@@ -59,7 +56,7 @@ function ShopSearch() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#25a85a]">Find a shop</p>
           <h2 className="mt-1 text-2xl font-extrabold text-[#0a4a3a]">Search by the shop number</h2>
-          <p className="mt-2 text-sm leading-relaxed text-slate-600">Use the public WhatsApp number, such as 0792 717 918 or +254 792 717 918. We will open the shop WhatsApp so Pesa AI can help you.</p>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600">Use the public WhatsApp number, such as 07XX XX XX XX.</p>
         </div>
       </div>
       <form onSubmit={search} className="mt-5 flex flex-col gap-3 sm:flex-row">
@@ -70,7 +67,7 @@ function ShopSearch() {
           onChange={(event) => setPhone(event.target.value)}
           inputMode="tel"
           autoComplete="tel"
-          placeholder="0792 717 918"
+          placeholder="07XX XX XX XX"
           className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-[#25a85a] focus:ring-2"
         />
         <button type="submit" disabled={state === "loading"} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0a4a3a] px-5 py-3 text-sm font-bold text-white disabled:opacity-60">
@@ -83,7 +80,7 @@ function ShopSearch() {
       {shops.length > 0 && (
         <div className="mt-5 grid gap-3">
           {shops.map((shop) => (
-            <button key={shop.slug} type="button" onClick={() => openShop(shop)} className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-[#25a85a] hover:shadow-sm">
+            <button key={shop.slug} type="button" onClick={() => setLocation(`/shop/${encodeURIComponent(shop.slug)}`)} className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-[#25a85a] hover:shadow-sm">
               {shop.imageUrl || shop.logoUrl ? <img src={shop.imageUrl || shop.logoUrl || ""} alt="" className="h-12 w-12 rounded-xl object-cover" /> : <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#e7f7ed] text-lg font-extrabold text-[#0a4a3a]">{shop.name.slice(0, 1).toUpperCase()}</span>}
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-bold text-[#0a4a3a]">{shop.name}</span>
