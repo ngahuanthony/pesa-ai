@@ -126,13 +126,14 @@ export function VoiceStockTab() {
   const photoTargetId = useRef<string | null>(null);
   const confirming = confirm.isPending;
 
-  const interpretText = useCallback((text: string) => {
+  const interpretText = useCallback((text: string, append = false) => {
     if (!text.trim() || !businessId) return;
     interpret.mutate({ businessId, data: { transcript: text.trim() } }, {
       onSuccess: (result) => {
-        setTranscript(result.normalizedTranscript || result.transcript);
+        const nextTranscript = result.normalizedTranscript || result.transcript;
+        setTranscript((currentTranscript) => append && currentTranscript ? `${currentTranscript}\n${nextTranscript}` : nextTranscript);
         confirmationRequestId.current = crypto.randomUUID();
-        setDraft(result.items.map((item) => {
+        const nextRows = result.items.map((item) => {
           const suggestedProduct = item.productId ? null : findSafeProductMatch(item.productName, products);
           const resolvedProductId = item.productId || suggestedProduct?.id || null;
           const autoResolvedMatch = !item.productId && Boolean(suggestedProduct) &&
@@ -148,7 +149,8 @@ export function VoiceStockTab() {
             warning: autoResolvedMatch ? null : item.warning,
             imageUrl: existingVariant?.imageUrl || null,
           };
-        }));
+        });
+        setDraft((currentRows) => append ? [...(currentRows || []), ...nextRows] : nextRows);
         if (!result.items.length) toast({ title: "Nothing to review", description: "Try saying a product, quantity, and action." });
       },
       onError: () => toast({ title: "Could not understand that", description: "Check the transcript and try again.", variant: "destructive" }),
@@ -264,7 +266,7 @@ export function VoiceStockTab() {
         // to transcription only creates a confusing provider error.
         if (elapsed < MIN_RECORDING_MS || blob.size < MIN_AUDIO_BYTES) { setMicError(""); return; }
         transcribe.mutate({ businessId, data: blob }, {
-          onSuccess: (result) => { setLastProvider(result.provider); setTranscript(result.normalizedTranscript || result.transcript); interpretText(result.normalizedTranscript || result.transcript); },
+          onSuccess: (result) => { setLastProvider(result.provider); interpretText(result.normalizedTranscript || result.transcript, true); },
           onError: (error) => {
             const detail = error instanceof Error ? error.message.replace(/^HTTP \d+[^:]*:\s*/, "") : "The transcription service returned an unexpected error.";
             setMicError(`Audio could not be transcribed: ${detail}`);
