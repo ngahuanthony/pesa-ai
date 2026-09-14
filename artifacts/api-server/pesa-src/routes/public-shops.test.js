@@ -80,7 +80,7 @@ test("returns only photographed matching variants for on-demand search", () => {
   assert.equal(result.variants.length, 1);
   assert.equal(result.variants[0].variant, "Orange");
   assert.equal(result.variants[0].stockQty, 3);
-  assert.match(result.variants[0].imageUrl, /iphone-16_orange\\.webp$/);
+  assert.match(result.variants[0].imageUrl, /iphone-16_orange\.webp$/);
 });
 
 test("does not expose unpublished or personal-number businesses", () => {
