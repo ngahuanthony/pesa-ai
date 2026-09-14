@@ -11,6 +11,8 @@ import {
 } from "@workspace/api-client-react";
 
 type Draft = VoiceStockItem & { id: string; imageUrl?: string | null; imageUploading?: boolean; imageError?: string };
+const MIN_RECORDING_MS = 800;
+const MIN_AUDIO_BYTES = 1024;
 const actions: Record<string, { label: string; short: string; tone: string }> = {
   receive: { label: "Receive / Add", short: "ADD", tone: "text-emerald-800 bg-emerald-100 border-emerald-200" },
   sell: { label: "Sell / Deduct", short: "SELL", tone: "text-amber-900 bg-amber-100 border-amber-200" },
@@ -57,6 +59,7 @@ export function VoiceStockTab() {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const confirmationRequestId = useRef(crypto.randomUUID());
   const pressActive = useRef(false);
+  const recordingStartedAt = useRef<number | null>(null);
   const photoInput = useRef<HTMLInputElement | null>(null);
   const photoTargetId = useRef<string | null>(null);
   const confirming = confirm.isPending;
@@ -193,7 +196,11 @@ export function VoiceStockTab() {
         if (stream.current === liveStream) stream.current = null;
         const blob = new Blob(chunks.current, { type: next.mimeType || mimeType || "audio/webm" });
         chunks.current = [];
-        if (!blob.size) { setMicError("No audio was captured. Hold the button while speaking, then release it."); return; }
+        const elapsed = recordingStartedAt.current ? Date.now() - recordingStartedAt.current : 0;
+        recordingStartedAt.current = null;
+        // Ignore accidental taps and incomplete containers locally. Sending them
+        // to transcription only creates a confusing provider error.
+        if (elapsed < MIN_RECORDING_MS || blob.size < MIN_AUDIO_BYTES) { setMicError(""); return; }
         transcribe.mutate({ businessId, data: blob }, {
           onSuccess: (result) => { setLastProvider(result.provider); setTranscript(result.normalizedTranscript || result.transcript); interpretText(result.normalizedTranscript || result.transcript); },
           onError: (error) => {
@@ -202,11 +209,13 @@ export function VoiceStockTab() {
           },
         });
       };
+      recordingStartedAt.current = Date.now();
       next.start(250); setRecording(true); setSeconds(0);
       timer.current = setInterval(() => setSeconds((value) => value + 1), 1000);
       if (!pressActive.current) stopRecording();
     } catch {
       pressActive.current = false;
+      recordingStartedAt.current = null;
       stream.current?.getTracks().forEach((track) => track.stop());
       stream.current = null;
       setMicError("Microphone access was declined. Allow it in your browser settings, or type the update instead.");
