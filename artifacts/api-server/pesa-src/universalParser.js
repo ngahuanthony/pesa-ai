@@ -93,7 +93,7 @@ function proposal({ candidate, action, quantity, unit, products, confidence = 0.
   const match = matchProduct(candidate, products);
   const qty = Number(quantity);
   if (!match) {
-    const warning = "No confident catalogue match. Select the correct product before confirming.";
+    const warning = "Choose a product from your catalogue to continue.";
     return {
       productId: null, productName: candidate || null, action: action || null,
       quantity: Number.isFinite(qty) ? qty : null, unit: unit || "pieces",
