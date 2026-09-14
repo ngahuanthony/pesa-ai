@@ -36,14 +36,35 @@ function normalizedProductTokens(value: unknown) {
     });
 }
 
+const PRODUCT_COLORS = new Set([
+  "black", "white", "red", "green", "blue", "yellow", "orange", "purple",
+  "pink", "brown", "grey", "gray", "silver", "gold", "golden",
+  "nyeusi", "nyeupe", "nyekundu", "kijani", "bluu", "manjano", "machungwa",
+  "zambarau", "waridi", "kahawia", "kijivu",
+]);
+
+function normalizedMatchTokens(value: unknown) {
+  return normalizedProductTokens(value)
+    .filter((token) => !PRODUCT_COLORS.has(token));
+}
+
+function productNumbers(value: unknown) {
+  return normalizedProductText(value).match(/\b\d+(?:\.\d+)?\b/g) || [];
+}
+
 function productMatchScore(candidate: string, productName: string) {
   const target = normalizedProductText(candidate);
   const name = normalizedProductText(productName);
   if (!target || !name) return 0;
+  const targetNumbers = productNumbers(target);
+  const nameNumbers = productNumbers(name);
+  if (targetNumbers.length && nameNumbers.length && targetNumbers.join(",") !== nameNumbers.join(",")) return 0;
   if (target === name) return 1;
 
-  const targetTokens = normalizedProductTokens(target);
-  const nameTokens = normalizedProductTokens(name);
+  const targetTokens = normalizedMatchTokens(target);
+  const nameTokens = normalizedMatchTokens(name);
+  if (!targetTokens.length || !nameTokens.length) return 0;
+  if (targetTokens.join(" ") === nameTokens.join(" ")) return 1;
   if ([...targetTokens].sort().join(" ") === [...nameTokens].sort().join(" ")) return 0.98;
   if (target.includes(name) || name.includes(target)) return 0.92;
 
@@ -68,7 +89,7 @@ function findSafeProductMatch(candidate: string | null | undefined, products: Ar
   const ranked = rankedProductMatches(candidate, products);
   const best = ranked[0];
   const second = ranked[1];
-  if (!best || best.score < 0.86 || (second && best.score - second.score < 0.08)) return null;
+  if (!best || best.score < 0.5 || (second && best.score - second.score < 0.08)) return null;
   return best.product;
 }
 

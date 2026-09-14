@@ -7,6 +7,34 @@ function normalize(value) {
   return normalizeTranscript(value).replace(/[^\p{L}\p{N}/.]+/gu, " ").trim();
 }
 
+const MATCHING_COLOR_WORDS = new Set([
+  "black", "white", "red", "green", "blue", "yellow", "orange", "purple",
+  "pink", "brown", "grey", "gray", "silver", "gold", "golden",
+  "nyeusi", "nyeupe", "nyekundu", "kijani", "bluu", "manjano", "machungwa",
+  "zambarau", "waridi", "kahawia", "kijivu",
+]);
+
+function singularizeToken(token) {
+  if (token.length > 4 && token.endsWith("ies")) return `${token.slice(0, -3)}y`;
+  if (token.length > 4 && token.endsWith("ves")) return `${token.slice(0, -3)}f`;
+  if (token.length > 4 && token.endsWith("es")) return token.slice(0, -2);
+  if (token.length > 3 && token.endsWith("s") && !token.endsWith("ss")) return token.slice(0, -1);
+  return token;
+}
+
+function matchingText(value) {
+  return normalize(value)
+    .split(" ")
+    .filter((token) => token && !MATCHING_COLOR_WORDS.has(token))
+    .map(singularizeToken)
+    .join(" ")
+    .trim();
+}
+
+function numericTokens(value) {
+  return matchingText(value).match(/\b\d+(?:\.\d+)?\b/g) || [];
+}
+
 function actionFor(text) {
   const value = normalize(text);
   if (/\b(damag(?:e|ed)?|broken|spoiled?|haribika|imeharibika)\b/.test(value)) return "damage";
@@ -69,17 +97,23 @@ function quantityWithUnit(text, units = []) {
 }
 
 function matchProduct(candidate, products) {
-  const target = normalize(candidate);
+  const target = matchingText(candidate);
   if (!target) return null;
-  const exact = products.find((product) => normalize(product.name) === target);
+  const targetNumbers = numericTokens(candidate);
+  const exact = products.find((product) =>
+    matchingText(product.name) === target &&
+    JSON.stringify(numericTokens(product.name)) === JSON.stringify(targetNumbers)
+  );
   if (exact) return { product: exact, score: 1 };
   const ranked = products.map((product) => ({
     product,
-    score: Math.max(...aliasesFor(product).map((alias) => similarity(target, alias))),
+    score: numericTokens(product.name).join(",") !== targetNumbers.join(",")
+      ? 0
+      : Math.max(...aliasesFor(product).map((alias) => similarity(matchingText(alias), target))),
   })).sort((a, b) => b.score - a.score);
   const best = ranked[0];
   const second = ranked[1];
-  if (!best || best.score < 0.72 || (second && best.score - second.score < 0.08)) return null;
+  if (!best || best.score < 0.5 || (second && best.score - second.score < 0.08)) return null;
   return best;
 }
 
@@ -241,9 +275,15 @@ function fallbackInterpret(transcript, business, products) {
   candidate = candidate
     .replace(/\b(received?|sold|sell|damaged?|missing|adjust(?:ed)?|stock|count|pieces?|pcs?|units?|of)\b/g, " ")
     .replace(/\s+/g, " ").trim();
+  const color = (attrs.colors || []).find((candidateColor) =>
+    new RegExp(`\\b${escapeRegExp(candidateColor)}\\b`, "i").test(text)
+  ) || null;
+  candidate = candidate
+    .replace(new RegExp(`\\b(?:${[...(attrs.colors || []), ...MATCHING_COLOR_WORDS].map(escapeRegExp).join("|")})\\b`, "gi"), " ")
+    .replace(/\s+/g, " ").trim();
   return [proposal({
     candidate, action: explicitAction || "receive", quantity: quantityMatch?.[1], products,
-    unit: attrs.units?.[0] || "pieces", evidence: text,
+    unit: attrs.units?.[0] || "pieces", color, evidence: text,
     confidence: 0.74, actionWasImplicit: !explicitAction,
   })];
 }

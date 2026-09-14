@@ -4,7 +4,12 @@ const colorMap = {
   blue: ["blue", "bluu", "bulu", "blu"],
   red: ["red", "nyekundu", "reed"],
   white: ["white", "nyeupe", "waiti"],
-  yellow: ["yellow", "njano", "yelow"],
+  yellow: ["yellow", "njano", "manjano", "yelow"],
+  orange: ["orange", "machungwa"],
+  purple: ["purple", "zambarau"],
+  pink: ["pink", "waridi"],
+  brown: ["brown", "kahawia"],
+  grey: ["grey", "gray", "kijivu"],
 };
 const numberMap = {
   "5": ["five", "tano", "faiv", "5", "fai"], "10": ["ten", "kumi", "10", "teni"],
@@ -25,7 +30,7 @@ const categoryAttrs = {
   phone_accessories: { colors: Object.keys(colorMap), units: ["pieces", "pcs"], variants: ["color"] },
   mitumba: { colors: Object.keys(colorMap), sizes: ["S", "M", "L", "XL", "XXL"], units: ["pieces", "bale"], variants: ["color", "size"] },
   hardware: { units: ["kg", "g", "pieces", "metre", "litre", "inch"], sizes: ["1/2", "3/4", "1", "2", "3"], variants: ["size"] },
-  grocery: { units: ["kg", "g", "litre", "pieces", "packet"], variants: [] },
+  grocery: { colors: Object.keys(colorMap), units: ["kg", "g", "litre", "pieces", "packet"], variants: [] },
   cosmetics: { colors: Object.keys(colorMap), units: ["pieces", "ml", "g"], variants: ["color"] },
   shoes: { sizes: ["36", "37", "38", "39", "40", "41", "42", "43", "44"], colors: Object.keys(colorMap), units: ["pairs", "pieces"], variants: ["color", "size"] },
 };

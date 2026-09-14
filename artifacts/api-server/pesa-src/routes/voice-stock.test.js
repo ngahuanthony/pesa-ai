@@ -249,8 +249,32 @@ test("keeps a phone model number separate from the spoken quantity", () => {
     [],
   );
   assert.equal(items[0].quantity, 10);
-  assert.match(items[0].productName, /iphone 16 pro max clear cover white/i);
+  assert.match(items[0].productName, /iphone 16 pro max clear cover/i);
+  assert.equal(items[0].color, "white");
   assert.equal(items[0].productId, null);
+});
+
+test("matches colour words and plural product names without losing the spoken colour", () => {
+  const items = fallbackInterpret(
+    "iphone 16 pro max orange covers 10 pieces",
+    { id: "phones", category: "phone_accessories" },
+    [{ id: "iphone-cover", businessId: "phones", name: "iPhone 16 Pro Max Clear Cover", stockQty: 0 }],
+  );
+  assert.equal(items[0].productId, "iphone-cover");
+  assert.equal(items[0].productName, "iPhone 16 Pro Max Clear Cover");
+  assert.equal(items[0].color, "orange");
+  assert.equal(items[0].quantity, 10);
+  assert.notEqual(items[0].confidenceLevel, "blocked");
+});
+
+test("keeps unmatched products blocked instead of creating catalogue items implicitly", () => {
+  const items = fallbackInterpret(
+    "leather travel bags orange 10 pieces",
+    { id: "phones", category: "phone_accessories" },
+    [{ id: "iphone-cover", businessId: "phones", name: "iPhone 16 Pro Max Clear Cover", stockQty: 0 }],
+  );
+  assert.equal(items[0].productId, null);
+  assert.equal(items[0].confidenceLevel, "blocked");
 });
 
 test("confirmation request IDs prevent duplicate stock updates", () => {
