@@ -242,6 +242,17 @@ test("universal parser applies category-specific size and unit attributes", () =
   );
 });
 
+test("keeps a phone model number separate from the spoken quantity", () => {
+  const items = fallbackInterpret(
+    "iPhone 16 Pro Max clear cover white 10 pieces",
+    { id: "phones", category: "phone_accessories" },
+    [],
+  );
+  assert.equal(items[0].quantity, 10);
+  assert.match(items[0].productName, /iphone 16 pro max clear cover white/i);
+  assert.equal(items[0].productId, null);
+});
+
 test("confirmation request IDs prevent duplicate stock updates", () => {
   const first = db.confirmStockMovements("business-a", [
     { productId: "milk-a", action: "receive", quantity: 5, unit: "packets" },

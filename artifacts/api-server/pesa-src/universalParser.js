@@ -52,6 +52,22 @@ function aliasesFor(product) {
   return [...aliases].filter((alias) => alias.length >= 3);
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function quantityWithUnit(text, units = []) {
+  const unitWords = new Set(["piece", "pieces", "pc", "pcs", "unit", "units", "pair", "pairs", "packet", "packets"]);
+  for (const unit of units) {
+    const value = String(unit || "").trim().toLowerCase();
+    if (!value) continue;
+    unitWords.add(value);
+    if (value.endsWith("s")) unitWords.add(value.slice(0, -1));
+  }
+  const alternatives = [...unitWords].sort((a, b) => b.length - a.length).map(escapeRegExp).join("|");
+  return String(text).match(new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s*(?:${alternatives})\\b`, "i"));
+}
+
 function matchProduct(candidate, products) {
   const target = normalize(candidate);
   if (!target) return null;
@@ -190,9 +206,10 @@ function fallbackInterpret(transcript, business, products) {
       }
       continue;
     }
-    const afterQuantity = segment.match(/\b(\d+(?:\.\d+)?)\b/);
+    const afterQuantity = quantityWithUnit(segment, attrs.units) || segment.match(/\b(\d+(?:\.\d+)?)\b/);
+    const beforeQuantityWithUnit = quantityWithUnit(before, attrs.units);
     const beforeQuantities = [...before.matchAll(/\b(\d+(?:\.\d+)?)\b/g)];
-    const beforeQuantity = beforeQuantities[beforeQuantities.length - 1];
+    const beforeQuantity = beforeQuantityWithUnit || beforeQuantities[beforeQuantities.length - 1];
     const quantityMatch = (localAction && beforeQuantity) || afterQuantity || beforeQuantity;
     const color = (attrs.colors || []).find((candidate) => new RegExp(`\\b${candidate}\\b`).test(segment)) || null;
     const unit = (attrs.units || []).find((candidate) => new RegExp(`\\b${candidate}s?\\b`).test(segment)) || attrs.units?.[0] || "pieces";
@@ -210,10 +227,19 @@ function fallbackInterpret(transcript, business, products) {
   }
   if (items.length) return items;
 
-  const quantityMatch = text.match(/\b(\d+(?:\.\d+)?)\b/);
-  const candidate = text
-    .replace(/\b(received?|sold|sell|damaged?|missing|adjust(?:ed)?|stock|count|pieces?|pcs?|units?)\b/g, " ")
-    .replace(/\b\d+(?:\.\d+)?\b/g, " ")
+  const quantityWithUnitMatch = quantityWithUnit(text, attrs.units);
+  const numberMatches = [...text.matchAll(/\b(\d+(?:\.\d+)?)\b/g)];
+  const actionIndex = text.search(/\b(received?|sold|sell|damaged?|missing|adjust(?:ed)?|stock|count|ongeza|pokea|ingiza)\b/);
+  const quantityMatch = quantityWithUnitMatch ||
+    (actionIndex >= 0 && numberMatches.find((match) => match.index > actionIndex)) ||
+    numberMatches[numberMatches.length - 1] ||
+    null;
+  let candidate = text;
+  if (quantityMatch?.index != null) {
+    candidate = `${candidate.slice(0, quantityMatch.index)} ${candidate.slice(quantityMatch.index + quantityMatch[0].length)}`;
+  }
+  candidate = candidate
+    .replace(/\b(received?|sold|sell|damaged?|missing|adjust(?:ed)?|stock|count|pieces?|pcs?|units?|of)\b/g, " ")
     .replace(/\s+/g, " ").trim();
   return [proposal({
     candidate, action: explicitAction || "receive", quantity: quantityMatch?.[1], products,
