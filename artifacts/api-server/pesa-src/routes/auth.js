@@ -58,6 +58,22 @@ async function verifySignupOtp({ body }) {
   return { cookie: auth.sessionCookieHeader(session.token), data: { business: db.sanitizeBusiness(business), account: accountView(account), subscription: db.getSubscription(business.id) } };
 }
 
+async function resendSignupOtp({ body }) {
+  const channel = body?.channel === "shop" ? "shop" : "personal";
+  const pending = db.getPendingSignup(body?.pendingSignupId);
+  if (!pending || new Date(pending.expiresAt).getTime() < Date.now()) throw db.httpError(400, "This signup has expired. Please start again.");
+  if ((channel === "personal" && pending.personalVerified) || (channel === "shop" && pending.shopVerified)) return { data: { alreadyVerified: true, channel } };
+  const purpose = channel === "shop" ? "signup_shop" : "signup_personal";
+  const phone = channel === "shop" ? pending.pesaAiNumber : pending.personalPhone;
+  const challenge = db.createOtpChallenge(phone, purpose, { pendingSignupId: pending.id, shopName: pending.businessName });
+  if (channel === "shop") {
+    try { await sendShopSmsOtp(phone, challenge); } catch (error) { console.warn("[auth] Shop SMS resend pending:", error.message); return { status: 202, data: { sent: false, smsPending: true, channel, expiresAt: challenge.expiresAt, message: "The SMS is still pending. Please try again shortly." } }; }
+  } else {
+    try { await whatsapp.sendPlatformOtp(challenge.phone, challenge.code, { shopName: pending.businessName }); } catch (error) { console.error("[auth] WhatsApp OTP resend failed:", error.message); throw db.httpError(503, "We could not send a new WhatsApp code yet. Please try again shortly."); }
+  }
+  return { data: { sent: true, channel, expiresAt: challenge.expiresAt, message: channel === "shop" ? "A new SMS code has been sent." : "A new WhatsApp code has been sent." } };
+}
+
 async function requestLoginOtp({ body }) {
   const phone = db.normalizePhone(body?.personalPhone || body?.phone);
   if (!phone) throw db.httpError(400, "Personal WhatsApp number is required");
@@ -125,4 +141,4 @@ function me({ session }) {
   const business = db.getBusiness(session.businessId);
   return { authenticated: true, isAdmin: false, account: accountView(account), business: db.sanitizeBusiness(business), subscription: db.getSubscription(business.id) };
 }
-module.exports = { signup, verifySignupOtp, requestLoginOtp, verifyOtp, login, updateRecoveryEmail, logout, me };
+module.exports = { signup, verifySignupOtp, resendSignupOtp, requestLoginOtp, verifyOtp, login, updateRecoveryEmail, logout, me };

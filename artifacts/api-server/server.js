@@ -105,6 +105,7 @@ function startDailyReportScheduler() {
 
 router.post("/api/auth/signup", authRoutes.signup);
 router.post("/api/auth/verify-signup-otp", authRoutes.verifySignupOtp);
+router.post("/api/auth/resend-signup-otp", authRoutes.resendSignupOtp);
 router.post("/api/auth/request-otp", authRoutes.requestLoginOtp);
 router.post("/api/auth/verify-otp", authRoutes.verifyOtp);
 router.post("/api/auth/login", authRoutes.login);
