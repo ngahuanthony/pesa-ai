@@ -983,6 +983,7 @@ function verifyOtpChallenge(phone, code, purpose = "login") {
 function createPendingSignup(state, { businessName, personalPhone, pesaAiNumber }) {
   const normalizedPersonalPhone = normalizePhone(personalPhone);
   const normalizedShopNumber = normalizePhone(pesaAiNumber);
+  if (normalizedPersonalPhone && normalizedPersonalPhone === normalizedShopNumber) throw httpError(400, "Use two different numbers: one public Duka number and one private number for alerts.");
   if ((state.businesses || []).some((b) => normalizePhone(b.pesaAiNumber) === normalizedShopNumber)) throw httpError(409, "This number is already on WhatsApp or is already registered as a shop number");
   if ((state.pendingSignups || []).some((p) => p.pesaAiNumber === normalizedShopNumber && !p.finalizedAt)) throw httpError(409, "This number is already being verified");
   const pending = { id: id(), businessName: String(businessName).trim(), personalPhone: normalizedPersonalPhone, pesaAiNumber: normalizedShopNumber, personalVerified: false, shopVerified: false, status: "pending_verification", createdAt: now(), expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
