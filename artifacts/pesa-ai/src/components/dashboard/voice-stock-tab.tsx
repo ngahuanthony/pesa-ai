@@ -89,7 +89,10 @@ export function VoiceStockTab() {
         if (!blob.size) { setMicError("No audio was captured. Hold the button while speaking, then release it."); return; }
         transcribe.mutate({ businessId, data: blob }, {
           onSuccess: (result) => { setLastProvider(result.provider); setTranscript(result.normalizedTranscript || result.transcript); interpretText(result.normalizedTranscript || result.transcript); },
-          onError: () => setMicError("Audio could not be transcribed. Type what you said below and review it."),
+          onError: (error) => {
+            const detail = error instanceof Error ? error.message.replace(/^HTTP \d+[^:]*:\s*/, "") : "The transcription service returned an unexpected error.";
+            setMicError(`Audio could not be transcribed: ${detail}`);
+          },
         });
       };
       next.start(250); setRecording(true); setSeconds(0);
