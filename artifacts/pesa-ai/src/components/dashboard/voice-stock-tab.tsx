@@ -19,6 +19,22 @@ const actions: Record<string, { label: string; short: string; tone: string }> = 
   adjustment: { label: "Adjust / Set", short: "SET", tone: "text-sky-800 bg-sky-100 border-sky-200" },
 };
 
+function normalizedProductText(value: unknown) {
+  return String(value || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
+}
+
+function findSafeProductMatch(candidate: string | null | undefined, products: Array<{ id: string; name: string }>) {
+  const target = normalizedProductText(candidate);
+  if (!target) return null;
+  const exact = products.find((product) => normalizedProductText(product.name) === target);
+  if (exact) return exact;
+  const phraseMatches = products.filter((product) => {
+    const name = normalizedProductText(product.name);
+    return name && (target.includes(name) || name.includes(target));
+  });
+  return phraseMatches.length === 1 ? phraseMatches[0] : null;
+}
+
 export function VoiceStockTab() {
   const { data: me } = useGetMe();
   const businessId = me?.business?.id ?? "";
@@ -52,9 +68,21 @@ export function VoiceStockTab() {
         setTranscript(result.normalizedTranscript || result.transcript);
         confirmationRequestId.current = crypto.randomUUID();
         setDraft(result.items.map((item) => {
-          const existing = products.find((product) => product.id === item.productId);
+          const suggestedProduct = item.productId ? null : findSafeProductMatch(item.productName, products);
+          const resolvedProductId = item.productId || suggestedProduct?.id || null;
+          const autoResolvedMatch = !item.productId && Boolean(suggestedProduct) &&
+            item.warning === "No confident catalogue match. Select the correct product before confirming.";
+          const existing = products.find((product) => product.id === resolvedProductId);
           const existingVariant = existing?.colorStock?.find((variant) => variant.color.toLowerCase() === (item.color || "").toLowerCase());
-          return { ...item, id: crypto.randomUUID(), imageUrl: existingVariant?.imageUrl || null };
+          return {
+            ...item,
+            id: crypto.randomUUID(),
+            productId: resolvedProductId,
+            productName: existing?.name || item.productName,
+            confidenceLevel: autoResolvedMatch ? "review" : item.confidenceLevel,
+            warning: autoResolvedMatch ? null : item.warning,
+            imageUrl: existingVariant?.imageUrl || null,
+          };
         }));
         if (!result.items.length) toast({ title: "Nothing to review", description: "Try saying a product, quantity, and action." });
       },
@@ -273,12 +301,12 @@ export function VoiceStockTab() {
       <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div><div className="flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary" /><h2 className="font-bold">Review before applying</h2></div><p className="mt-1 text-xs text-muted-foreground">Yellow means check the match. Red means this row cannot be applied.</p></div><Button data-testid="button-confirm-all" onClick={confirmAll} disabled={invalid || confirming} className="h-11 gap-2 rounded-xl">{confirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{confirming ? "Applying…" : `Confirm all · ${draft.length}`}</Button></div>
       <div className="divide-y divide-border">{draft.map((item, index) => { const preview = previews.get(item.id); const blocked = item.confidenceLevel === "blocked" || !item.productId; const uncertain = !blocked && (item.confidenceLevel === "review" || !!item.warning); return <article data-testid={`card-review-item-${index}`} key={item.id} className={`p-4 transition-colors ${blocked ? "bg-rose-50/80" : uncertain ? "bg-amber-50/80" : "bg-card"}`}>
         <div className="mb-3 flex items-start justify-between gap-2"><div className="flex items-center gap-2">{blocked ? <ShieldAlert className="h-4 w-4 text-rose-700" /> : uncertain ? <AlertTriangle className="h-4 w-4 text-amber-700" /> : <Check className="h-4 w-4 text-emerald-700" />}<span className="text-xs font-bold uppercase tracking-wider">{blocked ? "Blocked · fix match" : uncertain ? "Review this row" : "Ready to apply"}</span></div><Button data-testid={`button-remove-review-${index}`} variant="ghost" size="icon" onClick={() => setDraft((items) => items?.filter((entry) => entry.id !== item.id) ?? null)} className="h-8 w-8 text-muted-foreground"><Trash2 className="h-4 w-4" /></Button></div>
-        <div className="grid gap-3 sm:grid-cols-[1.3fr_1fr_0.7fr_0.8fr]"><label className="text-xs font-medium text-muted-foreground">Product<select data-testid={`select-review-product-${index}`} value={item.productId ?? ""} onChange={(e) => update(item.id, { productId: e.target.value || null })} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"><option value="">Choose product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.stockQty} in stock</option>)}</select></label><label className="text-xs font-medium text-muted-foreground">Movement<select data-testid={`select-review-action-${index}`} value={item.action ?? ""} onChange={(e) => update(item.id, { action: e.target.value as VoiceStockItemAction })} className={`mt-1 h-10 w-full rounded-lg border px-2 text-sm font-semibold ${item.action ? actions[item.action].tone : "border-input bg-background"}`}><option value="">Choose action</option>{Object.entries(actions).map(([value, action]) => <option key={value} value={value}>{action.label}</option>)}</select></label><label className="text-xs font-medium text-muted-foreground">Quantity<input data-testid={`input-review-quantity-${index}`} type="number" min="1" value={item.quantity ?? ""} onChange={(e) => update(item.id, { quantity: Number(e.target.value) })} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm font-semibold" /></label><label className="text-xs font-medium text-muted-foreground">Unit<input data-testid={`input-review-unit-${index}`} value={item.unit} onChange={(e) => update(item.id, { unit: e.target.value })} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm" /></label></div>
+         <div className="grid gap-3 sm:grid-cols-[1.3fr_1fr_0.7fr_0.8fr]"><label className="text-xs font-medium text-muted-foreground">Product<select data-testid={`select-review-product-${index}`} value={item.productId ?? ""} onChange={(e) => update(item.id, { productId: e.target.value || null })} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"><option value="">Choose product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.stockQty} in stock</option>)}</select>{!item.productId && item.productName && <span className="mt-1 block text-[11px] text-rose-700">Heard: “{item.productName}”. Choose the matching catalogue product.</span>}</label><label className="text-xs font-medium text-muted-foreground">Movement<select data-testid={`select-review-action-${index}`} value={item.action ?? ""} onChange={(e) => update(item.id, { action: e.target.value as VoiceStockItemAction })} className={`mt-1 h-10 w-full rounded-lg border px-2 text-sm font-semibold ${item.action ? actions[item.action].tone : "border-input bg-background"}`}><option value="">Choose action</option>{Object.entries(actions).map(([value, action]) => <option key={value} value={value}>{action.label}</option>)}</select></label><label className="text-xs font-medium text-muted-foreground">Quantity<input data-testid={`input-review-quantity-${index}`} type="number" min="1" value={item.quantity ?? ""} onChange={(e) => update(item.id, { quantity: Number(e.target.value) })} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm font-semibold" /></label><label className="text-xs font-medium text-muted-foreground">Unit<input data-testid={`input-review-unit-${index}`} value={item.unit} onChange={(e) => update(item.id, { unit: e.target.value })} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm" /></label></div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-medium text-muted-foreground">Color variant<input data-testid={`input-review-color-${index}`} value={item.color ?? ""} onChange={(e) => update(item.id, { color: e.target.value })} placeholder="Optional" className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm" /></label><label className="text-xs font-medium text-muted-foreground">Size variant<input data-testid={`input-review-size-${index}`} value={item.size ?? ""} onChange={(e) => update(item.id, { size: e.target.value })} placeholder="Optional" className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm" /></label></div>
         <div className="mt-3 flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/20 p-2"><Button type="button" variant="outline" size="sm" onClick={() => openPhotoPicker(item.id)} disabled={!item.productId || item.imageUploading} className="gap-2"><Camera className="h-4 w-4" />{item.imageUploading ? "Uploading…" : "📷 Product photo"}</Button>{item.imageUrl && <img src={item.imageUrl} alt={`${item.productName || "Product"} ${item.color || ""}`} className="h-10 w-10 rounded-md border border-border object-cover" />}{item.imageError && <span className="text-xs text-rose-700">{item.imageError}</span>}<span className="text-[11px] text-muted-foreground">One photo per variant · camera product shot</span></div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-black/5 pt-3 text-xs"><span className="text-muted-foreground">Stock after: <strong className={preview && preview.next < 0 ? "text-rose-700" : "text-foreground"}>{preview?.next ?? "—"}</strong></span><span className="font-mono uppercase tracking-wider text-muted-foreground">{item.evidence || item.warning || `${Math.round(item.confidence * 100)}% confidence`}</span></div>
       </article>; })}</div>
-      {invalid && <div data-testid="status-review-blocked" className="flex items-center gap-2 border-t border-rose-200 bg-rose-50 px-4 py-3 text-xs font-medium text-rose-800"><ShieldAlert className="h-4 w-4" />Fix blocked or invalid rows before confirming.</div>}
+       {invalid && <div data-testid="status-review-blocked" className="flex items-center gap-2 border-t border-rose-200 bg-rose-50 px-4 py-3 text-xs font-medium text-rose-800"><ShieldAlert className="h-4 w-4" />Choose a product for each row marked in red, then confirm.</div>}
     </section>}
     <section className="rounded-2xl border border-border bg-card">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3"><History className="h-4 w-4 text-primary" /><h2 className="text-sm font-bold">Recent voice updates</h2></div>
