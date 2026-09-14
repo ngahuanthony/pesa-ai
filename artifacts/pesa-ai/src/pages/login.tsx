@@ -128,7 +128,7 @@ export default function LoginPage() {
             <form onSubmit={requestOtp} className="mt-7 space-y-5">
               <div>
                 <label className="text-sm font-semibold">Your Personal WhatsApp</label>
-                <input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="0722542810" className="mt-1 w-full rounded-xl border px-4 py-3.5 text-base" required />
+                <input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="07XX XX XX XX" className="mt-1 w-full rounded-xl border px-4 py-3.5 text-base" required />
               </div>
               {error && <div className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
               <button type="submit" disabled={busy} className="w-full rounded-xl bg-[#0a4a3a] py-3.5 text-sm font-bold text-white disabled:opacity-60">{busy ? "Sending code…" : "Send me a code"}</button>
