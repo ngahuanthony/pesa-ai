@@ -5,6 +5,7 @@ import { Download, QrCode } from "lucide-react";
 interface ShopQRCardProps {
   businessName: string;
   phone: string; // raw phone from waStatus or business profile
+  shopSlug?: string;
 }
 
 /** Normalise any Kenyan phone format → digits only with country code, e.g. "254712345678" */
@@ -23,6 +24,16 @@ function displayPhone(raw: string): string {
     return `+${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6, 9)} ${n.slice(9)}`;
   }
   return `+${n}`;
+}
+
+function slugifyShopName(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "shop";
 }
 
 function wrapCanvasText(
@@ -69,19 +80,19 @@ function roundRect(
   ctx.closePath();
 }
 
-export function ShopQRCard({ businessName, phone }: ShopQRCardProps) {
+export function ShopQRCard({ businessName, phone, shopSlug }: ShopQRCardProps) {
   const previewRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  const waPhone = normalisePhone(phone);
-  const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent("Hi, I'd like to shop")}`;
+  const publicShopPath = `/shop/${encodeURIComponent(shopSlug || slugifyShopName(businessName))}`;
+  const shopUrl = `${window.location.origin}${publicShopPath}`;
 
   /** Compose the full-res print card onto a canvas and return it */
   const buildCanvas = useCallback(async (W: number, H: number): Promise<HTMLCanvasElement> => {
     // 1. Generate QR at high resolution
     const qrSize = Math.round(W * 0.62);
-    const qrDataUrl: string = await QRCode.toDataURL(waUrl, {
+    const qrDataUrl: string = await QRCode.toDataURL(shopUrl, {
       width: qrSize,
       margin: 2,
       color: { dark: "#111111", light: "#ffffff" },
@@ -171,7 +182,7 @@ export function ShopQRCard({ businessName, phone }: ShopQRCardProps) {
     ctx.stroke();
 
     return canvas;
-  }, [waUrl, businessName, phone]);
+  }, [shopUrl, businessName, phone]);
 
   // Render preview into the visible canvas
   useEffect(() => {

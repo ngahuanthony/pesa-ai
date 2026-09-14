@@ -80,6 +80,7 @@ const videoScanRoutes    = require("./pesa-src/routes/video-scan");
 const conversationRoutes = require("./pesa-src/routes/conversations");
 const photoScanRoutes   = require("./pesa-src/routes/photo-scan");
 const voiceStockRoutes  = require("./pesa-src/routes/voice-stock");
+const publicShopRoutes  = require("./pesa-src/routes/public-shops");
 const videoProcessor = require("./pesa-src/video-processor");
 const whatsapp = require("./pesa-src/whatsapp");
 const mpesa = require("./pesa-src/mpesa");
@@ -184,6 +185,12 @@ router.post("/api/businesses/:businessId/voice-stock/interpret", voiceStockRoute
 router.post("/api/businesses/:businessId/voice-stock/confirm", voiceStockRoutes.confirm);
 router.get("/api/businesses/:businessId/voice-stock/history", voiceStockRoutes.history);
 router.delete("/api/businesses/:businessId/video-scan/:scanId",        videoScanRoutes.deleteScan);
+
+// Public discovery never receives a session and only returns shops that have
+// an explicit public flag or the legacy connected-WhatsApp/public-number
+// combination. It deliberately does not expose the business listing route.
+router.get("/api/public/shops/search", publicShopRoutes.search);
+router.get("/api/public/shops/:slug", publicShopRoutes.get);
 
 router.post("/api/businesses/:businessId/chat", chatRoutes.send);
 // Note: chat history uses path param (not query) to avoid codegen type collision

@@ -19,6 +19,7 @@ import ForgotPasswordPage from '@/pages/forgot-password';
 import DashboardPage from '@/pages/dashboard';
 import AdminPage from '@/pages/admin';
 import PrivacyPage from '@/pages/privacy';
+import PublicShopPage from '@/pages/public-shop';
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ function Router() {
     <RoutedErrorBoundary>
       <Switch>
         <Route path="/" component={LandingPage} />
+        <Route path="/shop/:slug" component={PublicShopPage} />
         <Route path="/login" component={LoginPage} />
         <Route path="/signup" component={SignupPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />

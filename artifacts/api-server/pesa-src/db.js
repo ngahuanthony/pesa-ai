@@ -555,6 +555,7 @@ function sanitizeBusiness(business) {
   const { mpesaCredentials, changeLog, idOrKraPin, ...rest } = business;
   return {
     ...rest,
+    publicShopSlug: getPublicShopSlug(business),
     phone: maskPhone(rest.phone),
     personalPhone: maskPhone(rest.personalPhone),
     pesaAiNumber: maskPhone(rest.pesaAiNumber),
@@ -760,6 +761,117 @@ function normalizePhone(phone) {
   if (digits.startsWith("254")) return digits;
   if (digits.startsWith("0")) return "254" + digits.slice(1);
   return digits;
+}
+
+function slugifyPublicShopName(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "shop";
+}
+
+function getPublicShopSlug(business) {
+  if (business?.publicShopSlug || business?.shopSlug) {
+    return String(business.publicShopSlug || business.shopSlug);
+  }
+  const suffix = String(business?.id || "").replace(/[^a-z0-9]/gi, "").slice(0, 8).toLowerCase();
+  return `${slugifyPublicShopName(business?.name)}${suffix ? `-${suffix}` : ""}`;
+}
+
+function hasExplicitPublicShopVisibility(business) {
+  return ["publicShopPublished", "shopPublished", "published", "discoverable"]
+    .some((field) => Object.prototype.hasOwnProperty.call(business || {}, field));
+}
+
+function isPublicShopDiscoverable(business) {
+  if (!business || business.suspended === true || business.deletedAt) return false;
+  const visibilityFields = ["publicShopPublished", "shopPublished", "published", "discoverable"];
+  if (hasExplicitPublicShopVisibility(business)) {
+    return visibilityFields.some((field) => business[field] === true);
+  }
+
+  // Existing businesses predate the explicit visibility field. A connected
+  // WhatsApp number plus an intentionally supplied public number is the
+  // legacy equivalent of publishing a shop; personal/business signup phones
+  // are never enough to make a shop discoverable.
+  const publicNumber = business.publicPhone || business.whatsappNumber ||
+    business.whatsappRequestedPhone || business.pesaAiNumber || business.shopPhone;
+  return Boolean(publicNumber && (
+    business.whatsappPhoneNumberId ||
+    business.whatsappConnectionStatus === "connected"
+  ));
+}
+
+function publicShopPayload(business, { includeProducts = false } = {}) {
+  const slug = getPublicShopSlug(business);
+  const publicNumber = business.publicPhone || business.whatsappNumber ||
+    business.whatsappRequestedPhone || business.pesaAiNumber || business.shopPhone || null;
+  const payload = {
+    name: business.name,
+    category: business.category || null,
+    location: business.location || null,
+    deliveryAreas: business.deliveryAreas || null,
+    buildingName: business.buildingName || null,
+    shopNumber: business.shopNumber || null,
+    verifiedShop: business.verifiedShop === true,
+    logoUrl: business.logoUrl || business.logo || null,
+    imageUrl: business.imageUrl || business.shopImageUrl || null,
+    slug,
+    url: `/shop/${encodeURIComponent(slug)}`,
+    whatsappUrl: publicNumber
+      ? `https://wa.me/${normalizePhone(publicNumber)}?text=${encodeURIComponent("Hi, I'd like to shop")}`
+      : null,
+  };
+  if (includeProducts) {
+    payload.products = listProducts(business.id, { activeOnly: true }).map((product) => ({
+      id: product.id,
+      name: product.name,
+      description: product.description || null,
+      price: product.price,
+      stockQty: product.stockQty,
+      imageUrl: product.imageUrl || null,
+    }));
+  }
+  return payload;
+}
+
+function searchPublicShopsByPhone(phone) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return [];
+  return load().businesses
+    .filter((business) => isPublicShopDiscoverable(business))
+    .filter((business) => {
+      const publicNumbers = [
+        business.publicPhone,
+        business.whatsappNumber,
+        business.whatsappRequestedPhone,
+        business.pesaAiNumber,
+        business.shopPhone,
+      ].filter(Boolean);
+      return publicNumbers.some((candidate) => normalizePhone(candidate) === normalized);
+    })
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+    .map((business) => publicShopPayload(business));
+}
+
+function getPublicShopBySlug(slug) {
+  const normalizedSlug = String(slug || "").trim().toLowerCase();
+  if (!normalizedSlug) return undefined;
+  const publicBusinesses = load().businesses.filter(isPublicShopDiscoverable);
+  const exact = publicBusinesses.find((candidate) =>
+    getPublicShopSlug(candidate).toLowerCase() === normalizedSlug
+  );
+  // QR cards generated before the persisted slug was available used the
+  // readable name-only path. Keep that path working only when it is
+  // unambiguous; duplicate shop names must use the collision-safe slug.
+  const nameMatches = publicBusinesses.filter((candidate) =>
+    slugifyPublicShopName(candidate.name) === normalizedSlug
+  );
+  const business = exact || (nameMatches.length === 1 ? nameMatches[0] : undefined);
+  return business ? publicShopPayload(business, { includeProducts: true }) : undefined;
 }
 
 function maskEmail(email) {
@@ -1809,6 +1921,10 @@ module.exports = {
   createBusiness,
   listBusinesses,
   getBusiness,
+  getPublicShopSlug,
+  isPublicShopDiscoverable,
+  searchPublicShopsByPhone,
+  getPublicShopBySlug,
   getBusinessByWhatsappPhoneNumberId,
   updateBusiness,
   setWhatsAppCredentials,
