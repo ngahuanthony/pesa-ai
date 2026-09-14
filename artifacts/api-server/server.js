@@ -321,7 +321,7 @@ const server = http.createServer(async (req, res) => {
       const session = auth.resolveSession(req);
       auth.requireOwnBusiness(session, businessId);
       const contentType = String(req.headers["content-type"] || "audio/webm").split(";")[0];
-      if (!["audio/webm", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/wav", "audio/x-m4a"].includes(contentType)) {
+      if (!["audio/webm", "audio/mp4", "audio/m4a", "audio/mpeg", "audio/ogg", "audio/wav", "audio/x-wav", "audio/x-m4a"].includes(contentType)) {
         sendJson(res, 415, { error: "Unsupported audio format" });
         return;
       }

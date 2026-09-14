@@ -529,6 +529,14 @@ paths:
             schema:
               type: string
               format: binary
+          audio/m4a:
+            schema:
+              type: string
+              format: binary
+          audio/x-m4a:
+            schema:
+              type: string
+              format: binary
           audio/mpeg:
             schema:
               type: string

@@ -40,6 +40,7 @@ export function VoiceStockTab() {
   const chunks = useRef<Blob[]>([]);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const confirmationRequestId = useRef(crypto.randomUUID());
+  const pressActive = useRef(false);
   const confirming = confirm.isPending;
 
   const interpretText = useCallback((text: string) => {
@@ -56,41 +57,67 @@ export function VoiceStockTab() {
   }, [businessId, interpret, toast]);
 
   const stopRecording = useCallback(() => {
-    if (!recorder.current || recorder.current.state === "inactive") return;
+    pressActive.current = false;
+    const activeRecorder = recorder.current;
+    if (!activeRecorder || activeRecorder.state === "inactive") return;
     setRecording(false);
     if (timer.current) clearInterval(timer.current);
     stream.current?.getTracks().forEach((track) => track.stop());
     stream.current = null;
-    recorder.current.stop();
+    activeRecorder.stop();
   }, []);
 
   const startRecording = async () => {
+    if (recording || transcribe.isPending || interpret.isPending) return;
+    pressActive.current = true;
     setMicError("");
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      pressActive.current = false;
       setMicError("Voice recording is not available here. Type the update below instead."); return;
     }
     try {
       const liveStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.current = liveStream; chunks.current = [];
-      const next = new MediaRecorder(liveStream);
+      const preferredMimeTypes = ["audio/webm;codecs=opus", "audio/mp4", "audio/m4a", "audio/ogg;codecs=opus", "audio/webm"];
+      const mimeType = preferredMimeTypes.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+      const next = mimeType ? new MediaRecorder(liveStream, { mimeType }) : new MediaRecorder(liveStream);
       recorder.current = next;
       next.ondataavailable = (event) => { if (event.data.size) chunks.current.push(event.data); };
       next.onstop = () => {
-        const blob = new Blob(chunks.current, { type: next.mimeType || "audio/webm" });
+        const blob = new Blob(chunks.current, { type: next.mimeType || mimeType || "audio/webm" });
         chunks.current = [];
-        if (!blob.size) return;
+        if (!blob.size) { setMicError("No audio was captured. Hold the button while speaking, then release it."); return; }
         transcribe.mutate({ businessId, data: blob }, {
           onSuccess: (result) => { setLastProvider(result.provider); setTranscript(result.normalizedTranscript || result.transcript); interpretText(result.normalizedTranscript || result.transcript); },
           onError: () => setMicError("Audio could not be transcribed. Type what you said below and review it."),
         });
       };
-      next.start(); setRecording(true); setSeconds(0);
+      next.start(250); setRecording(true); setSeconds(0);
       timer.current = setInterval(() => setSeconds((value) => value + 1), 1000);
+      if (!pressActive.current) stopRecording();
     } catch {
+      pressActive.current = false;
+      stream.current?.getTracks().forEach((track) => track.stop());
+      stream.current = null;
       setMicError("Microphone access was declined. Allow it in your browser settings, or type the update instead.");
     }
   };
-  const toggleRecording = () => recording ? stopRecording() : void startRecording();
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    void startRecording();
+  };
+  const handlePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    stopRecording();
+  };
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if ((event.key === " " || event.key === "Enter") && !event.repeat) { event.preventDefault(); void startRecording(); }
+  };
+  const handleKeyUp = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === " " || event.key === "Enter") { event.preventDefault(); stopRecording(); }
+  };
   useEffect(() => () => { if (timer.current) clearInterval(timer.current); stream.current?.getTracks().forEach((track) => track.stop()); }, []);
 
   const update = (id: string, patch: Partial<Draft>) => setDraft((items) => items?.map((item) =>
@@ -146,9 +173,9 @@ export function VoiceStockTab() {
       <div className="border-b border-border bg-primary/[0.045] p-4 sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div><p className="font-semibold">Capture a stock change</p><p className="mt-1 text-xs text-muted-foreground">Audio is sent for transcription, then discarded. Nothing is applied automatically.</p></div>
-          <Button data-testid="button-toggle-recording" onClick={toggleRecording} disabled={transcribe.isPending || interpret.isPending} className={`h-12 min-w-[148px] gap-2 rounded-xl ${recording ? "bg-rose-700 hover:bg-rose-800" : "bg-primary hover:bg-primary/90"}`}>{recording ? <><MicOff className="h-5 w-5" /> Stop · {seconds}s</> : <><Mic className="h-5 w-5" /> Tap to record</>}</Button>
+          <Button data-testid="button-toggle-recording" onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} onPointerCancel={stopRecording} onPointerLeave={() => { if (recording) stopRecording(); }} onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} onContextMenu={(event) => event.preventDefault()} disabled={transcribe.isPending || interpret.isPending} aria-label="Hold to record a stock movement" aria-pressed={recording} className={`h-12 min-w-[168px] touch-none select-none gap-2 rounded-xl ${recording ? "bg-rose-700 hover:bg-rose-800" : "bg-primary hover:bg-primary/90"}`}>{recording ? <><MicOff className="h-5 w-5" /> Listening · {seconds}s</> : <><Mic className="h-5 w-5" /> Hold to record</>}</Button>
         </div>
-        {recording && <div data-testid="status-recording" className="mt-4 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800"><span className="h-2 w-2 animate-pulse rounded-full bg-rose-600" />Listening. Speak clearly, then tap stop.</div>}
+        {recording && <div data-testid="status-recording" className="mt-4 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800"><span className="h-2 w-2 animate-pulse rounded-full bg-rose-600" />Listening. Speak clearly, then release the button.</div>}
         {micError && <div data-testid="status-microphone-error" className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{micError}</div>}
         {(transcribe.isPending || interpret.isPending) && <div data-testid="status-processing" className="mt-3 flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-900"><Loader2 className="h-4 w-4 animate-spin" />{transcribe.isPending ? "Transcribing your recording…" : "Preparing stock changes for review…"}</div>}
         <div className="mt-4"><label htmlFor="voice-transcript" className="mb-2 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Transcript · editable fallback</label><Textarea id="voice-transcript" data-testid="input-voice-transcript" value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Example: received 12 packets of milk, sold 3 packets" className="min-h-20 resize-none bg-background/70 text-sm" disabled={recording || transcribe.isPending} /><div className="mt-3 flex flex-wrap justify-end gap-2"><Button data-testid="button-analyze-transcript" onClick={() => interpretText(transcript)} disabled={!transcript.trim() || recording || interpret.isPending} className="gap-2">{interpret.isPending && <Loader2 className="h-4 w-4 animate-spin" />}Prepare review</Button><Button data-testid="button-reset-voice-stock" variant="ghost" onClick={() => { stopRecording(); setDraft(null); setTranscript(""); setMicError(""); }} disabled={!transcript && !draft} className="gap-2"><RotateCcw className="h-4 w-4" />Clear</Button></div></div>
