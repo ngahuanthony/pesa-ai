@@ -49,7 +49,7 @@ export default function LandingPage() {
                 Find a shop
               </a>
             </div>
-            <p className="mt-3 text-xs text-slate-500">5-day free trial · No credit card · Money goes directly to your M-Pesa</p>
+            <p className="mt-3 text-xs text-slate-500">5-day free trial · No credit card · Money goes to your Till, Paybill, or bank account</p>
           </div>
           <PhoneMockup />
         </section>
