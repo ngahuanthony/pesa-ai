@@ -43,6 +43,7 @@ export type ProductColorStockItem = {
   color: string;
   /** @minimum 0 */
   quantity: number;
+  imageUrl?: string | null;
 };
 
 export interface Product {
@@ -99,6 +100,7 @@ export interface VoiceStockItem {
   currentStock: number | null;
   proposedStock: number | null;
   warning?: string | null;
+  imageUrl?: string | null;
 }
 
 export interface VoiceStockInterpretation {
@@ -141,6 +143,8 @@ export type VoiceStockConfirmInputItemsItem = {
   color?: string | null;
   /** @maxLength 50 */
   size?: string | null;
+  /** @maxLength 500 */
+  imageUrl?: string | null;
 };
 
 export interface VoiceStockConfirmInput {
@@ -186,6 +190,12 @@ export interface StockMovement {
 export interface VoiceStockConfirmResult {
   products: Product[];
   movements: StockMovement[];
+}
+
+export interface VariantImageUploadResult {
+  imageUrl: string;
+  path: string;
+  bytes: number;
 }
 
 export interface OrderItem {

@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const db = require("../db");
 const auth = require("../auth");
+const productImages = require("../product-images");
 const { categoryAttrs, normalizeTranscript } = require("../transcriptNormalizer");
 const { cleanAiItems, fallbackInterpret } = require("../universalParser");
 
@@ -266,10 +267,31 @@ function confirm({ params, body, session }) {
   });
 }
 
+async function uploadVariantImage({ params, query, body, contentType, session }) {
+  auth.requireOwnBusiness(session, params.businessId);
+  const productId = String(query?.productId || "").trim();
+  const color = String(query?.color || "default").trim();
+  if (!productId) throw db.httpError(400, "productId is required");
+  if (!color || color.length > 50) throw db.httpError(400, "color must be between 1 and 50 characters");
+  const product = db.listProducts(params.businessId).find((item) => item.id === productId);
+  if (!product) throw db.httpError(404, "Product not found for this business");
+  try {
+    return await productImages.uploadVariantImage({
+      businessId: params.businessId,
+      productId,
+      color,
+      imageBuffer: body,
+      contentType,
+    });
+  } catch (error) {
+    throw db.httpError(400, error.message);
+  }
+}
+
 function history({ params, query, session }) {
   auth.requireOwnBusiness(session, params.businessId);
   db.getBusiness(params.businessId);
   return db.listStockMovements(params.businessId, query.limit);
 }
 
-module.exports = { interpret, confirm, history, transcribeAudio };
+module.exports = { interpret, confirm, history, transcribeAudio, uploadVariantImage };

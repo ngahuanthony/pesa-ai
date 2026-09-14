@@ -56,7 +56,12 @@ const TOOLS = [
 function systemPrompt(business, products) {
   const catalogSummary = products
     .filter((p) => p.active)
-    .map((p) => `- ${p.name}: KES ${p.price} (${p.stockQty > 0 ? `${p.stockQty} in stock` : "out of stock"})`)
+    .map((p) => {
+      const variants = Array.isArray(p.colorStock)
+        ? p.colorStock.filter((entry) => entry.imageUrl).map((entry) => `${entry.color}: photo available`).join(", ")
+        : "";
+      return `- ${p.name}: KES ${p.price} (${p.stockQty > 0 ? `${p.stockQty} in stock` : "out of stock"})${variants ? ` [${variants}]` : ""}`;
+    })
     .join("\n");
 
   const locationLine = business.location ? `Location: ${business.location}` : "";
@@ -119,6 +124,10 @@ function executeTool(business, customerId, toolName, toolInput) {
         price: p.price,
         stockQty: p.stockQty,
         description: p.description,
+        variants: Array.isArray(p.colorStock)
+          ? p.colorStock.map((entry) => ({ color: entry.color, quantity: entry.quantity, imageUrl: entry.imageUrl || null }))
+          : [],
+        imageUrl: p.imageUrl || null,
       })),
     };
   }
@@ -251,11 +260,41 @@ function runMockAssistant(business, customerId, history, userText, opts = {}) {
   };
 }
 
-async function getAssistantReply(business, customerId, history, userText, opts = {}) {
-  if (ANTHROPIC_API_KEY) {
-    return runClaudeAssistant(business, customerId, history, userText, opts);
-  }
-  return runMockAssistant(business, customerId, history, userText, opts);
+function normalizeProductSearchText(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-module.exports = { getAssistantReply };
+function getProductImageReplies(business, userText) {
+  const query = normalizeProductSearchText(userText);
+  if (!query) return [];
+  const products = db.listProducts(business.id, { activeOnly: true });
+  const replies = [];
+  for (const product of products) {
+    const productName = normalizeProductSearchText(product.name);
+    if (!productName || !query.includes(productName)) continue;
+    const variants = Array.isArray(product.colorStock) ? product.colorStock : [];
+    const requestedVariants = variants.filter((entry) =>
+      entry.imageUrl && normalizeProductSearchText(entry.color) && query.includes(normalizeProductSearchText(entry.color))
+    );
+    const selected = (requestedVariants.length ? requestedVariants : variants.filter((entry) => entry.imageUrl).slice(0, 1));
+    if (selected.length) {
+      for (const entry of selected.slice(0, 3)) {
+        replies.push({ link: entry.imageUrl, caption: `${product.name}${entry.color ? ` · ${entry.color}` : ""} — KSh ${product.price}` });
+      }
+    } else if (product.imageUrl) {
+      replies.push({ link: product.imageUrl, caption: `${product.name} — KSh ${product.price}` });
+    }
+    if (replies.length >= 3) break;
+  }
+  return replies.filter((reply) => /^https?:\/\//i.test(reply.link));
+}
+
+async function getAssistantReply(business, customerId, history, userText, opts = {}) {
+  const mediaReplies = getProductImageReplies(business, userText);
+  const result = ANTHROPIC_API_KEY
+    ? await runClaudeAssistant(business, customerId, history, userText, opts)
+    : runMockAssistant(business, customerId, history, userText, opts);
+  return { ...result, mediaReplies };
+}
+
+module.exports = { getAssistantReply, getProductImageReplies };

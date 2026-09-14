@@ -57,7 +57,8 @@ import type {
   VoiceStockConfirmResult,
   VoiceStockInterpretInput,
   VoiceStockInterpretation,
-  VoiceStockTranscription
+  VoiceStockTranscription,
+  VariantImageUploadResult
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1835,6 +1836,21 @@ export const useTranscribeVoiceStock = <TError = ErrorType<unknown>,
 ): UseMutationResult<Awaited<ReturnType<typeof transcribeVoiceStock>>, TError, {businessId: string;data: BodyType<Blob>}, TContext> => {
   return useMutation(getTranscribeVoiceStockMutationOptions(options));
 }
+
+export const getUploadVoiceStockVariantImageUrl = (businessId: string, productId: string, color: string) => {
+  return `/api/businesses/${businessId}/voice-stock/variant-image?productId=${encodeURIComponent(productId)}&color=${encodeURIComponent(color)}`
+}
+
+export const uploadVoiceStockVariantImage = async (businessId: string,
+    productId: string, color: string, image: Blob, options?: Parameters<typeof customFetch>[1]): Promise<VariantImageUploadResult> => {
+  return customFetch<VariantImageUploadResult>(getUploadVoiceStockVariantImageUrl(businessId, productId, color),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'image/webp', ...options?.headers },
+    body: image
+  }
+);}
 
 export const getConfirmVoiceStockUrl = (businessId: string,) => {
 

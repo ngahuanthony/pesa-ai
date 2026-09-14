@@ -16,4 +16,8 @@ export type VoiceStockConfirmInputItemsItem = {
   unit?: string;
   /** @maxLength 50 */
   color?: string | null;
+  /** @maxLength 50 */
+  size?: string | null;
+  /** @maxLength 500 */
+  imageUrl?: string | null;
 };

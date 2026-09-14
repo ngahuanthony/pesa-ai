@@ -10,4 +10,5 @@ export type ProductColorStockItem = {
   color: string;
   /** @minimum 0 */
   quantity: number;
+  imageUrl?: string | null;
 };

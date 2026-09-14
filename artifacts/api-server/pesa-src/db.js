@@ -14,6 +14,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const fieldCrypto = require("./crypto");
+const productImages = require("./product-images");
 
 // Override with a DATA_DIR env var to point this at a mounted persistent
 // disk on hosts like Render/Railway (their filesystem is otherwise wiped
@@ -1250,18 +1251,23 @@ function confirmStockMovements(businessId, items, { transcript, accountId, reque
       }
       const requestedColor = item.color == null ? "" : String(item.color).trim();
       const requestedSize = item.size == null ? "" : String(item.size).trim();
+      const imageUrl = item.imageUrl == null ? "" : String(item.imageUrl).trim();
       if (requestedColor.length > 50) throw httpError(400, "Colour must be at most 50 characters");
       if (item.color != null && !requestedColor) throw httpError(400, "Colour cannot be blank");
       if (requestedSize.length > 50) throw httpError(400, "Size must be at most 50 characters");
+      if (imageUrl.length > 500) throw httpError(400, "Product image URL must be at most 500 characters");
+      if (imageUrl && productImages.isConfigured() && !productImages.isPublicProductImageUrl(imageUrl)) {
+        throw httpError(400, "Product image URL must come from configured Supabase product storage");
+      }
 
       const existingColors = stagedColors.has(product.id)
         ? stagedColors.get(product.id)
         : (Array.isArray(product.colorStock) && product.colorStock.length
-          ? product.colorStock.map((entry) => ({ color: String(entry.color), quantity: Number(entry.quantity) || 0 }))
+          ? product.colorStock.map((entry) => ({ color: String(entry.color), quantity: Number(entry.quantity) || 0, ...(entry.imageUrl ? { imageUrl: String(entry.imageUrl) } : {}) }))
           : (requestedColor && Number(product.stockQty) > 0
             ? [{ color: "Unspecified", quantity: Number(product.stockQty) }]
             : []));
-      const effectiveColor = requestedColor || (existingColors.length ? "Unspecified" : "");
+      const effectiveColor = requestedColor || (existingColors.length ? "Unspecified" : (item.imageUrl ? "default" : ""));
       const current = stagedStock.has(product.id) ? stagedStock.get(product.id) : Number(product.stockQty);
       let nextColors = existingColors;
       let colorPreviousStock = null;
@@ -1276,8 +1282,12 @@ function confirmStockMovements(businessId, items, { transcript, accountId, reque
         if (colorResultingStock < 0) {
           throw httpError(400, `Stock cannot become negative for ${product.name} (${effectiveColor})`);
         }
-        if (colorIndex >= 0) nextColors[colorIndex].quantity = colorResultingStock;
-        else nextColors.push({ color: effectiveColor, quantity: colorResultingStock });
+        if (colorIndex >= 0) {
+          nextColors[colorIndex].quantity = colorResultingStock;
+          if (imageUrl) nextColors[colorIndex].imageUrl = imageUrl;
+        } else {
+          nextColors.push({ color: effectiveColor, quantity: colorResultingStock, ...(imageUrl ? { imageUrl } : {}) });
+        }
       }
       // An adjustment is a physical count: it sets stock to that count,
       // rather than adding another quantity to the existing balance.

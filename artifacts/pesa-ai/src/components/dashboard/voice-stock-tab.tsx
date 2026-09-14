@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Check, History, Loader2, Mic, MicOff, PackageCheck, RotateCcw, ShieldAlert, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, Camera, Check, History, Loader2, Mic, MicOff, PackageCheck, RotateCcw, ShieldAlert, Sparkles, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import {
   VoiceStockItem, VoiceStockItemAction, VoiceStockConfirmInputItemsItemAction,
 } from "@workspace/api-client-react";
 
-type Draft = VoiceStockItem & { id: string };
+type Draft = VoiceStockItem & { id: string; imageUrl?: string | null; imageUploading?: boolean; imageError?: string };
 const actions: Record<string, { label: string; short: string; tone: string }> = {
   receive: { label: "Receive / Add", short: "ADD", tone: "text-emerald-800 bg-emerald-100 border-emerald-200" },
   sell: { label: "Sell / Deduct", short: "SELL", tone: "text-amber-900 bg-amber-100 border-amber-200" },
@@ -41,6 +41,8 @@ export function VoiceStockTab() {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const confirmationRequestId = useRef(crypto.randomUUID());
   const pressActive = useRef(false);
+  const photoInput = useRef<HTMLInputElement | null>(null);
+  const photoTargetId = useRef<string | null>(null);
   const confirming = confirm.isPending;
 
   const interpretText = useCallback((text: string) => {
@@ -49,12 +51,86 @@ export function VoiceStockTab() {
       onSuccess: (result) => {
         setTranscript(result.normalizedTranscript || result.transcript);
         confirmationRequestId.current = crypto.randomUUID();
-        setDraft(result.items.map((item) => ({ ...item, id: crypto.randomUUID() })));
+        setDraft(result.items.map((item) => {
+          const existing = products.find((product) => product.id === item.productId);
+          const existingVariant = existing?.colorStock?.find((variant) => variant.color.toLowerCase() === (item.color || "").toLowerCase());
+          return { ...item, id: crypto.randomUUID(), imageUrl: existingVariant?.imageUrl || null };
+        }));
         if (!result.items.length) toast({ title: "Nothing to review", description: "Try saying a product, quantity, and action." });
       },
       onError: () => toast({ title: "Could not understand that", description: "Check the transcript and try again.", variant: "destructive" }),
     });
-  }, [businessId, interpret, toast]);
+  }, [businessId, interpret, products, toast]);
+
+  const updatePhotoState = useCallback((id: string, patch: Partial<Draft>) => {
+    setDraft((items) => items?.map((item) => item.id === id ? { ...item, ...patch } : item) ?? null);
+  }, []);
+
+  const openPhotoPicker = (id: string) => {
+    photoTargetId.current = id;
+    if (photoInput.current) {
+      photoInput.current.value = "";
+      photoInput.current.click();
+    }
+  };
+
+  const compressProductPhoto = async (file: File) => {
+    const sourceUrl = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.src = sourceUrl;
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error("The product photo could not be read"));
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = 500;
+      canvas.height = 500;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Photo compression is not available in this browser");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, 500, 500);
+      const scale = Math.min(500 / image.naturalWidth, 500 / image.naturalHeight);
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      context.drawImage(image, Math.round((500 - width) / 2), Math.round((500 - height) / 2), width, height);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.6));
+      if (!blob || blob.type !== "image/webp") throw new Error("This browser cannot create WebP product photos");
+      return blob;
+    } finally {
+      URL.revokeObjectURL(sourceUrl);
+    }
+  };
+
+  const handlePhotoSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const id = photoTargetId.current;
+    event.target.value = "";
+    if (!file || !id || !businessId) return;
+    const item = draft?.find((candidate) => candidate.id === id);
+    if (!item?.productId) {
+      toast({ title: "Choose a product first", description: "A photo must belong to a matched catalogue product.", variant: "destructive" });
+      return;
+    }
+    updatePhotoState(id, { imageUploading: true, imageError: "" });
+    try {
+      const blob = await compressProductPhoto(file);
+      const color = item.color?.trim() || "default";
+      const response = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/voice-stock/variant-image?productId=${encodeURIComponent(item.productId)}&color=${encodeURIComponent(color)}`, {
+        method: "POST",
+        headers: { "Content-Type": "image/webp" },
+        body: blob,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.imageUrl) throw new Error(payload.error || "Product photo upload failed");
+      updatePhotoState(id, { imageUrl: payload.imageUrl, imageUploading: false, imageError: "" });
+      toast({ title: "Product photo saved", description: "This photo will be attached to the variant when you confirm." });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Product photo upload failed";
+      updatePhotoState(id, { imageUploading: false, imageError: message });
+      toast({ title: "Photo not saved", description: message, variant: "destructive" });
+    }
+  };
 
   const stopRecording = useCallback(() => {
     pressActive.current = false;
@@ -126,9 +202,13 @@ export function VoiceStockTab() {
   };
   useEffect(() => () => { if (timer.current) clearInterval(timer.current); stream.current?.getTracks().forEach((track) => track.stop()); }, []);
 
-  const update = (id: string, patch: Partial<Draft>) => setDraft((items) => items?.map((item) =>
-    item.id === id ? { ...item, ...patch, confidenceLevel: "review", warning: null } : item
-  ) ?? null);
+  const update = (id: string, patch: Partial<Draft>) => setDraft((items) => items?.map((item) => {
+    if (item.id !== id) return item;
+    const identityChanged =
+      ("productId" in patch && patch.productId !== item.productId) ||
+      ("color" in patch && patch.color !== item.color);
+    return { ...item, ...patch, imageUrl: identityChanged ? null : item.imageUrl, confidenceLevel: "review", warning: null };
+  }) ?? null);
   const previews = useMemo(() => {
     const result = new Map<string, { current: number; next: number }>();
     const stock = new Map(products.map((product) => [product.id, product.stockQty]));
@@ -160,7 +240,7 @@ export function VoiceStockTab() {
   const invalid = (draft ?? []).some((item) => item.confidenceLevel === "blocked" || !item.productId || !item.action || !item.quantity || item.quantity <= 0 || (previews.get(item.id)?.next ?? 0) < 0);
   const confirmAll = () => {
     if (!draft || invalid || confirming || !businessId) return;
-    confirm.mutate({ businessId, data: { transcript, requestId: confirmationRequestId.current, items: draft.map((item) => ({ productId: item.productId!, action: item.action as VoiceStockConfirmInputItemsItemAction, quantity: item.quantity!, unit: item.unit, color: item.color || null, size: item.size || null })) } }, {
+    confirm.mutate({ businessId, data: { transcript, requestId: confirmationRequestId.current, items: draft.map((item) => ({ productId: item.productId!, action: item.action as VoiceStockConfirmInputItemsItemAction, quantity: item.quantity!, unit: item.unit, color: item.color || null, size: item.size || null, imageUrl: item.imageUrl || null })) } }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListProductsQueryKey(businessId) });
         queryClient.invalidateQueries({ queryKey: getGetVoiceStockHistoryQueryKey(businessId) });
@@ -171,6 +251,7 @@ export function VoiceStockTab() {
   };
 
   return <main className="mx-auto min-h-[100dvh] max-w-5xl space-y-5 px-3 py-4 sm:px-6 sm:py-7">
+    <input ref={photoInput} type="file" accept="image/*" capture="environment" onChange={handlePhotoSelected} className="hidden" aria-label="Take product photo" />
     <header className="flex items-start justify-between gap-4">
       <div><div className="mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-primary"><Sparkles className="h-3.5 w-3.5" /> Pesa AI · stock desk</div><h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Voice to stock</h1><p className="mt-1 max-w-xl text-sm text-muted-foreground">Say what moved. We’ll prepare it, you decide what gets recorded.</p></div>
       <div className="hidden rounded-xl border border-border bg-card px-3 py-2 text-right sm:block"><p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Daily safeguard</p><p className="text-sm font-semibold text-primary">Review before apply</p></div>
@@ -194,6 +275,7 @@ export function VoiceStockTab() {
         <div className="mb-3 flex items-start justify-between gap-2"><div className="flex items-center gap-2">{blocked ? <ShieldAlert className="h-4 w-4 text-rose-700" /> : uncertain ? <AlertTriangle className="h-4 w-4 text-amber-700" /> : <Check className="h-4 w-4 text-emerald-700" />}<span className="text-xs font-bold uppercase tracking-wider">{blocked ? "Blocked · fix match" : uncertain ? "Review this row" : "Ready to apply"}</span></div><Button data-testid={`button-remove-review-${index}`} variant="ghost" size="icon" onClick={() => setDraft((items) => items?.filter((entry) => entry.id !== item.id) ?? null)} className="h-8 w-8 text-muted-foreground"><Trash2 className="h-4 w-4" /></Button></div>
         <div className="grid gap-3 sm:grid-cols-[1.3fr_1fr_0.7fr_0.8fr]"><label className="text-xs font-medium text-muted-foreground">Product<select data-testid={`select-review-product-${index}`} value={item.productId ?? ""} onChange={(e) => update(item.id, { productId: e.target.value || null })} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"><option value="">Choose product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.stockQty} in stock</option>)}</select></label><label className="text-xs font-medium text-muted-foreground">Movement<select data-testid={`select-review-action-${index}`} value={item.action ?? ""} onChange={(e) => update(item.id, { action: e.target.value as VoiceStockItemAction })} className={`mt-1 h-10 w-full rounded-lg border px-2 text-sm font-semibold ${item.action ? actions[item.action].tone : "border-input bg-background"}`}><option value="">Choose action</option>{Object.entries(actions).map(([value, action]) => <option key={value} value={value}>{action.label}</option>)}</select></label><label className="text-xs font-medium text-muted-foreground">Quantity<input data-testid={`input-review-quantity-${index}`} type="number" min="1" value={item.quantity ?? ""} onChange={(e) => update(item.id, { quantity: Number(e.target.value) })} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm font-semibold" /></label><label className="text-xs font-medium text-muted-foreground">Unit<input data-testid={`input-review-unit-${index}`} value={item.unit} onChange={(e) => update(item.id, { unit: e.target.value })} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm" /></label></div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-medium text-muted-foreground">Color variant<input data-testid={`input-review-color-${index}`} value={item.color ?? ""} onChange={(e) => update(item.id, { color: e.target.value })} placeholder="Optional" className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm" /></label><label className="text-xs font-medium text-muted-foreground">Size variant<input data-testid={`input-review-size-${index}`} value={item.size ?? ""} onChange={(e) => update(item.id, { size: e.target.value })} placeholder="Optional" className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm" /></label></div>
+        <div className="mt-3 flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/20 p-2"><Button type="button" variant="outline" size="sm" onClick={() => openPhotoPicker(item.id)} disabled={!item.productId || item.imageUploading} className="gap-2"><Camera className="h-4 w-4" />{item.imageUploading ? "Uploading…" : "📷 Product photo"}</Button>{item.imageUrl && <img src={item.imageUrl} alt={`${item.productName || "Product"} ${item.color || ""}`} className="h-10 w-10 rounded-md border border-border object-cover" />}{item.imageError && <span className="text-xs text-rose-700">{item.imageError}</span>}<span className="text-[11px] text-muted-foreground">One photo per variant · camera product shot</span></div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-black/5 pt-3 text-xs"><span className="text-muted-foreground">Stock after: <strong className={preview && preview.next < 0 ? "text-rose-700" : "text-foreground"}>{preview?.next ?? "—"}</strong></span><span className="font-mono uppercase tracking-wider text-muted-foreground">{item.evidence || item.warning || `${Math.round(item.confidence * 100)}% confidence`}</span></div>
       </article>; })}</div>
       {invalid && <div data-testid="status-review-blocked" className="flex items-center gap-2 border-t border-rose-200 bg-rose-50 px-4 py-3 text-xs font-medium text-rose-800"><ShieldAlert className="h-4 w-4" />Fix blocked or invalid rows before confirming.</div>}

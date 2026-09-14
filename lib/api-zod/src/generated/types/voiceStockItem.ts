@@ -20,4 +20,5 @@ export interface VoiceStockItem {
   currentStock: number | null;
   proposedStock: number | null;
   warning?: string | null;
+  imageUrl?: string | null;
 }

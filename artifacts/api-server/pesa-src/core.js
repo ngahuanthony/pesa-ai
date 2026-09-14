@@ -3,7 +3,7 @@
 // guarantees "works in the simulator" == "works on real WhatsApp."
 
 const db = require("./db");
-const { getAssistantReply } = require("./ai");
+const { getAssistantReply, getProductImageReplies } = require("./ai");
 
 // The pre-filled text baked into the shop QR / wa.me link.
 // When a customer taps the link, WhatsApp sends exactly this message.
@@ -107,14 +107,14 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
       db.mutate((state) => {
         db.addMessage(state, conversation.id, "assistant", business.welcomeMessage);
       });
-      return { replyText: business.welcomeMessage, order: null, customer, conversation };
+      return { replyText: business.welcomeMessage, mediaReplies: getProductImageReplies(business, text), order: null, customer, conversation };
     }
   }
 
-  const { replyText, order } = await getAssistantReply(business, customer.id, priorHistory, text);
+  const { replyText, mediaReplies, order } = await getAssistantReply(business, customer.id, priorHistory, text);
   const prepared = orderActions(replyText, order);
   db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", prepared.replyText); });
-  return { replyText: prepared.replyText, interactiveButtons: prepared.interactiveButtons, order, customer, conversation };
+  return { replyText: prepared.replyText, mediaReplies, interactiveButtons: prepared.interactiveButtons, order, customer, conversation };
 }
 
 module.exports = { handleCustomerMessage };

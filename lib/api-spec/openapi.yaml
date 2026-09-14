@@ -549,6 +549,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/VoiceStockTranscription"
 
+  /businesses/{businessId}/voice-stock/variant-image:
+    post:
+      operationId: uploadVoiceStockVariantImage
+      tags: [voice-stock]
+      parameters:
+        - $ref: "#/components/parameters/BusinessId"
+        - name: productId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: color
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 50
+      requestBody:
+        required: true
+        content:
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Public URL for the overwritten product-variant image.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariantImageUploadResult"
+
   /businesses/{businessId}/voice-stock/confirm:
     post:
       operationId: confirmVoiceStock
@@ -863,6 +895,9 @@ components:
               quantity:
                 type: number
                 minimum: 0
+              imageUrl:
+                type: string
+                nullable: true
             required: [color, quantity]
         imageUrl:
           type: string
@@ -947,6 +982,9 @@ components:
         warning:
           type: string
           nullable: true
+        imageUrl:
+          type: string
+          nullable: true
       required: [productId, productName, action, quantity, unit, confidence, confidenceLevel, currentStock, proposedStock]
 
     VoiceStockInterpretation:
@@ -996,8 +1034,24 @@ components:
                 type: string
                 nullable: true
                 maxLength: 50
+              imageUrl:
+                type: string
+                nullable: true
+                maxLength: 500
             required: [productId, action, quantity]
       required: [items]
+
+    VariantImageUploadResult:
+      type: object
+      properties:
+        imageUrl:
+          type: string
+          format: uri
+        path:
+          type: string
+        bytes:
+          type: integer
+      required: [imageUrl, path, bytes]
 
     StockMovement:
       type: object

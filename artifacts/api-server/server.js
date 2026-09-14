@@ -336,6 +336,37 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Product photos are compressed to WebP in the browser and uploaded here
+  // before Confirm All. The deterministic path overwrites one photo per
+  // product/colour variant.
+  const productImageUploadMatch = req.method === "POST" &&
+    pathname.match(/^\/api\/businesses\/([^/]+)\/voice-stock\/variant-image$/);
+  if (productImageUploadMatch) {
+    const businessId = productImageUploadMatch[1];
+    try {
+      const session = auth.resolveSession(req);
+      const contentType = String(req.headers["content-type"] || "").split(";")[0].toLowerCase();
+      if (contentType !== "image/webp") {
+        sendJson(res, 415, { error: "Product photo must be WebP" });
+        return;
+      }
+      const imageBuffer = await readRawBody(req, 100 * 1024);
+      const result = await voiceStockRoutes.uploadVariantImage({
+        params: { businessId },
+        query: parseQuery(parsed.query),
+        body: imageBuffer,
+        contentType,
+        session,
+      });
+      sendJson(res, 200, result);
+    } catch (err) {
+      const status = err.statusCode || 500;
+      console.error("[voice-stock] product image upload error:", err.message);
+      sendJson(res, status, { error: err.message || "Product image upload failed" });
+    }
+    return;
+  }
+
   // ── Video upload ──────────────────────────────────────────────────────
   // Handled before the generic router so we can read raw binary bytes
   // (the generic readBody() only handles JSON).

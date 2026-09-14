@@ -148,6 +148,51 @@ test("colour stock cannot become negative and confirmation stays atomic", () => 
   assert.equal(db.getProduct("cable-a").stockQty, 4);
   assert.deepEqual(db.getProduct("cable-a").colorStock, [{ color: "Black", quantity: 4 }]);
 });
+
+test("confirmation saves one overwritable image URL per colour variant", () => {
+  const first = voiceStock.confirm({
+    params: { businessId: "business-a" }, session: session("business-a"),
+    body: { items: [{ productId: "cable-a", action: "receive", color: "Black", quantity: 4, imageUrl: "https://images.example/black-old.webp" }] },
+  });
+  assert.equal(first.products[0].colorStock[0].imageUrl, "https://images.example/black-old.webp");
+
+  const second = voiceStock.confirm({
+    params: { businessId: "business-a" }, session: session("business-a"),
+    body: { items: [{ productId: "cable-a", action: "adjustment", color: "Black", quantity: 7, imageUrl: "https://images.example/black-new.webp" }] },
+  });
+  assert.deepEqual(db.getProduct("cable-a").colorStock, [
+    { color: "Black", quantity: 7, imageUrl: "https://images.example/black-new.webp" },
+  ]);
+  assert.equal(second.movements[0].colorResultingStock, 7);
+});
+
+test("variant image upload returns the deterministic public URL", async () => {
+  const originalFetch = global.fetch;
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = "https://demo.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role-key";
+  global.fetch = async (url, options) => {
+    assert.match(url, /\/storage\/v1\/object\/product-images\/business-a\/tea-a_black\.webp$/);
+    assert.equal(options.method, "POST");
+    assert.equal(options.headers["x-upsert"], "true");
+    return { ok: true, text: async () => "" };
+  };
+  try {
+    const result = await voiceStock.uploadVariantImage({
+      params: { businessId: "business-a" },
+      query: { productId: "tea-a", color: "Black" },
+      body: Buffer.alloc(200, 1),
+      contentType: "image/webp",
+      session: session("business-a"),
+    });
+    assert.equal(result.imageUrl, "https://demo.supabase.co/storage/v1/object/public/product-images/business-a/tea-a_black.webp");
+  } finally {
+    global.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+  }
+});
 const { normalizeTranscript } = require("../transcriptNormalizer");
 const { fallbackInterpret } = require("../universalParser");
 test("normalizes Swahili, Sheng, and common ASR variants", () => {

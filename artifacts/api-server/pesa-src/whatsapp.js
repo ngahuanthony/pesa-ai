@@ -141,7 +141,7 @@ async function handleIncomingWebhook(body) {
     return;
   }
 
-  const { replyText, extraReplies, interactiveButtons } = await handleCustomerMessage({
+  const { replyText, extraReplies, interactiveButtons, mediaReplies } = await handleCustomerMessage({
     business,
     customerPhone: from,
     customerName:  contactName,
@@ -156,6 +156,11 @@ async function handleIncomingWebhook(body) {
 
   // Shop-link entry: send the catalog message immediately after the welcome
   if (extraReplies && extraReplies.length) { for (const extra of extraReplies) if (extra) await sendMessage(phoneNumberId, from, extra, accessToken); }
+  if (mediaReplies && mediaReplies.length) {
+    for (const media of mediaReplies) {
+      await sendImageMessage(phoneNumberId, from, media.link, media.caption, accessToken);
+    }
+  }
   if (interactiveButtons) await sendButtonsMessage(phoneNumberId, from, "Choose a payment option:", interactiveButtons, accessToken);
 }
 
@@ -208,6 +213,35 @@ async function sendMessage(phoneNumberId, to, text, accessToken) {
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
     console.error(`[whatsapp] Send failed (${res.status}): ${errText}`);
+    return false;
+  }
+  return true;
+}
+
+async function sendImageMessage(phoneNumberId, to, link, caption, accessToken) {
+  if (!accessToken) {
+    console.warn("[whatsapp] No access token available — skipping product image:", link);
+    return false;
+  }
+  const res = await fetch(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "image",
+        image: { link, ...(caption ? { caption } : {}) },
+      }),
+    }
+  );
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    console.error(`[whatsapp] Image send failed (${res.status}): ${errText}`);
     return false;
   }
   return true;
@@ -349,6 +383,7 @@ module.exports = {
   verifyWebhook,
   handleIncomingWebhook,
   sendMessage,
+  sendImageMessage,
   sendPlatformOtp,
   resolveAccessToken,
   updateWhatsAppBusinessProfile,
