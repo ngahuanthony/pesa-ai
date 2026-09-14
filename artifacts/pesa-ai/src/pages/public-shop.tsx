@@ -105,7 +105,6 @@ export default function PublicShopPage() {
                 </div>
               </section>
               {shop.whatsappUrl && <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#d9e8df] bg-white/95 px-5 py-3 shadow-[0_-8px_30px_rgba(10,74,58,0.12)] backdrop-blur"><div className="mx-auto flex max-w-5xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><a href={shop.whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#25D366] px-5 py-3 text-sm font-bold text-white"><ExternalLink className="h-4 w-4" /> Chat on WhatsApp Shop</a><a href={shop.whatsappUrl} target="_blank" rel="noreferrer" className="text-center text-xs font-semibold text-slate-600 underline underline-offset-4">Open directly in WhatsApp</a></div></div>}
-              </section>
             </>
           )}
         </div>
