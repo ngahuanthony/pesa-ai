@@ -25,6 +25,7 @@ const productTermMap = {
   flour: ["unga"],
   shirt: ["shati"],
   nails: ["misumari"],
+  max: ["max", "marks", "mark", "maks", "maxx"],
 };
 const categoryAttrs = {
   phone_accessories: { colors: Object.keys(colorMap), units: ["pieces", "pcs"], variants: ["color"] },

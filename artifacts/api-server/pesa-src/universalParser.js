@@ -211,7 +211,7 @@ function parseVariantPairs(segment, attrs) {
   return rows;
 }
 
-function fallbackInterpret(transcript, business, products) {
+function fallbackInterpretSingle(transcript, business, products) {
   const text = normalize(transcript);
   const category = String(business.category || "general").toLowerCase().replace(/\s+/g, "_");
   const attrs = categoryAttrs[category] || { colors: ["black", "green", "blue", "red", "white", "yellow"], units: ["pieces"] };
@@ -286,6 +286,14 @@ function fallbackInterpret(transcript, business, products) {
     unit: attrs.units?.[0] || "pieces", color, evidence: text,
     confidence: 0.74, actionWasImplicit: !explicitAction,
   })];
+}
+
+function fallbackInterpret(transcript, business, products) {
+  const segments = String(transcript || "")
+    .split(/\r?\n|;/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  return segments.flatMap((segment) => fallbackInterpretSingle(segment, business, products));
 }
 
 function cleanAiItems(items, products) {

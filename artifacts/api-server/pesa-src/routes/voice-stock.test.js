@@ -198,6 +198,7 @@ const { fallbackInterpret } = require("../universalParser");
 test("normalizes Swahili, Sheng, and common ASR variants", () => {
   assert.equal(normalizeTranscript("Samsung fold five Five black pieces five green pieces five block pieces"), "samsung fold 5 5 black pieces 5 green pieces 5 black pieces");
   assert.equal(normalizeTranscript("Shati tano nyeusi size L"), "shirt 5 black size l");
+  assert.equal(normalizeTranscript("iPhone 16 pro marks black clear 10 pieces"), "iphone 16 pro max black clear 10 pieces");
 });
 
 test("universal parser separates similar phone models and repeated colour variants", () => {
@@ -265,6 +266,34 @@ test("matches colour words and plural product names without losing the spoken co
   assert.equal(items[0].color, "orange");
   assert.equal(items[0].quantity, 10);
   assert.notEqual(items[0].confidenceLevel, "blocked");
+});
+
+test("matches the common max-to-marks transcription shown in Voice-to-Stock", () => {
+  const items = fallbackInterpret(
+    "16 pro marks black clear 10 pieces",
+    { id: "phones", category: "phone_accessories" },
+    [{ id: "iphone-cover", businessId: "phones", name: "iPhone 16 Pro Max Clear Cover", stockQty: 0 }],
+  );
+  assert.equal(items.length, 1);
+  assert.equal(items[0].productId, "iphone-cover");
+  assert.equal(items[0].productName, "iPhone 16 Pro Max Clear Cover");
+  assert.equal(items[0].color, "black");
+  assert.equal(items[0].quantity, 10);
+  assert.notEqual(items[0].confidenceLevel, "blocked");
+});
+
+test("processes more than five newline-separated stock movements in one review", () => {
+  const products = Array.from({ length: 6 }, (_, index) => ({
+    id: `phone-${index + 1}`,
+    businessId: "phones",
+    name: `Phone Cover ${index + 1}`,
+    stockQty: 0,
+  }));
+  const transcript = products.map((product, index) => `${product.name} black ${index + 1} pieces`).join("\n");
+  const items = fallbackInterpret(transcript, { id: "phones", category: "phone_accessories" }, products);
+  assert.equal(items.length, 6);
+  assert.deepEqual(items.map((item) => [item.productId, item.quantity]), products.map((product, index) => [product.id, index + 1]));
+  assert.ok(items.every((item) => item.confidenceLevel !== "blocked"));
 });
 
 test("keeps unmatched products blocked instead of creating catalogue items implicitly", () => {

@@ -9,6 +9,8 @@ const GROQ_MODEL = "whisper-large-v3";
 const GROQ_PROMPT = "Pesa AI duka Samsung Fold Tecno Infinix black green blue nyeusi kijani tano kumi pieces";
 const OPENAI_MODEL = "gpt-4o-mini";
 const FALLBACK_PROMPT = GROQ_PROMPT;
+const MAX_VOICE_TRANSCRIPT_CHARS = 12000;
+const MAX_VOICE_ITEMS = 100;
 
 function mediaType(contentType) {
   return String(contentType || "audio/webm").split(";", 1)[0].trim().toLowerCase();
@@ -211,7 +213,7 @@ async function openAiInterpret(transcript, business, products) {
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: [
-          "Extract inventory changes from English, Kiswahili, or Sheng.",
+           "Extract every inventory change from English, Kiswahili, or Sheng. Process every line and return one item per product movement; do not stop after the first few lines.",
           "Return JSON only: {items:[{product_search,action,quantity,unit,color,size,evidence,confidence,actionWasImplicit}]}.",
           "Never return productId. product_search must be a catalogue name or exact spoken product phrase for deterministic matching.",
           "Actions are receive, sell, damage, missing, or adjustment. If action is omitted, use receive and actionWasImplicit true.",
@@ -235,7 +237,7 @@ async function interpret({ params, body, session }) {
   const business = db.getBusiness(params.businessId);
   const rawTranscript = body && typeof body.transcript === "string" ? body.transcript.trim() : "";
   if (!rawTranscript) throw db.httpError(400, "transcript is required");
-  if (rawTranscript.length > 4000) throw db.httpError(400, "transcript must be at most 4000 characters");
+  if (rawTranscript.length > MAX_VOICE_TRANSCRIPT_CHARS) throw db.httpError(400, `transcript must be at most ${MAX_VOICE_TRANSCRIPT_CHARS} characters`);
   const normalizedTranscript = normalizeTranscript(rawTranscript);
   const products = db.listProducts(params.businessId);
   let items;
@@ -257,9 +259,9 @@ function confirm({ params, body, session }) {
   const items = body && Array.isArray(body.items) ? body.items : null;
   const transcript = body && body.transcript;
   if (!items || !items.length) throw db.httpError(400, "items must be a non-empty array");
-  if (items.length > 100) throw db.httpError(400, "at most 100 items can be confirmed at once");
+  if (items.length > MAX_VOICE_ITEMS) throw db.httpError(400, `at most ${MAX_VOICE_ITEMS} items can be confirmed at once`);
   if (transcript != null && typeof transcript !== "string") throw db.httpError(400, "transcript must be a string");
-  if (transcript && transcript.length > 4000) throw db.httpError(400, "transcript must be at most 4000 characters");
+  if (transcript && transcript.length > MAX_VOICE_TRANSCRIPT_CHARS) throw db.httpError(400, `transcript must be at most ${MAX_VOICE_TRANSCRIPT_CHARS} characters`);
   return db.confirmStockMovements(params.businessId, items, {
     transcript,
     accountId: session && session.accountId,
