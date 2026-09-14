@@ -115,6 +115,24 @@ async function handleIncomingWebhook(body) {
   const accessToken = resolveAccessToken(business);
   const normalizedText = String(text || "").trim().toLowerCase();
 
+  // Public shop links use a short, deterministic greeting. Keep the first
+  // response lightweight, then answer later product requests with only the
+  // matching photographed variant rather than sending the whole catalogue.
+  const publicShopSlug = db.getPublicShopSlug(business);
+  if (normalizedText === `hi ${String(publicShopSlug).toLowerCase()}`) {
+    await sendMessage(phoneNumberId, from, "Habari! " + business.name + " hapa. Unatafuta gani?", accessToken);
+    return;
+  }
+  const requestedVariants = db.searchPublicProducts(business.id, text, { limit: 1 });
+  if (requestedVariants.length) {
+    const variant = requestedVariants[0];
+    const label = variant.productName + (variant.variant ? " — " + variant.variant : "");
+    const stock = Number(variant.stockQty) > 0 ? "Stock: " + Number(variant.stockQty) : "Out of stock";
+    const caption = label + "\n" + stock + "\nPrice: KSh " + Number(variant.price || 0).toLocaleString("en-KE");
+    await sendImageMessage(phoneNumberId, from, variant.imageUrl, caption, accessToken);
+    return;
+  }
+
   if (normalizedText === "login") {
     const account = db.getAccountByPersonalPhone(from);
     if (!account) {

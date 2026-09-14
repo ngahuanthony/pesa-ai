@@ -819,20 +819,22 @@ function publicShopPayload(business, { includeProducts = false } = {}) {
     verifiedShop: business.verifiedShop === true,
     logoUrl: business.logoUrl || business.logo || null,
     imageUrl: business.imageUrl || business.shopImageUrl || null,
+    businessId: business.id,
     slug,
     url: `/shop/${encodeURIComponent(slug)}`,
     whatsappUrl: publicNumber
-      ? `https://wa.me/${normalizePhone(publicNumber)}?text=${encodeURIComponent("Hi, I'd like to shop")}`
+      ? `https://wa.me/${normalizePhone(publicNumber)}?text=${encodeURIComponent(`Hi ${slug}`)}`
       : null,
   };
   if (includeProducts) {
-    payload.products = listProducts(business.id, { activeOnly: true }).map((product) => ({
+    payload.popularProducts = listProducts(business.id, { activeOnly: true })
+      .filter((product) => Number(product.stockQty) > 0)
+      .slice(0, 3)
+      .map((product) => ({
       id: product.id,
       name: product.name,
-      description: product.description || null,
       price: product.price,
       stockQty: product.stockQty,
-      imageUrl: product.imageUrl || null,
     }));
   }
   return payload;
@@ -872,6 +874,54 @@ function getPublicShopBySlug(slug) {
   );
   const business = exact || (nameMatches.length === 1 ? nameMatches[0] : undefined);
   return business ? publicShopPayload(business, { includeProducts: true }) : undefined;
+}
+
+function normalizeProductSearchText(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function searchPublicProducts(businessId, query, { limit = 12 } = {}) {
+  const business = load().businesses.find((candidate) =>
+    candidate.id === businessId && isPublicShopDiscoverable(candidate)
+  );
+  if (!business) return [];
+  const tokens = normalizeProductSearchText(query).split(/\s+/).filter(Boolean);
+  if (!tokens.length) return [];
+
+  const maxResults = Math.min(Math.max(Number(limit) || 12, 1), 24);
+  const results = [];
+  for (const product of listProducts(business.id, { activeOnly: true })) {
+    const variants = Array.isArray(product.colorStock) && product.colorStock.length
+      ? product.colorStock
+      : [{ color: null, quantity: product.stockQty, imageUrl: product.imageUrl || null }];
+    for (const variant of variants) {
+      const variantName = variant.color ? String(variant.color) : "";
+      const searchable = normalizeProductSearchText(
+        `${product.name || ""} ${product.description || ""} ${variantName}`
+      );
+      if (!tokens.every((token) => searchable.includes(token))) continue;
+      const imageUrl = variant.imageUrl || product.imageUrl || null;
+      // Public search is intentionally photo-on-demand: do not return a
+      // catalogue match unless the requested variant already has an image.
+      if (!imageUrl) continue;
+      results.push({
+        id: `${product.id}:${variantName || "default"}`,
+        productId: product.id,
+        productName: product.name,
+        variant: variantName || null,
+        price: Number(product.price) || 0,
+        stockQty: Number(variant.quantity) || 0,
+        imageUrl,
+      });
+      if (results.length >= maxResults) return results;
+    }
+  }
+  return results;
 }
 
 function maskEmail(email) {
@@ -1925,6 +1975,7 @@ module.exports = {
   isPublicShopDiscoverable,
   searchPublicShopsByPhone,
   getPublicShopBySlug,
+  searchPublicProducts,
   getBusinessByWhatsappPhoneNumberId,
   updateBusiness,
   setWhatsAppCredentials,

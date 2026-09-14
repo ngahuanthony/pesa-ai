@@ -39,7 +39,25 @@ function fixture() {
         publicShopPublished: true,
       },
     ],
-    products: [],
+    products: [
+      {
+        id: "iphone-16",
+        businessId: "public-a",
+        name: "iPhone 16 Pro Max Clear Cover",
+        description: "Protective phone cover",
+        price: 800,
+        stockQty: 7,
+        active: true,
+        colorStock: [
+          {
+            color: "Orange",
+            quantity: 3,
+            imageUrl: "https://example.supabase.co/storage/v1/object/public/product-images/public-a/iphone-16_orange.webp",
+          },
+          { color: "Black", quantity: 4 },
+        ],
+      },
+    ],
   }));
 }
 
@@ -52,6 +70,17 @@ test("accepts common Kenyan number formats and matches exact public numbers", ()
   assert.equal(local.phone, "254792717918");
   assert.deepEqual(local.shops.map((shop) => shop.name), ["A Accessories", "B Accessories"]);
   assert.deepEqual(international.shops.map((shop) => shop.name), local.shops.map((shop) => shop.name));
+  assert.match(local.shops[0].whatsappUrl, /text=Hi%20a-accessories-public-a/);
+});
+
+test("returns only photographed matching variants for on-demand search", () => {
+  const result = publicShops.searchProducts({
+    query: { business_id: "public-a", q: "iPhone 16 orange" },
+  });
+  assert.equal(result.variants.length, 1);
+  assert.equal(result.variants[0].variant, "Orange");
+  assert.equal(result.variants[0].stockQty, 3);
+  assert.match(result.variants[0].imageUrl, /iphone-16_orange\\.webp$/);
 });
 
 test("does not expose unpublished or personal-number businesses", () => {

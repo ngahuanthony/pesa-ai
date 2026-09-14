@@ -190,7 +190,9 @@ router.delete("/api/businesses/:businessId/video-scan/:scanId",        videoScan
 // an explicit public flag or the legacy connected-WhatsApp/public-number
 // combination. It deliberately does not expose the business listing route.
 router.get("/api/public/shops/search", publicShopRoutes.search);
+router.get("/api/find-by-phone", publicShopRoutes.findByPhone);
 router.get("/api/public/shops/:slug", publicShopRoutes.get);
+router.get("/api/products/search", publicShopRoutes.searchProducts);
 
 router.post("/api/businesses/:businessId/chat", chatRoutes.send);
 // Note: chat history uses path param (not query) to avoid codegen type collision

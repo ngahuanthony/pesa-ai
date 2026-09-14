@@ -33,11 +33,15 @@ function ShopSearch() {
     setState("loading");
     setShops([]);
     try {
-      const response = await fetch(`/api/public/shops/search?phone=${encodeURIComponent(phone)}`);
+      const response = await fetch(`/api/find-by-phone?phone=${encodeURIComponent(phone)}`);
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "We could not find that shop");
-      setShops(Array.isArray(body.shops) ? body.shops : []);
-      setState(body.shops?.length ? "idle" : "empty");
+      const foundShops = Array.isArray(body.shops) ? body.shops : [];
+      setShops(foundShops);
+      setState(foundShops.length ? "idle" : "empty");
+      if (foundShops.length === 1) {
+        setLocation(`/shop/${encodeURIComponent(foundShops[0].slug)}`);
+      }
     } catch {
       setState("error");
     }
