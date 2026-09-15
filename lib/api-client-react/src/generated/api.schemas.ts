@@ -61,7 +61,7 @@ export interface Product {
 }
 
 export interface VoiceStockInterpretInput {
-  /** @maxLength 4000 */
+  /** @maxLength 12000 */
   transcript: string;
 }
 
@@ -194,12 +194,17 @@ export interface StockMovement {
   previousStock: number;
   resultingStock: number;
   transcript?: string | null;
+  rawTranscript?: string | null;
+  parserVersion?: string | null;
+  clientRequestId?: string | null;
   createdAt: string;
 }
 
 export interface VoiceStockConfirmResult {
   products: Product[];
   movements: StockMovement[];
+  idempotent?: boolean;
+  duplicate?: boolean;
 }
 
 export interface VariantImageUploadResult {
