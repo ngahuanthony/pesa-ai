@@ -101,11 +101,16 @@ export interface VoiceStockItem {
   proposedStock: number | null;
   warning?: string | null;
   imageUrl?: string | null;
+  matchType?: 'exact' | 'suggested' | 'new';
+  suggestedProduct?: { id: string; name: string } | null;
 }
 
 export interface VoiceStockInterpretation {
+  rawTranscript?: string;
   transcript: string;
+  cleanedTranscript?: string;
   normalizedTranscript: string;
+  parserVersion?: string;
   items: VoiceStockItem[];
 }
 
@@ -133,7 +138,8 @@ export const VoiceStockConfirmInputItemsItemAction = {
 } as const;
 
 export type VoiceStockConfirmInputItemsItem = {
-  productId: string;
+  productId?: string | null;
+  productName?: string;
   action: VoiceStockConfirmInputItemsItemAction;
   /** @exclusiveMinimum 0 */
   quantity: number;
@@ -148,10 +154,14 @@ export type VoiceStockConfirmInputItemsItem = {
 };
 
 export interface VoiceStockConfirmInput {
+  /** @maxLength 12000 */
+  rawTranscript?: string;
   /** @maxLength 4000 */
   transcript?: string;
   /** @maxLength 100 */
   requestId?: string;
+  clientRequestId?: string;
+  parserVersion?: string;
   /** @minItems 1 */
   items: VoiceStockConfirmInputItemsItem[];
 }
