@@ -183,6 +183,8 @@ router.get("/api/businesses/:businessId/activity",                              
 router.post("/api/businesses/:businessId/photo-scan",         photoScanRoutes.analyzePhotos);
 router.post("/api/businesses/:businessId/photo-scan/confirm", photoScanRoutes.confirmPhotoDrafts);
 router.post("/api/businesses/:businessId/voice-stock/interpret", voiceStockRoutes.interpret);
+router.post("/api/stock-intake/preview", voiceStockRoutes.preview);
+router.post("/api/stock-intake/confirm", voiceStockRoutes.confirmIntake);
 router.post("/api/businesses/:businessId/voice-stock/confirm", voiceStockRoutes.confirm);
 router.get("/api/businesses/:businessId/voice-stock/history", voiceStockRoutes.history);
 router.delete("/api/businesses/:businessId/video-scan/:scanId",        videoScanRoutes.deleteScan);
