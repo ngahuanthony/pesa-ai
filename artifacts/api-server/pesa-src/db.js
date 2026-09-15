@@ -15,6 +15,7 @@ const path = require("path");
 const crypto = require("crypto");
 const fieldCrypto = require("./crypto");
 const productImages = require("./product-images");
+const { normalizeTranscript } = require("./transcriptNormalizer");
 
 // Override with a DATA_DIR env var to point this at a mounted persistent
 // disk on hosts like Render/Railway (their filesystem is otherwise wiped
@@ -1369,49 +1370,46 @@ function ensureStockMovements(state) {
   return state.stockMovements;
 }
 
-function confirmStockMovements(businessId, items, { transcript, accountId, requestId } = {}) {
+function normalizeVoiceProductName(value) {
+  return normalizeTranscript(value).replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
+}
+
+function confirmStockMovements(businessId, items, { transcript, rawTranscript, parserVersion = "v2.1", accountId, requestId, clientRequestId } = {}) {
   return mutate((state) => {
-    if (!state.businesses.some((business) => business.id === businessId)) {
-      throw httpError(404, "Business not found");
-    }
+    if (!state.businesses.some((business) => business.id === businessId)) throw httpError(404, "Business not found");
     ensureStockMovements(state);
-    const normalizedRequestId = requestId == null ? null : String(requestId).trim();
-    if (normalizedRequestId && normalizedRequestId.length > 100) {
-      throw httpError(400, "Request ID must be at most 100 characters");
-    }
+    const normalizedRequestId = String(clientRequestId ?? requestId ?? "").trim() || null;
+    if (normalizedRequestId && normalizedRequestId.length > 100) throw httpError(400, "Request ID must be at most 100 characters");
+    const auditTranscript = rawTranscript == null ? (transcript == null ? null : String(transcript)) : String(rawTranscript);
     if (normalizedRequestId) {
-      const previous = state.stockMovements.filter((movement) =>
-        movement.businessId === businessId && movement.requestId === normalizedRequestId
-      );
+      const previous = state.stockMovements.filter((movement) => movement.businessId === businessId && (movement.clientRequestId || movement.requestId) === normalizedRequestId);
       if (previous.length) {
         const productIds = [...new Set(previous.map((movement) => movement.productId))];
-        return {
-          products: state.products.filter((product) => product.businessId === businessId && productIds.includes(product.id)),
-          movements: previous,
-          duplicate: true,
-        };
+        return { products: state.products.filter((product) => product.businessId === businessId && productIds.includes(product.id)), movements: previous, duplicate: true, idempotent: true };
       }
     }
     const products = [];
     const movements = [];
-
-    // Validate and stage all changes before modifying any product. This makes
-    // the JSON-file transaction all-or-nothing, including repeated products.
     const stagedStock = new Map();
     const stagedColors = new Map();
     for (const item of items) {
-      const product = state.products.find((p) => p.id === item.productId && p.businessId === businessId);
-      if (!product) throw httpError(400, "Product does not belong to this business");
+      const requestedProductId = item.productId == null || String(item.productId).trim() === "" ? null : String(item.productId).trim();
+      let product = requestedProductId ? state.products.find((p) => p.id === requestedProductId && p.businessId === businessId) : null;
+      if (requestedProductId && !product) throw httpError(400, "Product does not belong to this business");
+      if (!product) {
+        const requestedName = String(item.productName || "").trim();
+        if (requestedName.length < 3 || requestedName.length > 200) throw httpError(400, "Product name must be between 3 and 200 characters");
+        const normalizedName = normalizeVoiceProductName(requestedName);
+        product = state.products.find((candidate) => candidate.businessId === businessId && normalizeVoiceProductName(candidate.name) === normalizedName);
+        if (!product) {
+          product = { id: id(), businessId, name: requestedName, description: "", price: 0, stockQty: 0, imageUrl: null, source: "voice-stock", active: true, createdAt: now() };
+          state.products.push(product);
+        }
+      }
       const quantity = Number(item.quantity);
-      if (!Number.isFinite(quantity) || quantity <= 0) {
-        throw httpError(400, "Each movement quantity must be a positive number");
-      }
-      if (!["receive", "sell", "damage", "missing", "adjustment"].includes(item.action)) {
-        throw httpError(400, "Invalid stock movement action");
-      }
-      if (item.unit != null && String(item.unit).length > 50) {
-        throw httpError(400, "Movement unit must be at most 50 characters");
-      }
+      if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 100000) throw httpError(400, "Each movement quantity must be between 1 and 100000");
+      if (!["receive", "sell", "damage", "missing", "adjustment"].includes(item.action)) throw httpError(400, "Invalid stock movement action");
+      if (item.unit != null && String(item.unit).length > 50) throw httpError(400, "Movement unit must be at most 50 characters");
       const requestedColor = item.color == null ? "" : String(item.color).trim();
       const requestedSize = item.size == null ? "" : String(item.size).trim();
       const imageUrl = item.imageUrl == null ? "" : String(item.imageUrl).trim();
@@ -1419,19 +1417,12 @@ function confirmStockMovements(businessId, items, { transcript, accountId, reque
       if (item.color != null && !requestedColor) throw httpError(400, "Colour cannot be blank");
       if (requestedSize.length > 50) throw httpError(400, "Size must be at most 50 characters");
       if (imageUrl.length > 500) throw httpError(400, "Product image URL must be at most 500 characters");
-      if (imageUrl && productImages.isConfigured() && !productImages.isPublicProductImageUrl(imageUrl)) {
-        throw httpError(400, "Product image URL must come from configured Supabase product storage");
-      }
-
-      const existingColors = stagedColors.has(product.id)
-        ? stagedColors.get(product.id)
-        : (Array.isArray(product.colorStock) && product.colorStock.length
-          ? product.colorStock.map((entry) => ({ color: String(entry.color), quantity: Number(entry.quantity) || 0, ...(entry.imageUrl ? { imageUrl: String(entry.imageUrl) } : {}) }))
-          : (requestedColor && Number(product.stockQty) > 0
-            ? [{ color: "Unspecified", quantity: Number(product.stockQty) }]
-            : []));
+      if (imageUrl && productImages.isConfigured() && !productImages.isPublicProductImageUrl(imageUrl)) throw httpError(400, "Product image URL must come from configured Supabase product storage");
+      const existingColors = stagedColors.has(product.id) ? stagedColors.get(product.id) : (Array.isArray(product.colorStock) && product.colorStock.length
+        ? product.colorStock.map((entry) => ({ color: String(entry.color), quantity: Number(entry.quantity) || 0, ...(entry.imageUrl ? { imageUrl: String(entry.imageUrl) } : {}) }))
+        : (requestedColor && Number(product.stockQty) > 0 ? [{ color: "Unspecified", quantity: Number(product.stockQty) }] : []));
       const effectiveColor = requestedColor || (existingColors.length ? "Unspecified" : (item.imageUrl ? "default" : ""));
-      const current = stagedStock.has(product.id) ? stagedStock.get(product.id) : Number(product.stockQty);
+      const current = stagedStock.has(product.id) ? stagedStock.get(product.id) : Number(product.stockQty) || 0;
       let nextColors = existingColors;
       let colorPreviousStock = null;
       let colorResultingStock = null;
@@ -1439,68 +1430,37 @@ function confirmStockMovements(businessId, items, { transcript, accountId, reque
         nextColors = existingColors.map((entry) => ({ ...entry }));
         const colorIndex = nextColors.findIndex((entry) => String(entry.color).toLowerCase() === effectiveColor.toLowerCase());
         colorPreviousStock = colorIndex >= 0 ? Number(nextColors[colorIndex].quantity) : 0;
-        colorResultingStock = item.action === "adjustment"
-          ? quantity
-          : colorPreviousStock + (["sell", "damage", "missing"].includes(item.action) ? -quantity : quantity);
-        if (colorResultingStock < 0) {
-          throw httpError(400, `Stock cannot become negative for ${product.name} (${effectiveColor})`);
-        }
+        colorResultingStock = item.action === "adjustment" ? quantity : colorPreviousStock + (["sell", "damage", "missing"].includes(item.action) ? -quantity : quantity);
+        if (colorResultingStock < 0) throw new Error("Stock cannot become negative for " + product.name + " (" + effectiveColor + ")");
         if (colorIndex >= 0) {
           nextColors[colorIndex].quantity = colorResultingStock;
           if (imageUrl) nextColors[colorIndex].imageUrl = imageUrl;
-        } else {
-          nextColors.push({ color: effectiveColor, quantity: colorResultingStock, ...(imageUrl ? { imageUrl } : {}) });
-        }
+        } else nextColors.push({ color: effectiveColor, quantity: colorResultingStock, ...(imageUrl ? { imageUrl } : {}) });
       }
-      // An adjustment is a physical count: it sets stock to that count,
-      // rather than adding another quantity to the existing balance.
-      const next = effectiveColor
-        ? nextColors.reduce((sum, entry) => sum + Number(entry.quantity), 0)
-        : (item.action === "adjustment"
-          ? quantity
-          : current + (["sell", "damage", "missing"].includes(item.action) ? -quantity : quantity));
+      const next = effectiveColor ? nextColors.reduce((sum, entry) => sum + Number(entry.quantity), 0) : (item.action === "adjustment" ? quantity : current + (["sell", "damage", "missing"].includes(item.action) ? -quantity : quantity));
       const delta = next - current;
-      if (next < 0) throw httpError(400, `Stock cannot become negative for ${product.name}`);
+      if (next < 0) throw new Error("Stock cannot become negative for " + product.name);
       stagedStock.set(product.id, next);
       if (effectiveColor) stagedColors.set(product.id, nextColors);
-      movements.push({
-        product, item, quantity, delta, previousStock: current, proposedStock: next,
-        color: requestedColor || null, size: requestedSize || null, colorPreviousStock, colorResultingStock,
-        colorStock: effectiveColor ? nextColors : null,
-      });
+      movements.push({ product, item, quantity, delta, previousStock: current, proposedStock: next, color: requestedColor || null, size: requestedSize || null, colorPreviousStock, colorResultingStock, colorStock: effectiveColor ? nextColors : null });
     }
-
     for (const entry of movements) {
       entry.product.stockQty = entry.proposedStock;
       if (entry.colorStock) entry.product.colorStock = entry.colorStock;
       if (!products.some((product) => product.id === entry.product.id)) products.push(entry.product);
       const movement = {
-        id: id(),
-        businessId,
-        productId: entry.product.id,
-        productName: entry.product.name,
-        action: entry.item.action,
-        quantity: entry.quantity,
-        unit: entry.item.unit ? String(entry.item.unit) : "units",
-        color: entry.color,
-        size: entry.size,
-        colorPreviousStock: entry.colorPreviousStock,
-        colorResultingStock: entry.colorResultingStock,
-        delta: entry.delta,
-        previousStock: entry.previousStock,
-        resultingStock: entry.proposedStock,
-        transcript: transcript ? String(transcript) : null,
-        accountId: accountId || null,
-        requestId: normalizedRequestId,
-        createdAt: now(),
+        id: id(), businessId, productId: entry.product.id, productName: entry.product.name, action: entry.item.action,
+        quantity: entry.quantity, unit: entry.item.unit ? String(entry.item.unit) : "units", color: entry.color, size: entry.size,
+        colorPreviousStock: entry.colorPreviousStock, colorResultingStock: entry.colorResultingStock, delta: entry.delta,
+        previousStock: entry.previousStock, resultingStock: entry.proposedStock, transcript: auditTranscript, rawTranscript: auditTranscript,
+        parserVersion: String(parserVersion || "v2.1"), accountId: accountId || null, requestId: normalizedRequestId,
+        clientRequestId: normalizedRequestId, createdAt: now(),
       };
-      state.stockMovements.push(movement);
-      entry.movement = movement;
+      state.stockMovements.push(movement); entry.movement = movement;
     }
-    return { products, movements: movements.map((entry) => entry.movement) };
+    return { products, movements: movements.map((entry) => entry.movement), idempotent: false };
   });
 }
-
 function listStockMovements(businessId, limit = 100) {
   const state = load();
   const movements = Array.isArray(state.stockMovements) ? state.stockMovements : [];
