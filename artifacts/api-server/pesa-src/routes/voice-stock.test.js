@@ -296,14 +296,34 @@ test("processes more than five newline-separated stock movements in one review",
   assert.ok(items.every((item) => item.confidenceLevel !== "blocked"));
 });
 
-test("keeps unmatched products blocked instead of creating catalogue items implicitly", () => {
+test("keeps unmatched products reviewable instead of blocking the merchant", () => {
   const items = fallbackInterpret(
     "leather travel bags orange 10 pieces",
     { id: "phones", category: "phone_accessories" },
     [{ id: "iphone-cover", businessId: "phones", name: "iPhone 16 Pro Max Clear Cover", stockQty: 0 }],
   );
   assert.equal(items[0].productId, null);
-  assert.equal(items[0].confidenceLevel, "blocked");
+  assert.equal(items[0].confidenceLevel, "review");
+  assert.equal(items[0].warning, null);
+  assert.equal(items[0].matchType, "new");
+});
+
+test("confirmation creates an unmatched product and stores audit fields", () => {
+  const result = voiceStock.confirm({
+    params: { businessId: "business-a" }, session: session("business-a"),
+    body: { rawTranscript: "ongeza aifon sikistini pro max black tano", clientRequestId: "voice-new-1", parserVersion: "v2.1", items: [{ productName: "iPhone 16 Pro Max", action: "receive", quantity: 5, unit: "pieces", color: "black" }] },
+  });
+  assert.equal(result.idempotent, false);
+  assert.equal(result.products[0].name, "iPhone 16 Pro Max");
+  assert.equal(result.products[0].stockQty, 5);
+  assert.equal(result.movements[0].rawTranscript, "ongeza aifon sikistini pro max black tano");
+  assert.equal(result.movements[0].clientRequestId, "voice-new-1");
+  const repeated = voiceStock.confirm({
+    params: { businessId: "business-a" }, session: session("business-a"),
+    body: { rawTranscript: "different retry", clientRequestId: "voice-new-1", items: [{ productName: "iPhone 16 Pro Max", action: "receive", quantity: 5 }] },
+  });
+  assert.equal(repeated.idempotent, true);
+  assert.equal(db.listProducts("business-a").find((product) => product.name === "iPhone 16 Pro Max").stockQty, 5);
 });
 
 test("confirmation request IDs prevent duplicate stock updates", () => {
