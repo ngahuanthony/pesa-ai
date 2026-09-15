@@ -1168,6 +1168,15 @@ components:
         transcript:
           type: string
           nullable: true
+        rawTranscript:
+          type: string
+          nullable: true
+        parserVersion:
+          type: string
+          nullable: true
+        clientRequestId:
+          type: string
+          nullable: true
         createdAt:
           type: string
       required: [id, businessId, productId, productName, action, quantity, unit, delta, previousStock, resultingStock, createdAt]
