@@ -2,7 +2,7 @@ const crypto = require("node:crypto");
 const db = require("../db");
 const auth = require("../auth");
 const productImages = require("../product-images");
-const { categoryAttrs, normalizeTranscript } = require("../transcriptNormalizer");
+const { PARSER_VERSION, categoryAttrs, normalizeTranscript } = require("../transcriptNormalizer");
 const { cleanAiItems, fallbackInterpret } = require("../universalParser");
 
 const GROQ_MODEL = "whisper-large-v3";
@@ -251,22 +251,39 @@ async function interpret({ params, body, session }) {
   } else {
     items = fallbackInterpret(normalizedTranscript, business, products);
   }
-  return { transcript: rawTranscript, normalizedTranscript, items };
+  return { rawTranscript, transcript: rawTranscript, cleanedTranscript: normalizedTranscript, normalizedTranscript, parserVersion: PARSER_VERSION, items };
 }
 
 function confirm({ params, body, session }) {
   auth.requireOwnBusiness(session, params.businessId);
   const items = body && Array.isArray(body.items) ? body.items : null;
-  const transcript = body && body.transcript;
+  const rawTranscript = body && (body.rawTranscript ?? body.transcript);
+  const clientRequestId = body && (body.clientRequestId ?? body.requestId);
   if (!items || !items.length) throw db.httpError(400, "items must be a non-empty array");
-  if (items.length > MAX_VOICE_ITEMS) throw db.httpError(400, `at most ${MAX_VOICE_ITEMS} items can be confirmed at once`);
-  if (transcript != null && typeof transcript !== "string") throw db.httpError(400, "transcript must be a string");
-  if (transcript && transcript.length > MAX_VOICE_TRANSCRIPT_CHARS) throw db.httpError(400, `transcript must be at most ${MAX_VOICE_TRANSCRIPT_CHARS} characters`);
+  if (items.length > MAX_VOICE_ITEMS) throw db.httpError(400, "at most " + MAX_VOICE_ITEMS + " items can be confirmed at once");
+  if (rawTranscript != null && typeof rawTranscript !== "string") throw db.httpError(400, "rawTranscript must be a string");
+  if (rawTranscript && rawTranscript.length > MAX_VOICE_TRANSCRIPT_CHARS) throw db.httpError(400, "rawTranscript must be at most " + MAX_VOICE_TRANSCRIPT_CHARS + " characters");
+  if (clientRequestId != null && String(clientRequestId).length > 100) throw db.httpError(400, "clientRequestId must be at most 100 characters");
   return db.confirmStockMovements(params.businessId, items, {
-    transcript,
-    accountId: session && session.accountId,
-    requestId: body && body.requestId,
+    transcript: rawTranscript, rawTranscript, parserVersion: body?.parserVersion || PARSER_VERSION,
+    accountId: session && session.accountId, requestId: clientRequestId, clientRequestId,
   });
+}
+
+async function preview({ body, session }) {
+  const businessId = String(body?.business_id || body?.businessId || "").trim();
+  if (!businessId) throw db.httpError(400, "business_id is required");
+  return interpret({ params: { businessId }, body: { transcript: body?.transcript }, session });
+}
+
+function confirmIntake({ body, session }) {
+  const businessId = String(body?.business_id || body?.businessId || "").trim();
+  if (!businessId) throw db.httpError(400, "business_id is required");
+  const items = Array.isArray(body?.items) ? body.items : [{
+    productId: body?.productId || null, productName: body?.productName, action: body?.action || "receive",
+    quantity: body?.quantity, unit: body?.unit, color: body?.color ?? null, size: body?.size ?? null,
+  }];
+  return confirm({ params: { businessId }, body: { ...body, items }, session });
 }
 
 async function uploadVariantImage({ params, query, body, contentType, session }) {
@@ -296,4 +313,4 @@ function history({ params, query, session }) {
   return db.listStockMovements(params.businessId, query.limit);
 }
 
-module.exports = { interpret, confirm, history, transcribeAudio, uploadVariantImage };
+module.exports = { interpret, confirm, preview, confirmIntake, history, transcribeAudio, uploadVariantImage };
