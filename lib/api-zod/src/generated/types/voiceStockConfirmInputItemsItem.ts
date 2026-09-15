@@ -8,7 +8,8 @@
 import type { VoiceStockConfirmInputItemsItemAction } from './voiceStockConfirmInputItemsItemAction';
 
 export type VoiceStockConfirmInputItemsItem = {
-  productId: string;
+  productId?: string | null;
+  productName?: string;
   action: VoiceStockConfirmInputItemsItemAction;
   /** @exclusiveMinimum 0 */
   quantity: number;
