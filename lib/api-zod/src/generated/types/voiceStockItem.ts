@@ -21,4 +21,6 @@ export interface VoiceStockItem {
   proposedStock: number | null;
   warning?: string | null;
   imageUrl?: string | null;
+  matchType?: 'exact' | 'suggested' | 'new';
+  suggestedProduct?: { id: string; name: string } | null;
 }
