@@ -126,59 +126,44 @@ function confidenceLevel({ warning, confidence, actionWasImplicit }) {
 function proposal({ candidate, action, quantity, unit, products, confidence = 0.8, color = null, size = null, evidence = null, actionWasImplicit = false }) {
   const match = matchProduct(candidate, products);
   const qty = Number(quantity);
-  if (!match) {
-    const warning = "Choose a product from your catalogue to continue.";
-    return {
-      productId: null, productName: candidate || null, action: action || null,
-      quantity: Number.isFinite(qty) ? qty : null, unit: unit || "pieces",
-      color, size, evidence, confidence: 0, confidenceLevel: "blocked",
-      currentStock: null, proposedStock: null, colorCurrentStock: null,
-      colorProposedStock: null, warning,
-    };
-  }
   const normalizedColor = color ? String(color).trim() : null;
   const rawSize = size ? String(size).trim() : "";
   const normalizedSize = rawSize && /^[a-z]{1,3}$/i.test(rawSize) ? rawSize.toUpperCase() : (rawSize || null);
+  const matchType = match && match.score >= 0.92 ? "exact" : (match && match.score >= 0.75 ? "suggested" : "new");
+  const suggestedProduct = matchType === "suggested" ? { id: match.product.id, name: match.product.name } : null;
+  const calibrated = Math.min(Number(confidence) || 0, match?.score ?? 1);
+  if (matchType !== "exact") {
+    return {
+      productId: null, productName: candidate || null, action: action || null,
+      quantity: Number.isFinite(qty) ? qty : null, unit: unit || "pieces",
+      color: normalizedColor, size: normalizedSize, evidence,
+      confidence: calibrated, confidenceLevel: "review", currentStock: null, proposedStock: null,
+      colorCurrentStock: null, colorProposedStock: null, warning: null,
+      suggestedProduct, matchType,
+    };
+  }
   const current = Number(match.product.stockQty) || 0;
   const colorEntry = normalizedColor && Array.isArray(match.product.colorStock)
-    ? match.product.colorStock.find((entry) => normalize(entry.color) === normalize(normalizedColor))
-    : null;
+    ? match.product.colorStock.find((entry) => normalize(entry.color) === normalize(normalizedColor)) : null;
   const colorCurrent = normalizedColor ? Number(colorEntry?.quantity || 0) : null;
   const colorNext = normalizedColor && ACTIONS.includes(action) && Number.isFinite(qty)
-    ? (action === "adjustment" ? qty : colorCurrent + (DEDUCTIONS.has(action) ? -qty : qty))
-    : null;
+    ? (action === "adjustment" ? qty : colorCurrent + (DEDUCTIONS.has(action) ? -qty : qty)) : null;
   const next = ACTIONS.includes(action) && Number.isFinite(qty)
-    ? (action === "adjustment"
-      ? (normalizedColor ? current + colorNext - colorCurrent : qty)
-      : current + (DEDUCTIONS.has(action) ? -qty : qty))
-    : null;
+    ? (action === "adjustment" ? (normalizedColor ? current + colorNext - colorCurrent : qty) : current + (DEDUCTIONS.has(action) ? -qty : qty)) : null;
   const warning = !ACTIONS.includes(action)
     ? "Choose whether this stock was received, sold, damaged, missing, or counted."
-    : (!Number.isFinite(qty) || qty <= 0
-      ? "Enter a positive quantity."
-      : (next < 0 || (colorNext !== null && colorNext < 0)
-        ? "This change would make stock negative."
-        : null));
-  const calibrated = Math.min(Number(confidence) || 0, match.score);
+    : (!Number.isFinite(qty) || qty <= 0 || qty > 100000
+      ? "Check quantity. Enter a number from 1 to 100000."
+      : (next < 0 || (colorNext !== null && colorNext < 0) ? "This change would make stock negative." : null));
   return {
-    productId: match.product.id,
-    productName: match.product.name,
-    action,
-    quantity: Number.isFinite(qty) ? qty : null,
-    unit: unit || "pieces",
-    color: normalizedColor,
-    size: normalizedSize,
-    evidence,
-    confidence: calibrated,
-    confidenceLevel: confidenceLevel({ warning, confidence: calibrated, actionWasImplicit }),
-    currentStock: current,
-    proposedStock: next,
-    colorCurrentStock: colorCurrent,
-    colorProposedStock: colorNext,
-    warning,
+    productId: match.product.id, productName: match.product.name, action,
+    quantity: Number.isFinite(qty) ? qty : null, unit: unit || "pieces",
+    color: normalizedColor, size: normalizedSize, evidence,
+    confidence: calibrated, confidenceLevel: confidenceLevel({ warning, confidence: calibrated, actionWasImplicit }),
+    currentStock: current, proposedStock: next, colorCurrentStock: colorCurrent,
+    colorProposedStock: colorNext, warning, suggestedProduct: null, matchType: "exact",
   };
 }
-
 function catalogueMentions(transcript, products) {
   const text = normalize(transcript);
   const mentions = [];
