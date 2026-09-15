@@ -8,8 +8,12 @@
 import type { VoiceStockConfirmInputItemsItem } from './voiceStockConfirmInputItemsItem';
 
 export interface VoiceStockConfirmInput {
+  /** @maxLength 12000 */
+  rawTranscript?: string;
   /** @maxLength 4000 */
   transcript?: string;
+  clientRequestId?: string;
+  parserVersion?: string;
   /** @minItems 1 */
   items: VoiceStockConfirmInputItemsItem[];
 }
