@@ -492,6 +492,44 @@ paths:
                 items:
                   $ref: "#/components/schemas/ChatMessage"
 
+  /stock-intake/preview:
+    post:
+      operationId: previewStockIntake
+      tags: [voice-stock]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transcript, business_id, clientRequestId]
+              properties:
+                transcript: { type: string, maxLength: 12000 }
+                business_id: { type: string }
+                clientRequestId: { type: string, maxLength: 100 }
+      responses:
+        "200":
+          description: Parsed stock preview. Does not write stock.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VoiceStockInterpretation" }
+
+  /stock-intake/confirm:
+    post:
+      operationId: confirmStockIntake
+      tags: [voice-stock]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VoiceStockConfirmInput" }
+      responses:
+        "200":
+          description: Idempotent stock transaction result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VoiceStockConfirmResult" }
+
   /businesses/{businessId}/voice-stock/interpret:
     post:
       operationId: interpretVoiceStock
@@ -926,7 +964,11 @@ components:
     VoiceStockTranscription:
       type: object
       properties:
+        rawTranscript:
+          type: string
         transcript:
+          type: string
+        cleanedTranscript:
           type: string
         normalizedTranscript:
           type: string
@@ -985,7 +1027,16 @@ components:
         imageUrl:
           type: string
           nullable: true
-      required: [productId, productName, action, quantity, unit, confidence, confidenceLevel, currentStock, proposedStock]
+        matchType:
+          type: string
+          enum: [exact, suggested, new]
+        suggestedProduct:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string }
+            name: { type: string }
+      required: [productId, productName, action, quantity, unit, confidence, confidenceLevel, currentStock, proposedStock, matchType]
 
     VoiceStockInterpretation:
       type: object
@@ -1009,6 +1060,14 @@ components:
         requestId:
           type: string
           maxLength: 100
+        clientRequestId:
+          type: string
+          maxLength: 100
+        rawTranscript:
+          type: string
+          maxLength: 12000
+        parserVersion:
+          type: string
         items:
           type: array
           minItems: 1
@@ -1017,6 +1076,11 @@ components:
             properties:
               productId:
                 type: string
+                nullable: true
+              productName:
+                type: string
+                minLength: 3
+                maxLength: 200
               action:
                 type: string
                 enum: [receive, sell, damage, missing, adjustment]
@@ -1038,7 +1102,7 @@ components:
                 type: string
                 nullable: true
                 maxLength: 500
-            required: [productId, action, quantity]
+            required: [action, quantity]
       required: [items]
 
     VariantImageUploadResult:
@@ -1080,6 +1144,15 @@ components:
         requestId:
           type: string
           nullable: true
+        clientRequestId:
+          type: string
+          nullable: true
+        rawTranscript:
+          type: string
+          nullable: true
+        parserVersion:
+          type: string
+          nullable: true
         colorPreviousStock:
           type: number
           nullable: true
@@ -1102,6 +1175,8 @@ components:
     VoiceStockConfirmResult:
       type: object
       properties:
+        idempotent:
+          type: boolean
         products:
           type: array
           items:
