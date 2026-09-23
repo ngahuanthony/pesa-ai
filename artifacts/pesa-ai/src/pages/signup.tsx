@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { useEffect, useState } from "react";
 import { ShopQRCard } from "@/components/dashboard/shop-qr-card";
+import { MERCHANT_TYPES } from "@/constants/merchant-types";
 
 const formatPhoneInput = (value: string) => {
   const digits = value.replace(/\D/g, "");
@@ -64,11 +65,7 @@ export default function SignupPage() {
                 <div>
                   <label className="text-sm font-semibold">Business Type</label>
                   <select value={form.merchantType} onChange={update("merchantType")} className="mt-1 w-full rounded-xl border px-4 py-3.5 text-base" required>
-                    <option value="retail">Retail</option>
-                    <option value="hotel">Hotel</option>
-                    <option value="hospitality">Hospitality</option>
-                    <option value="service">Service</option>
-                    <option value="other">Other</option>
+                    {MERCHANT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
                   </select>
                 </div>
                 <div>

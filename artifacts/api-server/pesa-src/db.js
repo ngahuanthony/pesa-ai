@@ -419,6 +419,14 @@ function generateWelcomeMessage(business) {
   );
 }
 
+const MERCHANT_TYPES = new Set(["retail", "hospitality", "service", "other"]);
+
+function normalizeMerchantType(value) {
+  const type = String(value || "retail").toLowerCase();
+  if (type === "hotel") return "hospitality";
+  return MERCHANT_TYPES.has(type) ? type : "retail";
+}
+
 function createBusiness(
   state,
   { name, category, merchantType, phone, personalPhone, pesaAiNumber, paybillNumber, plan, buildingName, shopNumber, publicPhone, idOrKraPin, ownerName, personaInstructions, location, deliveryAreas }
@@ -437,7 +445,7 @@ function createBusiness(
     id: id(),
     name,
     category,
-    merchantType: merchantType || "retail",
+    merchantType: normalizeMerchantType(merchantType),
     phone: normalizedPhone,
     personalPhone: normalizedPersonalPhone,
     personalPhoneVerified: false,
@@ -559,7 +567,7 @@ function sanitizeBusiness(business) {
   const { mpesaCredentials, changeLog, idOrKraPin, ...rest } = business;
   return {
     ...rest,
-    merchantType: rest.merchantType || "retail",
+    merchantType: normalizeMerchantType(rest.merchantType),
     publicShopSlug: getPublicShopSlug(business),
     phone: maskPhone(rest.phone),
     personalPhone: maskPhone(rest.personalPhone),
@@ -994,8 +1002,7 @@ function createPendingSignup(state, { businessName, personalPhone, pesaAiNumber,
   if (normalizedPersonalPhone && normalizedPersonalPhone === normalizedShopNumber) throw httpError(400, "Use two different numbers: one public Duka number and one private number for alerts.");
   if ((state.businesses || []).some((b) => normalizePhone(b.pesaAiNumber) === normalizedShopNumber)) throw httpError(409, "This number is already on WhatsApp or is already registered as a shop number");
   if ((state.pendingSignups || []).some((p) => p.pesaAiNumber === normalizedShopNumber && !p.finalizedAt)) throw httpError(409, "This number is already being verified");
-  const allowedMerchantTypes = ["retail", "hotel", "hospitality", "service", "other"];
-  const pending = { id: id(), businessName: String(businessName).trim(), merchantType: allowedMerchantTypes.includes(String(merchantType || "").toLowerCase()) ? String(merchantType).toLowerCase() : "retail", personalPhone: normalizedPersonalPhone, pesaAiNumber: normalizedShopNumber, personalVerified: false, shopVerified: false, status: "pending_verification", createdAt: now(), expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
+  const pending = { id: id(), businessName: String(businessName).trim(), merchantType: normalizeMerchantType(merchantType), personalPhone: normalizedPersonalPhone, pesaAiNumber: normalizedShopNumber, personalVerified: false, shopVerified: false, status: "pending_verification", createdAt: now(), expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
   if (!Array.isArray(state.pendingSignups)) state.pendingSignups = [];
   state.pendingSignups.push(pending);
   return pending;
@@ -1939,6 +1946,7 @@ function runOneTimePhoneCorrection({ shopPhone, personalPhone, personalPhoneRaw,
 }
 module.exports = {
   DATA_FILE,
+  normalizeMerchantType,
   loadRaw,
   requestWhatsAppConnection,
   getVendorWhatsAppStatus,

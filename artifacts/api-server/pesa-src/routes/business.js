@@ -20,9 +20,9 @@ function update({ params, body, session }) {
     if (body[key] !== undefined) patch[key] = body[key];
   }
   if (patch.merchantType !== undefined && !["retail", "hotel", "hospitality", "service", "other"].includes(String(patch.merchantType).toLowerCase())) {
-    throw db.httpError(400, "merchantType must be retail, hotel, hospitality, service, or other");
+    throw db.httpError(400, "merchantType must be retail, hospitality, service, or other");
   }
-  if (patch.merchantType) patch.merchantType = String(patch.merchantType).toLowerCase();
+  if (patch.merchantType) patch.merchantType = db.normalizeMerchantType(patch.merchantType);
   // Only auto-derive personaName from name+category if the client isn't
   // explicitly setting it themselves (i.e. via the AI Persona section).
   if ((patch.name || patch.category) && !patch.personaName) {

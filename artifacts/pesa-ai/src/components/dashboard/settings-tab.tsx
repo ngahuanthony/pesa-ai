@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Store, Bot, CreditCard, CheckCircle2, Headphones, MapPin, Mail } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BRAND_NAME } from "@/constants/brand";
+import { MERCHANT_TYPES, displayMerchantType } from "@/constants/merchant-types";
 
 const CATEGORIES = [
   "Retail & Fashion",
@@ -140,7 +141,7 @@ export function SettingsTab() {
       setBizName(business.name || "");
       setOwnerName(business.ownerName || "");
       setCategory(business.category || "");
-      setMerchantType((business as any).merchantType || "retail");
+      setMerchantType(displayMerchantType((business as any).merchantType));
       setPersonaName(business.personaName || "");
       setPersonaInstructions(business.personaInstructions || "");
       setLocation((business as any).location || "");
@@ -295,11 +296,7 @@ export function SettingsTab() {
             <Select value={merchantType} onValueChange={setMerchantType}>
               <SelectTrigger className="w-full"><SelectValue placeholder="Select type..." /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="retail">Retail</SelectItem>
-                <SelectItem value="hotel">Hotel</SelectItem>
-                <SelectItem value="hospitality">Hospitality</SelectItem>
-                <SelectItem value="service">Service</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
+                {MERCHANT_TYPES.map((type) => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
