@@ -15,7 +15,7 @@ export interface Business {
   personaName: string;
   category: string;
   phone: string;
-  personalPhone?: string | null;
+  personalPhone?: string;
   pesaAiNumber?: string | null;
   pesaAiNumberVerified?: boolean;
   paybillNumber?: string | null;
@@ -25,7 +25,7 @@ export interface Business {
 
 export interface Account {
   id: string;
-  email?: string | null;
+  email: string;
 }
 
 export interface Subscription {
@@ -61,8 +61,23 @@ export interface Product {
 }
 
 export interface VoiceStockInterpretInput {
-  /** @maxLength 12000 */
+  /** @maxLength 4000 */
   transcript: string;
+}
+
+export type VoiceStockTranscriptionProvider = typeof VoiceStockTranscriptionProvider[keyof typeof VoiceStockTranscriptionProvider];
+
+
+export const VoiceStockTranscriptionProvider = {
+  openai: 'openai',
+} as const;
+
+export interface VoiceStockTranscription {
+  rawTranscript?: string;
+  transcript: string;
+  cleanedTranscript?: string;
+  normalizedTranscript: string;
+  provider: VoiceStockTranscriptionProvider;
 }
 
 export type VoiceStockItemAction = typeof VoiceStockItemAction[keyof typeof VoiceStockItemAction] | null;
@@ -78,11 +93,26 @@ export const VoiceStockItemAction = {
 
 export type VoiceStockItemConfidenceLevel = typeof VoiceStockItemConfidenceLevel[keyof typeof VoiceStockItemConfidenceLevel];
 
+
 export const VoiceStockItemConfidenceLevel = {
   high: 'high',
   review: 'review',
   blocked: 'blocked',
 } as const;
+
+export type VoiceStockItemMatchType = typeof VoiceStockItemMatchType[keyof typeof VoiceStockItemMatchType];
+
+
+export const VoiceStockItemMatchType = {
+  exact: 'exact',
+  suggested: 'suggested',
+  new: 'new',
+} as const;
+
+export type VoiceStockItemSuggestedProduct = {
+  id?: string;
+  name?: string;
+} | null;
 
 export interface VoiceStockItem {
   productId: string | null;
@@ -92,8 +122,8 @@ export interface VoiceStockItem {
   unit: string;
   color?: string | null;
   size?: string | null;
-  evidence?: string | null;
   confidenceLevel: VoiceStockItemConfidenceLevel;
+  evidence?: string | null;
   colorCurrentStock?: number | null;
   colorProposedStock?: number | null;
   confidence: number;
@@ -101,29 +131,14 @@ export interface VoiceStockItem {
   proposedStock: number | null;
   warning?: string | null;
   imageUrl?: string | null;
-  matchType?: 'exact' | 'suggested' | 'new';
-  suggestedProduct?: { id: string; name: string } | null;
+  matchType: VoiceStockItemMatchType;
+  suggestedProduct?: VoiceStockItemSuggestedProduct;
 }
 
 export interface VoiceStockInterpretation {
-  rawTranscript?: string;
   transcript: string;
-  cleanedTranscript?: string;
   normalizedTranscript: string;
-  parserVersion?: string;
   items: VoiceStockItem[];
-}
-
-export type VoiceStockTranscriptionProvider = typeof VoiceStockTranscriptionProvider[keyof typeof VoiceStockTranscriptionProvider];
-
-export const VoiceStockTranscriptionProvider = {
-  openai: 'openai',
-} as const;
-
-export interface VoiceStockTranscription {
-  transcript: string;
-  normalizedTranscript: string;
-  provider: VoiceStockTranscriptionProvider;
 }
 
 export type VoiceStockConfirmInputItemsItemAction = typeof VoiceStockConfirmInputItemsItemAction[keyof typeof VoiceStockConfirmInputItemsItemAction];
@@ -139,6 +154,10 @@ export const VoiceStockConfirmInputItemsItemAction = {
 
 export type VoiceStockConfirmInputItemsItem = {
   productId?: string | null;
+  /**
+     * @minLength 3
+     * @maxLength 200
+     */
   productName?: string;
   action: VoiceStockConfirmInputItemsItemAction;
   /** @exclusiveMinimum 0 */
@@ -154,16 +173,23 @@ export type VoiceStockConfirmInputItemsItem = {
 };
 
 export interface VoiceStockConfirmInput {
-  /** @maxLength 12000 */
-  rawTranscript?: string;
   /** @maxLength 4000 */
   transcript?: string;
   /** @maxLength 100 */
   requestId?: string;
+  /** @maxLength 100 */
   clientRequestId?: string;
+  /** @maxLength 12000 */
+  rawTranscript?: string;
   parserVersion?: string;
   /** @minItems 1 */
   items: VoiceStockConfirmInputItemsItem[];
+}
+
+export interface VariantImageUploadResult {
+  imageUrl: string;
+  path: string;
+  bytes: number;
 }
 
 export type StockMovementAction = typeof StockMovementAction[keyof typeof StockMovementAction];
@@ -188,37 +214,57 @@ export interface StockMovement {
   color?: string | null;
   size?: string | null;
   requestId?: string | null;
+  clientRequestId?: string | null;
+  rawTranscript?: string | null;
+  parserVersion?: string | null;
   colorPreviousStock?: number | null;
   colorResultingStock?: number | null;
   delta: number;
   previousStock: number;
   resultingStock: number;
   transcript?: string | null;
-  rawTranscript?: string | null;
-  parserVersion?: string | null;
-  clientRequestId?: string | null;
   createdAt: string;
 }
 
 export interface VoiceStockConfirmResult {
+  idempotent?: boolean;
   products: Product[];
   movements: StockMovement[];
-  idempotent?: boolean;
-  duplicate?: boolean;
-}
-
-export interface VariantImageUploadResult {
-  imageUrl: string;
-  path: string;
-  bytes: number;
 }
 
 export interface OrderItem {
   productId: string;
   productName: string;
-  qty: number;
+  /** @minimum 1 */
+  quantity: number;
   unitPrice: number;
 }
+
+export type OrderFulfillmentStatus = typeof OrderFulfillmentStatus[keyof typeof OrderFulfillmentStatus];
+
+
+export const OrderFulfillmentStatus = {
+  NEW: 'NEW',
+  ACCEPTED: 'ACCEPTED',
+  PREPARING: 'PREPARING',
+  READY: 'READY',
+  SERVED: 'SERVED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+
+export type OrderPaymentStatus = typeof OrderPaymentStatus[keyof typeof OrderPaymentStatus];
+
+
+export const OrderPaymentStatus = {
+  PENDING: 'PENDING',
+  PAID: 'PAID',
+} as const;
+
+export type OrderServiceLocationSnapshot = {
+  kind?: string;
+  label?: string;
+} | null;
 
 export interface Order {
   id: string;
@@ -227,10 +273,15 @@ export interface Order {
   customerPhone: string;
   customerName?: string | null;
   items: OrderItem[];
-  totalKES: number;
+  totalAmount: number;
   status: string;
-  deliveryAddress?: string | null;
+  fulfillmentStatus: OrderFulfillmentStatus;
+  paymentStatus: OrderPaymentStatus;
+  paymentMethod?: string | null;
+  serviceLocationSnapshot?: OrderServiceLocationSnapshot;
+  revision: number;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface SalesTrendPoint {
@@ -310,6 +361,67 @@ export interface AdminStats {
   whatsappConnected: number;
 }
 
+export interface AdminGrowthMerchant {
+  id: string;
+  name: string;
+  plan: string;
+  whatsappConnected: boolean;
+  active: boolean;
+  customerMessages: number;
+  conversations: number;
+  orders: number;
+  paidOrders: number;
+  transactionValue: number;
+  mpesaValue: number;
+}
+
+export interface AdminGrowthTrendDay {
+  date: string;
+  activeMerchants: number;
+  customerMessages: number;
+  orders: number;
+  paidOrders: number;
+  transactionValue: number;
+}
+
+export type AdminGrowthRecommendationPriority = typeof AdminGrowthRecommendationPriority[keyof typeof AdminGrowthRecommendationPriority];
+
+
+export const AdminGrowthRecommendationPriority = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+} as const;
+
+export interface AdminGrowthRecommendation {
+  priority: AdminGrowthRecommendationPriority;
+  title: string;
+  detail: string;
+}
+
+export interface AdminGrowthSummary {
+  periodDays: number;
+  periodStart: string;
+  totalBusinesses: number;
+  connectedMerchants: number;
+  activeMerchants: number;
+  merchantsWithOrders: number;
+  merchantsWithPaidOrders: number;
+  usageRate: number;
+  customerMessages: number;
+  customerConversations: number;
+  orders: number;
+  paidOrders: number;
+  pendingOrders: number;
+  totalTransactionValue: number;
+  mpesaValue: number;
+  mpesaTransactions: number;
+  averageOrderValue: number;
+  trend: AdminGrowthTrendDay[];
+  merchants: AdminGrowthMerchant[];
+  recommendations: AdminGrowthRecommendation[];
+}
+
 export interface MeResult {
   authenticated: boolean;
   isAdmin?: boolean | null;
@@ -376,15 +488,30 @@ export interface OrderStatusUpdate {
   status: string;
 }
 
+export interface OrderItemUpdate {
+  productId: string;
+  /** @minimum 1 */
+  quantity: number;
+}
+
+export interface OrderItemsUpdate {
+  /** @minItems 1 */
+  items: OrderItemUpdate[];
+}
+
 export interface MpesaPayInput {
   phone: string;
 }
 
 export interface MpesaConnectInput {
+  method: 'till' | 'paybill' | 'paybill_account';
+  tillNumber?: string | null;
+  paybillNumber?: string | null;
+  accountNumber?: string | null;
+  accountMode?: 'static' | 'dynamic_customer_phone';
   consumerKey: string;
   consumerSecret: string;
   passkey: string;
-  shortcode: string;
 }
 
 export interface PlanInput {
@@ -416,11 +543,35 @@ export interface AdminChargeInput {
   phone?: string;
 }
 
+export type PreviewStockIntakeBody = {
+  /** @maxLength 12000 */
+  transcript: string;
+  business_id: string;
+  /** @maxLength 100 */
+  clientRequestId: string;
+};
+
+export type UploadVoiceStockVariantImageParams = {
+productId: string;
+/**
+ * @maxLength 50
+ */
+color: string;
+};
+
 export type GetVoiceStockHistoryParams = {
 /**
  * @minimum 1
  * @maximum 500
  */
 limit?: number;
+};
+
+export type AdminGetGrowthSummaryParams = {
+/**
+ * @minimum 1
+ * @maximum 90
+ */
+days?: number;
 };
 

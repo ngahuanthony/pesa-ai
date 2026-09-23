@@ -171,6 +171,7 @@ router.get("/api/public/service-locations/:token", merchantIntelligenceRoutes.lo
 
 router.get("/api/businesses/:businessId/orders", orderRoutes.list);
 router.put("/api/businesses/:businessId/orders/:orderId/status", orderRoutes.updateStatus);
+router.put("/api/businesses/:businessId/orders/:orderId/items", orderRoutes.updateItems);
 router.post("/api/businesses/:businessId/orders/:orderId/mpesa",      orderRoutes.payWithMpesa);
 router.post("/api/mpesa/stkpush", mpesaApiRoutes.stkPush);
 router.post("/api/mpesa/callback", mpesaApiRoutes.callback);

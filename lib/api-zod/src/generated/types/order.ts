@@ -5,7 +5,10 @@
  * Pesa AI API
  * OpenAPI spec version: 0.1.0
  */
+import type { OrderFulfillmentStatus } from './orderFulfillmentStatus';
 import type { OrderItem } from './orderItem';
+import type { OrderPaymentStatus } from './orderPaymentStatus';
+import type { OrderServiceLocationSnapshot } from './orderServiceLocationSnapshot';
 
 export interface Order {
   id: string;
@@ -14,8 +17,13 @@ export interface Order {
   customerPhone: string;
   customerName?: string | null;
   items: OrderItem[];
-  totalKES: number;
+  totalAmount: number;
   status: string;
-  deliveryAddress?: string | null;
+  fulfillmentStatus: OrderFulfillmentStatus;
+  paymentStatus: OrderPaymentStatus;
+  paymentMethod?: string | null;
+  serviceLocationSnapshot?: OrderServiceLocationSnapshot;
+  revision: number;
   createdAt: string;
+  updatedAt: string;
 }

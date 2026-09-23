@@ -6,6 +6,7 @@
 const db = require("../db");
 const auth = require("../auth");
 const cryptoUtil = require("../crypto");
+const mpesa = require("../mpesa");
 
 function status({ params, session }) {
   auth.requireOwnBusiness(session, params.businessId);
@@ -13,7 +14,7 @@ function status({ params, session }) {
   return db.getMpesaStatus(params.businessId);
 }
 
-function connect({ params, body, session }) {
+async function connect({ params, body, session }) {
   auth.requireOwnBusiness(session, params.businessId);
   db.getBusiness(params.businessId);
   const subscription = db.getSubscription(params.businessId);
@@ -30,7 +31,12 @@ function connect({ params, body, session }) {
   if (!["till", "paybill", "paybill_account"].includes(method)) throw db.httpError(400, "method must be till, paybill, or paybill_account");
   const accountMode = input.accountMode === "dynamic_customer_phone" ? "dynamic_customer_phone" : "static";
   const actor = session.accountId || "vendor";
-  return { status: 201, data: db.setMpesaCredentials(params.businessId, { consumerKey, consumerSecret, passkey, shortcode, method, tillNumber: method === "till" ? shortcode : null, paybillNumber: method === "till" ? null : shortcode, accountNumber: accountMode === "static" ? input.accountNumber : null, accountMode }, actor) };
+  const result = db.setMpesaCredentials(params.businessId, { consumerKey, consumerSecret, passkey, shortcode, method, tillNumber: method === "till" ? shortcode : null, paybillNumber: method === "till" ? null : shortcode, accountNumber: accountMode === "static" ? input.accountNumber : null, accountMode }, actor);
+  if (sandbox) {
+    const credentials = db.getMpesaCredentialsDecrypted(params.businessId);
+    await mpesa.registerC2BUrls(params.businessId, credentials, process.env.PUBLIC_BASE_URL);
+  }
+  return { status: 201, data: result };
 }
 function disconnect({ params, session }) {
   auth.requireOwnBusiness(session, params.businessId);

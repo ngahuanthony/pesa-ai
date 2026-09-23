@@ -6,10 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface OrderItem {
+export interface OrderItemUpdate {
   productId: string;
-  productName: string;
   /** @minimum 1 */
   quantity: number;
-  unitPrice: number;
 }

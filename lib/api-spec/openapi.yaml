@@ -348,6 +348,35 @@ paths:
               schema:
                 $ref: "#/components/schemas/Order"
 
+  /businesses/{businessId}/orders/{orderId}/items:
+    put:
+      operationId: updateOrderItems
+      tags: [orders]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderItemsUpdate"
+      responses:
+        "200":
+          description: Corrected order with recalculated total and reserved stock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
   /businesses/{businessId}/orders/{orderId}/mpesa:
     post:
       operationId: payOrderWithMpesa
@@ -1189,15 +1218,6 @@ components:
         transcript:
           type: string
           nullable: true
-        rawTranscript:
-          type: string
-          nullable: true
-        parserVersion:
-          type: string
-          nullable: true
-        clientRequestId:
-          type: string
-          nullable: true
         createdAt:
           type: string
       required: [id, businessId, productId, productName, action, quantity, unit, delta, previousStock, resultingStock, createdAt]
@@ -1224,14 +1244,15 @@ components:
           type: string
         productName:
           type: string
-        qty:
-          type: number
+        quantity:
+          type: integer
+          minimum: 1
         unitPrice:
           type: number
       required:
         - productId
         - productName
-        - qty
+        - quantity
         - unitPrice
 
     Order:
@@ -1252,14 +1273,32 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OrderItem"
-        totalKES:
+        totalAmount:
           type: number
         status:
           type: string
-        deliveryAddress:
+        fulfillmentStatus:
+          type: string
+          enum: [NEW, ACCEPTED, PREPARING, READY, SERVED, COMPLETED, CANCELLED]
+        paymentStatus:
+          type: string
+          enum: [PENDING, PAID]
+        paymentMethod:
           type: string
           nullable: true
+        serviceLocationSnapshot:
+          type: object
+          nullable: true
+          properties:
+            kind:
+              type: string
+            label:
+              type: string
+        revision:
+          type: integer
         createdAt:
+          type: string
+        updatedAt:
           type: string
       required:
         - id
@@ -1267,9 +1306,13 @@ components:
         - customerId
         - customerPhone
         - items
-        - totalKES
+        - totalAmount
         - status
+        - fulfillmentStatus
+        - paymentStatus
+        - revision
         - createdAt
+        - updatedAt
 
     SalesTrendPoint:
       type: object
@@ -1707,6 +1750,29 @@ components:
       required:
         - status
 
+    OrderItemUpdate:
+      type: object
+      properties:
+        productId:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+      required:
+        - productId
+        - quantity
+
+    OrderItemsUpdate:
+      type: object
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/OrderItemUpdate"
+      required:
+        - items
+
     MpesaPayInput:
       type: object
       properties:
@@ -1718,19 +1784,32 @@ components:
     MpesaConnectInput:
       type: object
       properties:
+        method:
+          type: string
+          enum: [till, paybill, paybill_account]
+        tillNumber:
+          type: string
+          nullable: true
+        paybillNumber:
+          type: string
+          nullable: true
+        accountNumber:
+          type: string
+          nullable: true
+        accountMode:
+          type: string
+          enum: [static, dynamic_customer_phone]
         consumerKey:
           type: string
         consumerSecret:
           type: string
         passkey:
           type: string
-        shortcode:
-          type: string
       required:
+        - method
         - consumerKey
         - consumerSecret
         - passkey
-        - shortcode
 
     PlanInput:
       type: object

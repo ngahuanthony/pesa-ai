@@ -4,11 +4,12 @@ import {
   LayoutDashboard, Package, ShoppingCart, MessageSquare,
   Settings, LogOut, Phone, ChevronDown, User, Tag,
   Users, CreditCard, Layers, ScanLine, BarChart2,
-  Menu, X, Mic, BrainCircuit
+  Menu, X, Mic, BrainCircuit, Bell
 } from "lucide-react";
 import { useLogout, useGetMe } from "@workspace/api-client-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BRAND_NAME } from "@/constants/brand";
+import { useToast } from "@/hooks/use-toast";
 
 const WA_SUB_ITEMS = [
   { label: "Phone Number",     href: "/dashboard/whatsapp" },
@@ -27,6 +28,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { data: me } = useGetMe();
   const logout = useLogout();
+  const { toast } = useToast();
 
   const waActive    = location.startsWith("/dashboard/whatsapp");
   const stockActive = location.startsWith("/dashboard/stock");
@@ -34,6 +36,45 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [waOpen,    setWaOpen]    = useState(waActive);
   const [stockOpen, setStockOpen] = useState(stockActive);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [newOrderCount, setNewOrderCount] = useState(0);
+  const [latestOrderAlert, setLatestOrderAlert] = useState<any>(null);
+  const seenOrders = useRef<Map<string, number> | null>(null);
+  const businessId = (me as any)?.business?.id || "";
+
+  useEffect(() => {
+    if (!businessId) return;
+    let stopped = false;
+    const checkOrders = async () => {
+      try {
+        const response = await fetch(`/api/businesses/${businessId}/orders`, { credentials: "include" });
+        if (!response.ok) return;
+        const orders = await response.json();
+        if (!Array.isArray(orders) || stopped) return;
+        setNewOrderCount(orders.filter((order) =>
+          String(order.fulfillmentStatus || order.status || "").toUpperCase() === "NEW" ||
+          String(order.status || "").toLowerCase() === "pending"
+        ).length);
+        const next = new Map<string, number>(orders.map((order) => [order.id, Number(order.revision || 1)]));
+        if (seenOrders.current) {
+          const changed = orders.find((order) => !seenOrders.current!.has(order.id) || seenOrders.current!.get(order.id) !== Number(order.revision || 1));
+          if (changed) {
+            const isNew = !seenOrders.current.has(changed.id);
+            setLatestOrderAlert(changed);
+            toast({
+              title: isNew ? "New order received" : "Order updated",
+              description: `${changed.serviceLocationSnapshot?.label ? `${changed.serviceLocationSnapshot.label} · ` : ""}#${changed.id.slice(0, 8).toUpperCase()} · KSh ${Number(changed.totalAmount || 0).toLocaleString("en-KE")}`,
+            });
+          }
+        }
+        seenOrders.current = next;
+      } catch {
+        // The Orders page still shows the last successfully loaded data.
+      }
+    };
+    void checkOrders();
+    const timer = window.setInterval(checkOrders, 5000);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [businessId, toast]);
 
   const closeMobile = () => setMobileOpen(false);
 
@@ -188,7 +229,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
         {navLink("/dashboard/prices",    "Prices",    Tag)}
         {navLink("/dashboard/customers", "Customers", Users)}
-        {navLink("/dashboard/orders",    "Orders",    ShoppingCart)}
+        <div className="relative">
+          {navLink("/dashboard/orders", "Orders", ShoppingCart)}
+          {newOrderCount > 0 && (
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {newOrderCount}
+            </span>
+          )}
+        </div>
         {navLink("/settings/mpesa",       "M-Pesa",   CreditCard)}
         {navLink("/dashboard/sales",     "Reports",   BarChart2)}
         {navLink("/dashboard/settings",  "Settings",  Settings)}
@@ -249,6 +297,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Main content ── */}
       <main className="flex-1 overflow-auto pt-14 sm:pt-0">
+        {latestOrderAlert && !location.startsWith("/dashboard/orders") && (
+          <Link
+            href="/dashboard/orders"
+            onClick={() => { setLatestOrderAlert(null); closeMobile(); }}
+            className="sticky top-0 z-30 flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 shadow-sm"
+          >
+            <Bell className="h-4 w-4 animate-pulse text-amber-600" />
+            <span className="min-w-0 flex-1 text-sm font-semibold">
+              Order #{latestOrderAlert.id.slice(0, 8).toUpperCase()}
+              {latestOrderAlert.serviceLocationSnapshot?.label ? ` · ${latestOrderAlert.serviceLocationSnapshot.label}` : ""}
+              {" "}needs attention
+            </span>
+            <span className="text-xs font-bold text-amber-700">Open →</span>
+          </Link>
+        )}
         {children}
       </main>
     </div>

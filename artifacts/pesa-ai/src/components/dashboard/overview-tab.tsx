@@ -85,8 +85,8 @@ export function OverviewTab() {
     }
   };
 
-  const orders       = (ordersData   as any)?.orders   || [];
-  const products     = (productsData as any)?.products || [];
+  const orders       = Array.isArray(ordersData) ? ordersData : (ordersData as any)?.orders || [];
+  const products     = Array.isArray(productsData) ? productsData : (productsData as any)?.products || [];
   const totalRevenue = (salesData    as any)?.totalRevenue || 0;
   const recentOrders = orders.slice(0, 5);
 
@@ -397,9 +397,12 @@ export function OverviewTab() {
                 <div key={order.id} className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
                   <div>
                     <p className="text-sm font-medium text-foreground">{order.customerPhone}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{order.status}</p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {(order.fulfillmentStatus || order.status || "new").toLowerCase()}
+                      {order.serviceLocationSnapshot?.label ? ` · ${order.serviceLocationSnapshot.label}` : ""}
+                    </p>
                   </div>
-                  <p className="text-sm font-semibold text-foreground">KSh {(order.total || 0).toLocaleString()}</p>
+                  <p className="text-sm font-semibold text-foreground">KSh {Number(order.totalAmount || order.total || 0).toLocaleString()}</p>
                 </div>
               ))}
             </div>

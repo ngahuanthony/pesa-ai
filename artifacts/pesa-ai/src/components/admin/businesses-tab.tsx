@@ -284,6 +284,7 @@ function MpesaDialog({ business, onClose }: { business: any; onClose: () => void
   const [shortcode,      setShortcode]      = useState("");
   const [showSecret,     setShowSecret]     = useState(false);
   const [saving,         setSaving]         = useState(false);
+  const [verifying,      setVerifying]      = useState(false);
   const [mpesaStatus,    setMpesaStatus]    = useState<any>(null);
   const [loadingStatus,  setLoadingStatus]  = useState(false);
   const { toast } = useToast();
@@ -327,6 +328,22 @@ function MpesaDialog({ business, onClose }: { business: any; onClose: () => void
     if (res.ok) { toast({ title: "M-Pesa disconnected" }); load(); qc.invalidateQueries({ queryKey: getAdminListBusinessesQueryKey() }); }
   };
 
+  const verify = async () => {
+    setVerifying(true);
+    try {
+      const res = await fetch(`/api/admin/businesses/${business.id}/mpesa/verify`, { method: "POST", credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Safaricom verification failed");
+      toast({ title: "M-Pesa verified", description: "Safaricom accepted the credentials and callback URLs." });
+      await load();
+      qc.invalidateQueries({ queryKey: getAdminListBusinessesQueryKey() });
+    } catch (error: any) {
+      toast({ title: "Verification failed", description: error.message, variant: "destructive" });
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   return (
     <DialogContent className="max-w-md">
       <DialogHeader>
@@ -342,7 +359,7 @@ function MpesaDialog({ business, onClose }: { business: any; onClose: () => void
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               <div>
-                <p className="text-sm font-semibold text-emerald-700">Connected</p>
+                <p className="text-sm font-semibold text-emerald-700">{mpesaStatus.verified ? "Verified and live" : "Credentials saved"}</p>
                 <p className="text-xs text-emerald-600">Shortcode: {mpesaStatus.shortcodeMasked}</p>
               </div>
             </div>
@@ -355,6 +372,11 @@ function MpesaDialog({ business, onClose }: { business: any; onClose: () => void
             <AlertCircle className="h-4 w-4 text-amber-500" />
             <p className="text-sm text-amber-700 font-medium">Not connected — enter Daraja credentials below</p>
           </div>
+        )}
+        {mpesaStatus?.connected && !mpesaStatus?.verified && (
+          <button onClick={verify} disabled={verifying} className="w-full h-10 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+            {verifying ? "Verifying with Safaricom…" : "Verify credentials and callbacks"}
+          </button>
         )}
 
         {/* Info */}

@@ -218,8 +218,12 @@ async function setMpesaCredentials({ params, body, session }) {
   return result;
 }
 
-function verifyMpesa({ params, session }) {
+async function verifyMpesa({ params, session }) {
   auth.requireAdmin(session);
+  const credentials = db.getMpesaCredentialsDecrypted(params.businessId);
+  if (!credentials) throw db.httpError(404, "M-Pesa credentials not found");
+  const verification = await mpesa.verifyCredentials(params.businessId, credentials, process.env.PUBLIC_BASE_URL);
+  if (!verification.ok) throw db.httpError(502, `Safaricom verification failed: ${verification.error || "Credential validation failed"}`);
   return db.verifyMpesaCredentials(params.businessId, "admin");
 }
 

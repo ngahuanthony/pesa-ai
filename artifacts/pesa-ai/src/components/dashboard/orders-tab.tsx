@@ -1,11 +1,11 @@
 import {
   useGetMe, useListOrders, getListOrdersQueryKey,
-  useUpdateOrderStatus, usePayOrderWithMpesa,
+  useUpdateOrderStatus, usePayOrderWithMpesa, useListProducts, getListProductsQueryKey,
 } from "@workspace/api-client-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ShoppingBag, Smartphone, CheckCircle2 } from "lucide-react";
+import { ShoppingBag, Smartphone, CheckCircle2, Pencil, Minus, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +27,17 @@ interface PaymentMeta {
   mpesaPhone?:   string | null;
   paymentRef?:   string | null;
   paidAt?:       string | null;
+}
+
+function PaymentAttempt({ attempt }: { attempt?: any }) {
+  if (!attempt) return null;
+  if (attempt.status === "PENDING") {
+    return <p className="mt-1 text-[10px] font-medium text-amber-700">M-Pesa prompt pending on {attempt.phone || "customer phone"}</p>;
+  }
+  if (attempt.status === "FAILED") {
+    return <p className="mt-1 text-[10px] font-medium text-rose-600">Last M-Pesa attempt failed: {attempt.resultDesc || "Payment not completed"}. You can retry.</p>;
+  }
+  return null;
 }
 
 function paymentMethodLabel(method?: string) {
@@ -113,6 +124,10 @@ export function OrdersTab() {
       refetchInterval: 10000
     },
   });
+  const { data: productsData } = useListProducts(businessId, {
+    query: { enabled: !!businessId, queryKey: getListProductsQueryKey(businessId) },
+  });
+  const products = (Array.isArray(productsData) ? productsData : (productsData as any)?.products || []) as any[];
 
   const updateStatus = useUpdateOrderStatus();
   const payMpesa     = usePayOrderWithMpesa();
@@ -124,6 +139,61 @@ export function OrdersTab() {
   const [markOrder,   setMarkOrder]   = useState<string | null>(null);
   const [paymentRef,  setPaymentRef]  = useState("");
   const [markingPaid, setMarkingPaid] = useState(false);
+  const [editOrder, setEditOrder] = useState<any | null>(null);
+  const [editItems, setEditItems] = useState<{ productId: string; productName: string; quantity: number }[]>([]);
+  const [savingItems, setSavingItems] = useState(false);
+
+  const openEdit = (order: any) => {
+    setEditOrder(order);
+    setEditItems(order.items.map((item: any) => ({
+      productId: item.productId,
+      productName: item.productName,
+      quantity: Number(item.quantity ?? item.qty ?? 1),
+    })));
+  };
+
+  const changeQuantity = (productId: string, delta: number) => {
+    setEditItems((items) => items
+      .map((item) => item.productId === productId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item)
+      .filter((item) => item.quantity > 0));
+  };
+
+  const addProduct = (productId: string) => {
+    const product = products.find((item) => item.id === productId);
+    if (!product) return;
+    setEditItems((items) => {
+      const existing = items.find((item) => item.productId === productId);
+      return existing
+        ? items.map((item) => item.productId === productId ? { ...item, quantity: item.quantity + 1 } : item)
+        : [...items, { productId, productName: product.name, quantity: 1 }];
+    });
+  };
+
+  const saveItems = async () => {
+    if (!editOrder || editItems.length === 0) return;
+    setSavingItems(true);
+    try {
+      const response = await fetch(`/api/businesses/${businessId}/orders/${editOrder.id}/items`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: editItems.map(({ productId, quantity }) => ({ productId, quantity })) }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Could not update order");
+      await queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey(businessId) });
+      toast({ title: "Order corrected", description: "Stock, total and customer notification were updated." });
+      setEditOrder(null);
+    } catch (error: any) {
+      toast({ title: error.message || "Could not update order", variant: "destructive" });
+    } finally {
+      setSavingItems(false);
+    }
+  };
+
+  const canEdit = (order: any) =>
+    order.paymentStatus !== "PAID" &&
+    ["NEW", "ACCEPTED", "PENDING", "CONFIRMED"].includes(String(order.fulfillmentStatus || order.status || "").toUpperCase());
 
   const handleStatusChange = (orderId: string, status: string) => {
     updateStatus.mutate({ businessId, orderId, data: { status } }, {
@@ -247,6 +317,11 @@ export function OrdersTab() {
                   {o.items.map((item: any, idx: number) => (
                     <div key={idx} className="text-xs text-foreground">{item.quantity ?? item.qty}× {item.productName}</div>
                   ))}
+                  {canEdit(o) && (
+                    <button onClick={() => openEdit(o)} className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline">
+                      <Pencil className="h-3 w-3" /> Correct items
+                    </button>
+                  )}
                 </div>
                 <div className="text-sm font-bold text-foreground">KES {(o.totalAmount ?? o.totalKES).toLocaleString()}</div>
                 <div>
@@ -265,6 +340,7 @@ export function OrdersTab() {
                         <CheckCircle2 className="h-3.5 w-3.5" /> Paid
                       </div>
                       {meta && <PaymentDetails meta={meta} />}
+                      <PaymentAttempt attempt={(o as any).mpesaPaymentAttempt} />
                     </div>
                   ) : isOrderActionableForPayment(o) ? (
                     <div className="flex flex-col gap-1.5">
@@ -334,6 +410,11 @@ export function OrdersTab() {
                   {o.items.map((item: any, idx: number) => (
                     <div key={idx} className="text-xs text-foreground">{item.quantity ?? item.qty}× {item.productName}</div>
                   ))}
+                  {canEdit(o) && (
+                    <button onClick={() => openEdit(o)} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary">
+                      <Pencil className="h-3.5 w-3.5" /> Correct order
+                    </button>
+                  )}
                 </div>
 
                 {/* Payment */}
@@ -341,6 +422,7 @@ export function OrdersTab() {
                   <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
                     <CheckCircle2 className="h-3.5 w-3.5" /> Paid
                     {meta && <PaymentDetails meta={meta} />}
+                    <PaymentAttempt attempt={(o as any).mpesaPaymentAttempt} />
                   </div>
                 ) : isOrderActionableForPayment(o) ? (
                   <div className="flex gap-2">
@@ -370,7 +452,7 @@ export function OrdersTab() {
           <DialogHeader><DialogTitle>Collect Payment via M-Pesa</DialogTitle></DialogHeader>
           <form onSubmit={handleMpesaPay} className="space-y-4 mt-4">
             <div className="p-4 bg-muted rounded-xl text-sm">
-              Amount to collect: <strong className="text-foreground">KES {((currentOrder as any)?.totalAmount ?? currentOrder?.totalKES)?.toLocaleString()}</strong>
+              Amount to collect: <strong className="text-foreground">KES {Number((currentOrder as any)?.totalAmount || 0).toLocaleString()}</strong>
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Customer's M-Pesa phone</label>
@@ -417,6 +499,47 @@ export function OrdersTab() {
               </form>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editOrder !== null} onOpenChange={(open) => !open && setEditOrder(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Correct Order #{editOrder?.id.slice(0, 8).toUpperCase()}</DialogTitle>
+          </DialogHeader>
+          <div className="mt-3 space-y-4">
+            {editOrder?.serviceLocationSnapshot && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                {editOrder.serviceLocationSnapshot.kind}: {editOrder.serviceLocationSnapshot.label}
+              </div>
+            )}
+            <div className="space-y-2">
+              {editItems.map((item) => (
+                <div key={item.productId} className="flex items-center gap-2 rounded-lg border p-2.5">
+                  <span className="min-w-0 flex-1 text-sm font-medium">{item.productName}</span>
+                  <button type="button" onClick={() => changeQuantity(item.productId, -1)} className="rounded-md border p-1.5" aria-label={`Remove one ${item.productName}`}><Minus className="h-3.5 w-3.5" /></button>
+                  <span className="w-7 text-center text-sm font-bold">{item.quantity}</span>
+                  <button type="button" onClick={() => changeQuantity(item.productId, 1)} className="rounded-md border p-1.5" aria-label={`Add one ${item.productName}`}><Plus className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => setEditItems((items) => items.filter((candidate) => candidate.productId !== item.productId))} className="rounded-md p-1.5 text-rose-600" aria-label={`Remove ${item.productName}`}><Trash2 className="h-4 w-4" /></button>
+                </div>
+              ))}
+            </div>
+            <div>
+              <label className="text-sm font-medium">Add an item</label>
+              <select defaultValue="" onChange={(event) => { addProduct(event.target.value); event.target.value = ""; }} className="mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-sm">
+                <option value="" disabled>Choose a product…</option>
+                {products.filter((product) => product.active !== false && Number(product.stockQty || 0) > 0).map((product) => (
+                  <option key={product.id} value={product.id}>{product.name} · KSh {Number(product.price || 0).toLocaleString()} · {product.stockQty} available</option>
+                ))}
+              </select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Saving recalculates the total, adjusts reserved stock, records the correction, and tells the customer on WhatsApp.
+            </p>
+            <button type="button" onClick={saveItems} disabled={savingItems || editItems.length === 0} className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+              {savingItems ? "Saving correction…" : "Save corrected order"}
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

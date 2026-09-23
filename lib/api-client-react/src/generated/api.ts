@@ -21,6 +21,8 @@ import type {
 
 import type {
   AdminChargeInput,
+  AdminGetGrowthSummaryParams,
+  AdminGrowthSummary,
   AdminLoginInput,
   AdminResetPasswordInput,
   AdminStats,
@@ -39,8 +41,10 @@ import type {
   MpesaPayInput,
   MpesaStatus,
   Order,
+  OrderItemsUpdate,
   OrderStatusUpdate,
   PlanInput,
+  PreviewStockIntakeBody,
   Product,
   ProductImportInput,
   ProductInput,
@@ -53,12 +57,13 @@ import type {
   StockMovement,
   Subscription,
   SubscriptionChargeInput,
+  UploadVoiceStockVariantImageParams,
+  VariantImageUploadResult,
   VoiceStockConfirmInput,
   VoiceStockConfirmResult,
   VoiceStockInterpretInput,
   VoiceStockInterpretation,
-  VoiceStockTranscription,
-  VariantImageUploadResult
+  VoiceStockTranscription
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1248,6 +1253,74 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getUpdateOrderStatusMutationOptions(options));
     }
 
+export const getUpdateOrderItemsUrl = (businessId: string,
+    orderId: string,) => {
+
+
+
+
+  return `/api/businesses/${businessId}/orders/${orderId}/items`
+}
+
+export const updateOrderItems = async (businessId: string,
+    orderId: string,
+    orderItemsUpdate: OrderItemsUpdate, options?: Parameters<typeof customFetch>[1]): Promise<Order> => {
+
+  return customFetch<Order>(getUpdateOrderItemsUrl(businessId,orderId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(orderItemsUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateOrderItemsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOrderItems>>, TError,{businessId: string;orderId: string;data: BodyType<OrderItemsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateOrderItems>>, TError,{businessId: string;orderId: string;data: BodyType<OrderItemsUpdate>}, TContext> => {
+
+const mutationKey = ['updateOrderItems'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateOrderItems>>, {businessId: string;orderId: string;data: BodyType<OrderItemsUpdate>}> = (props) => {
+          const {businessId,orderId,data} = props ?? {};
+
+          return  updateOrderItems(businessId,orderId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateOrderItemsMutationResult = NonNullable<Awaited<ReturnType<typeof updateOrderItems>>>
+    export type UpdateOrderItemsMutationBody = BodyType<OrderItemsUpdate>
+    export type UpdateOrderItemsMutationError = ErrorType<unknown>
+
+    export const useUpdateOrderItems = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOrderItems>>, TError,{businessId: string;orderId: string;data: BodyType<OrderItemsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateOrderItems>>,
+        TError,
+        {businessId: string;orderId: string;data: BodyType<OrderItemsUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateOrderItemsMutationOptions(options));
+    }
+
 export const getPayOrderWithMpesaUrl = (businessId: string,
     orderId: string,) => {
 
@@ -1731,6 +1804,136 @@ export function useGetChatHistory<TData = Awaited<ReturnType<typeof getChatHisto
 
 
 
+export const getPreviewStockIntakeUrl = () => {
+
+
+
+
+  return `/api/stock-intake/preview`
+}
+
+export const previewStockIntake = async (previewStockIntakeBody: PreviewStockIntakeBody, options?: Parameters<typeof customFetch>[1]): Promise<VoiceStockInterpretation> => {
+
+  return customFetch<VoiceStockInterpretation>(getPreviewStockIntakeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(previewStockIntakeBody)
+  }
+);}
+
+
+
+
+
+export const getPreviewStockIntakeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewStockIntake>>, TError,{data: BodyType<PreviewStockIntakeBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewStockIntake>>, TError,{data: BodyType<PreviewStockIntakeBody>}, TContext> => {
+
+const mutationKey = ['previewStockIntake'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewStockIntake>>, {data: BodyType<PreviewStockIntakeBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewStockIntake(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewStockIntakeMutationResult = NonNullable<Awaited<ReturnType<typeof previewStockIntake>>>
+    export type PreviewStockIntakeMutationBody = BodyType<PreviewStockIntakeBody>
+    export type PreviewStockIntakeMutationError = ErrorType<unknown>
+
+    export const usePreviewStockIntake = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewStockIntake>>, TError,{data: BodyType<PreviewStockIntakeBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewStockIntake>>,
+        TError,
+        {data: BodyType<PreviewStockIntakeBody>},
+        TContext
+      > => {
+      return useMutation(getPreviewStockIntakeMutationOptions(options));
+    }
+
+export const getConfirmStockIntakeUrl = () => {
+
+
+
+
+  return `/api/stock-intake/confirm`
+}
+
+export const confirmStockIntake = async (voiceStockConfirmInput: VoiceStockConfirmInput, options?: Parameters<typeof customFetch>[1]): Promise<VoiceStockConfirmResult> => {
+
+  return customFetch<VoiceStockConfirmResult>(getConfirmStockIntakeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(voiceStockConfirmInput)
+  }
+);}
+
+
+
+
+
+export const getConfirmStockIntakeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmStockIntake>>, TError,{data: BodyType<VoiceStockConfirmInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmStockIntake>>, TError,{data: BodyType<VoiceStockConfirmInput>}, TContext> => {
+
+const mutationKey = ['confirmStockIntake'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmStockIntake>>, {data: BodyType<VoiceStockConfirmInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  confirmStockIntake(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmStockIntakeMutationResult = NonNullable<Awaited<ReturnType<typeof confirmStockIntake>>>
+    export type ConfirmStockIntakeMutationBody = BodyType<VoiceStockConfirmInput>
+    export type ConfirmStockIntakeMutationError = ErrorType<unknown>
+
+    export const useConfirmStockIntake = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmStockIntake>>, TError,{data: BodyType<VoiceStockConfirmInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmStockIntake>>,
+        TError,
+        {data: BodyType<VoiceStockConfirmInput>},
+        TContext
+      > => {
+      return useMutation(getConfirmStockIntakeMutationOptions(options));
+    }
+
 export const getInterpretVoiceStockUrl = (businessId: string,) => {
 
 
@@ -1798,59 +2001,145 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     }
 
 export const getTranscribeVoiceStockUrl = (businessId: string,) => {
+
+
+
+
   return `/api/businesses/${businessId}/voice-stock/transcribe`
 }
 
 export const transcribeVoiceStock = async (businessId: string,
     transcribeVoiceStockBody: Blob, options?: Parameters<typeof customFetch>[1]): Promise<VoiceStockTranscription> => {
+
   return customFetch<VoiceStockTranscription>(getTranscribeVoiceStockUrl(businessId),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': transcribeVoiceStockBody.type || 'application/octet-stream', ...options?.headers },
+    headers: { 'Content-Type': 'audio/webm', ...options?.headers },
     body: transcribeVoiceStockBody
   }
 );}
 
+
+
+
+
 export const getTranscribeVoiceStockMutationOptions = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transcribeVoiceStock>>, TError,{businessId: string;data: BodyType<Blob>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof transcribeVoiceStock>>, TError,{businessId: string;data: BodyType<Blob>}, TContext> => {
-  const mutationKey = ['transcribeVoiceStock'];
-  const {mutation: mutationOptions, request: requestOptions} = options ?
-    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-    options : {...options, mutation: {...options.mutation, mutationKey}}
-    : {mutation: { mutationKey, }, request: undefined};
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof transcribeVoiceStock>>, {businessId: string;data: BodyType<Blob>}> = (props) => {
-    const {businessId,data} = props ?? {};
-    return transcribeVoiceStock(businessId,data,requestOptions)
-  }
-  return { mutationFn, ...mutationOptions }
-}
 
-export type TranscribeVoiceStockMutationResult = NonNullable<Awaited<ReturnType<typeof transcribeVoiceStock>>>
-export type TranscribeVoiceStockMutationBody = BodyType<Blob>
-export type TranscribeVoiceStockMutationError = ErrorType<unknown>
+const mutationKey = ['transcribeVoiceStock'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
-export const useTranscribeVoiceStock = <TError = ErrorType<unknown>,
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof transcribeVoiceStock>>, {businessId: string;data: BodyType<Blob>}> = (props) => {
+          const {businessId,data} = props ?? {};
+
+          return  transcribeVoiceStock(businessId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TranscribeVoiceStockMutationResult = NonNullable<Awaited<ReturnType<typeof transcribeVoiceStock>>>
+    export type TranscribeVoiceStockMutationBody = BodyType<Blob>
+    export type TranscribeVoiceStockMutationError = ErrorType<unknown>
+
+    export const useTranscribeVoiceStock = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transcribeVoiceStock>>, TError,{businessId: string;data: BodyType<Blob>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationResult<Awaited<ReturnType<typeof transcribeVoiceStock>>, TError, {businessId: string;data: BodyType<Blob>}, TContext> => {
-  return useMutation(getTranscribeVoiceStockMutationOptions(options));
-}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof transcribeVoiceStock>>,
+        TError,
+        {businessId: string;data: BodyType<Blob>},
+        TContext
+      > => {
+      return useMutation(getTranscribeVoiceStockMutationOptions(options));
+    }
 
-export const getUploadVoiceStockVariantImageUrl = (businessId: string, productId: string, color: string) => {
-  return `/api/businesses/${businessId}/voice-stock/variant-image?productId=${encodeURIComponent(productId)}&color=${encodeURIComponent(color)}`
+export const getUploadVoiceStockVariantImageUrl = (businessId: string,
+    params: UploadVoiceStockVariantImageParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/businesses/${businessId}/voice-stock/variant-image?${stringifiedParams}` : `/api/businesses/${businessId}/voice-stock/variant-image`
 }
 
 export const uploadVoiceStockVariantImage = async (businessId: string,
-    productId: string, color: string, image: Blob, options?: Parameters<typeof customFetch>[1]): Promise<VariantImageUploadResult> => {
-  return customFetch<VariantImageUploadResult>(getUploadVoiceStockVariantImageUrl(businessId, productId, color),
+    uploadVoiceStockVariantImageBody: Blob,
+    params: UploadVoiceStockVariantImageParams, options?: Parameters<typeof customFetch>[1]): Promise<VariantImageUploadResult> => {
+
+  return customFetch<VariantImageUploadResult>(getUploadVoiceStockVariantImageUrl(businessId,params),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'image/webp', ...options?.headers },
-    body: image
+    body: uploadVoiceStockVariantImageBody
   }
 );}
+
+
+
+
+
+export const getUploadVoiceStockVariantImageMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadVoiceStockVariantImage>>, TError,{businessId: string;data: BodyType<Blob>;params: UploadVoiceStockVariantImageParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadVoiceStockVariantImage>>, TError,{businessId: string;data: BodyType<Blob>;params: UploadVoiceStockVariantImageParams}, TContext> => {
+
+const mutationKey = ['uploadVoiceStockVariantImage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadVoiceStockVariantImage>>, {businessId: string;data: BodyType<Blob>;params: UploadVoiceStockVariantImageParams}> = (props) => {
+          const {businessId,data,params} = props ?? {};
+
+          return  uploadVoiceStockVariantImage(businessId,data,params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadVoiceStockVariantImageMutationResult = NonNullable<Awaited<ReturnType<typeof uploadVoiceStockVariantImage>>>
+    export type UploadVoiceStockVariantImageMutationBody = BodyType<Blob>
+    export type UploadVoiceStockVariantImageMutationError = ErrorType<unknown>
+
+    export const useUploadVoiceStockVariantImage = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadVoiceStockVariantImage>>, TError,{businessId: string;data: BodyType<Blob>;params: UploadVoiceStockVariantImageParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadVoiceStockVariantImage>>,
+        TError,
+        {businessId: string;data: BodyType<Blob>;params: UploadVoiceStockVariantImageParams},
+        TContext
+      > => {
+      return useMutation(getUploadVoiceStockVariantImageMutationOptions(options));
+    }
 
 export const getConfirmVoiceStockUrl = (businessId: string,) => {
 
@@ -2523,6 +2812,84 @@ export function useAdminGetStats<TData = Awaited<ReturnType<typeof adminGetStats
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getAdminGetStatsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAdminGetGrowthSummaryUrl = (params?: AdminGetGrowthSummaryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/growth-summary?${stringifiedParams}` : `/api/admin/growth-summary`
+}
+
+export const adminGetGrowthSummary = async (params?: AdminGetGrowthSummaryParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminGrowthSummary> => {
+
+  return customFetch<AdminGrowthSummary>(getAdminGetGrowthSummaryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAdminGetGrowthSummaryQueryKey = (params?: AdminGetGrowthSummaryParams,) => {
+    return [
+    `/api/admin/growth-summary`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getAdminGetGrowthSummaryQueryOptions = <TData = Awaited<ReturnType<typeof adminGetGrowthSummary>>, TError = ErrorType<unknown>>(params?: AdminGetGrowthSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminGetGrowthSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAdminGetGrowthSummaryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof adminGetGrowthSummary>>> = ({ signal }) => adminGetGrowthSummary(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof adminGetGrowthSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type AdminGetGrowthSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof adminGetGrowthSummary>>>
+export type AdminGetGrowthSummaryQueryError = ErrorType<unknown>
+
+
+
+export function useAdminGetGrowthSummary<TData = Awaited<ReturnType<typeof adminGetGrowthSummary>>, TError = ErrorType<unknown>>(
+ params?: AdminGetGrowthSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminGetGrowthSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getAdminGetGrowthSummaryQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -18,13 +18,8 @@ export const HealthCheckResponse = zod.object({
 
 export const SignupBody = zod.object({
   "businessName": zod.string(),
-  "category": zod.string(),
-  "businessPhone": zod.string(),
-  "paybillNumber": zod.string().optional(),
-  "email": zod.string(),
-  "password": zod.string(),
-  "consent": zod.boolean(),
-  "plan": zod.string().optional()
+  "pesaAiNumber": zod.string(),
+  "personalPhone": zod.string()
 })
 
 export const SignupResponse = zod.object({
@@ -34,6 +29,9 @@ export const SignupResponse = zod.object({
   "personaName": zod.string(),
   "category": zod.string(),
   "phone": zod.string(),
+  "personalPhone": zod.string().optional(),
+  "pesaAiNumber": zod.string().nullish(),
+  "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
   "createdAt": zod.string()
@@ -67,6 +65,9 @@ export const LoginResponse = zod.object({
   "personaName": zod.string(),
   "category": zod.string(),
   "phone": zod.string(),
+  "personalPhone": zod.string().optional(),
+  "pesaAiNumber": zod.string().nullish(),
+  "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
   "createdAt": zod.string()
@@ -104,6 +105,9 @@ export const GetMeResponse = zod.object({
   "personaName": zod.string(),
   "category": zod.string(),
   "phone": zod.string(),
+  "personalPhone": zod.string().optional(),
+  "pesaAiNumber": zod.string().nullish(),
+  "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
   "createdAt": zod.string()
@@ -131,6 +135,9 @@ export const GetBusinessResponse = zod.object({
   "personaName": zod.string(),
   "category": zod.string(),
   "phone": zod.string(),
+  "personalPhone": zod.string().optional(),
+  "pesaAiNumber": zod.string().nullish(),
+  "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
   "createdAt": zod.string()
@@ -154,6 +161,9 @@ export const UpdateBusinessResponse = zod.object({
   "personaName": zod.string(),
   "category": zod.string(),
   "phone": zod.string(),
+  "personalPhone": zod.string().optional(),
+  "pesaAiNumber": zod.string().nullish(),
+  "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
   "createdAt": zod.string()
@@ -224,7 +234,8 @@ export const ListProductsResponseItem = zod.object({
   "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
   "colorStock": zod.array(zod.object({
   "color": zod.string(),
-  "quantity": zod.number().min(listProductsResponseColorStockItemQuantityMin)
+  "quantity": zod.number().min(listProductsResponseColorStockItemQuantityMin),
+  "imageUrl": zod.string().nullish()
 })).optional(),
   "imageUrl": zod.string().nullish(),
   "active": zod.boolean(),
@@ -258,7 +269,8 @@ export const CreateProductResponse = zod.object({
   "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
   "colorStock": zod.array(zod.object({
   "color": zod.string(),
-  "quantity": zod.number().min(createProductResponseColorStockItemQuantityMin)
+  "quantity": zod.number().min(createProductResponseColorStockItemQuantityMin),
+  "imageUrl": zod.string().nullish()
 })).optional(),
   "imageUrl": zod.string().nullish(),
   "active": zod.boolean(),
@@ -310,7 +322,8 @@ export const UpdateProductResponse = zod.object({
   "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
   "colorStock": zod.array(zod.object({
   "color": zod.string(),
-  "quantity": zod.number().min(updateProductResponseColorStockItemQuantityMin)
+  "quantity": zod.number().min(updateProductResponseColorStockItemQuantityMin),
+  "imageUrl": zod.string().nullish()
 })).optional(),
   "imageUrl": zod.string().nullish(),
   "active": zod.boolean(),
@@ -330,6 +343,9 @@ export const ListOrdersParams = zod.object({
   "businessId": zod.coerce.string()
 })
 
+
+
+
 export const ListOrdersResponseItem = zod.object({
   "id": zod.string(),
   "businessId": zod.string(),
@@ -339,13 +355,21 @@ export const ListOrdersResponseItem = zod.object({
   "items": zod.array(zod.object({
   "productId": zod.string(),
   "productName": zod.string(),
-  "qty": zod.number(),
+  "quantity": zod.number().int().min(1),
   "unitPrice": zod.number()
 })),
-  "totalKES": zod.number(),
+  "totalAmount": zod.number(),
   "status": zod.string(),
-  "deliveryAddress": zod.string().nullish(),
-  "createdAt": zod.string()
+  "fulfillmentStatus": zod.enum(['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'COMPLETED', 'CANCELLED']),
+  "paymentStatus": zod.enum(['PENDING', 'PAID']),
+  "paymentMethod": zod.string().nullish(),
+  "serviceLocationSnapshot": zod.object({
+  "kind": zod.string().optional(),
+  "label": zod.string().optional()
+}).nullish(),
+  "revision": zod.number().int(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
 export const ListOrdersResponse = zod.array(ListOrdersResponseItem)
 
@@ -359,6 +383,9 @@ export const UpdateOrderStatusBody = zod.object({
   "status": zod.string()
 })
 
+
+
+
 export const UpdateOrderStatusResponse = zod.object({
   "id": zod.string(),
   "businessId": zod.string(),
@@ -368,13 +395,67 @@ export const UpdateOrderStatusResponse = zod.object({
   "items": zod.array(zod.object({
   "productId": zod.string(),
   "productName": zod.string(),
-  "qty": zod.number(),
+  "quantity": zod.number().int().min(1),
   "unitPrice": zod.number()
 })),
-  "totalKES": zod.number(),
+  "totalAmount": zod.number(),
   "status": zod.string(),
-  "deliveryAddress": zod.string().nullish(),
-  "createdAt": zod.string()
+  "fulfillmentStatus": zod.enum(['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'COMPLETED', 'CANCELLED']),
+  "paymentStatus": zod.enum(['PENDING', 'PAID']),
+  "paymentMethod": zod.string().nullish(),
+  "serviceLocationSnapshot": zod.object({
+  "kind": zod.string().optional(),
+  "label": zod.string().optional()
+}).nullish(),
+  "revision": zod.number().int(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+export const UpdateOrderItemsParams = zod.object({
+  "businessId": zod.coerce.string(),
+  "orderId": zod.coerce.string()
+})
+
+
+
+
+
+export const UpdateOrderItemsBody = zod.object({
+  "items": zod.array(zod.object({
+  "productId": zod.string(),
+  "quantity": zod.number().int().min(1)
+})).min(1)
+})
+
+
+
+
+export const UpdateOrderItemsResponse = zod.object({
+  "id": zod.string(),
+  "businessId": zod.string(),
+  "customerId": zod.string(),
+  "customerPhone": zod.string(),
+  "customerName": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "productId": zod.string(),
+  "productName": zod.string(),
+  "quantity": zod.number().int().min(1),
+  "unitPrice": zod.number()
+})),
+  "totalAmount": zod.number(),
+  "status": zod.string(),
+  "fulfillmentStatus": zod.enum(['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'COMPLETED', 'CANCELLED']),
+  "paymentStatus": zod.enum(['PENDING', 'PAID']),
+  "paymentMethod": zod.string().nullish(),
+  "serviceLocationSnapshot": zod.object({
+  "kind": zod.string().optional(),
+  "label": zod.string().optional()
+}).nullish(),
+  "revision": zod.number().int(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
 
 
@@ -405,10 +486,14 @@ export const ConnectMpesaParams = zod.object({
 })
 
 export const ConnectMpesaBody = zod.object({
+  "method": zod.enum(['till','paybill','paybill_account']),
+  "tillNumber": zod.string().nullish(),
+  "paybillNumber": zod.string().nullish(),
+  "accountNumber": zod.string().nullish(),
+  "accountMode": zod.enum(['static','dynamic_customer_phone']).optional(),
   "consumerKey": zod.string(),
   "consumerSecret": zod.string(),
-  "passkey": zod.string(),
-  "shortcode": zod.string()
+  "passkey": zod.string()
 })
 
 export const ConnectMpesaResponse = zod.void()
@@ -473,20 +558,21 @@ export const GetChatHistoryResponseItem = zod.object({
 export const GetChatHistoryResponse = zod.array(GetChatHistoryResponseItem)
 
 
-export const InterpretVoiceStockParams = zod.object({
-  "businessId": zod.coerce.string()
+export const previewStockIntakeBodyTranscriptMax = 12000;
+
+export const previewStockIntakeBodyClientRequestIdMax = 100;
+
+
+
+export const PreviewStockIntakeBody = zod.object({
+  "transcript": zod.string().max(previewStockIntakeBodyTranscriptMax),
+  "business_id": zod.string(),
+  "clientRequestId": zod.string().max(previewStockIntakeBodyClientRequestIdMax)
 })
 
-export const interpretVoiceStockBodyTranscriptMax = 4000;
-
-
-
-export const InterpretVoiceStockBody = zod.object({
-  "transcript": zod.string().max(interpretVoiceStockBodyTranscriptMax)
-})
-
-export const InterpretVoiceStockResponse = zod.object({
+export const PreviewStockIntakeResponse = zod.object({
   "transcript": zod.string(),
+  "normalizedTranscript": zod.string(),
   "items": zod.array(zod.object({
   "productId": zod.string().nullable(),
   "productName": zod.string().nullable(),
@@ -494,47 +580,73 @@ export const InterpretVoiceStockResponse = zod.object({
   "quantity": zod.number().nullable(),
   "unit": zod.string(),
   "color": zod.string().nullish(),
+  "size": zod.string().nullish(),
+  "confidenceLevel": zod.enum(['high', 'review', 'blocked']),
+  "evidence": zod.string().nullish(),
   "colorCurrentStock": zod.number().nullish(),
   "colorProposedStock": zod.number().nullish(),
   "confidence": zod.number(),
   "currentStock": zod.number().nullable(),
   "proposedStock": zod.number().nullable(),
-  "warning": zod.string().nullish()
+  "warning": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "matchType": zod.enum(['exact', 'suggested', 'new']),
+  "suggestedProduct": zod.object({
+  "id": zod.string().optional(),
+  "name": zod.string().optional()
+}).nullish()
 }))
 })
 
 
-export const ConfirmVoiceStockParams = zod.object({
-  "businessId": zod.coerce.string()
-})
+export const confirmStockIntakeBodyTranscriptMax = 4000;
 
-export const confirmVoiceStockBodyTranscriptMax = 4000;
+export const confirmStockIntakeBodyRequestIdMax = 100;
 
-export const confirmVoiceStockBodyItemsItemQuantityExclusiveMin = 0;
+export const confirmStockIntakeBodyClientRequestIdMax = 100;
 
-export const confirmVoiceStockBodyItemsItemUnitMax = 50;
+export const confirmStockIntakeBodyRawTranscriptMax = 12000;
 
-export const confirmVoiceStockBodyItemsItemColorMax = 50;
+export const confirmStockIntakeBodyItemsItemProductNameMin = 3;
+export const confirmStockIntakeBodyItemsItemProductNameMax = 200;
+
+export const confirmStockIntakeBodyItemsItemQuantityExclusiveMin = 0;
+
+export const confirmStockIntakeBodyItemsItemUnitMax = 50;
+
+export const confirmStockIntakeBodyItemsItemColorMax = 50;
+
+export const confirmStockIntakeBodyItemsItemSizeMax = 50;
+
+export const confirmStockIntakeBodyItemsItemImageUrlMax = 500;
 
 
 
 
-export const ConfirmVoiceStockBody = zod.object({
-  "transcript": zod.string().max(confirmVoiceStockBodyTranscriptMax).optional(),
+export const ConfirmStockIntakeBody = zod.object({
+  "transcript": zod.string().max(confirmStockIntakeBodyTranscriptMax).optional(),
+  "requestId": zod.string().max(confirmStockIntakeBodyRequestIdMax).optional(),
+  "clientRequestId": zod.string().max(confirmStockIntakeBodyClientRequestIdMax).optional(),
+  "rawTranscript": zod.string().max(confirmStockIntakeBodyRawTranscriptMax).optional(),
+  "parserVersion": zod.string().optional(),
   "items": zod.array(zod.object({
-  "productId": zod.string(),
+  "productId": zod.string().nullish(),
+  "productName": zod.string().min(confirmStockIntakeBodyItemsItemProductNameMin).max(confirmStockIntakeBodyItemsItemProductNameMax).optional(),
   "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']),
-  "quantity": zod.number().gt(confirmVoiceStockBodyItemsItemQuantityExclusiveMin),
-  "unit": zod.string().max(confirmVoiceStockBodyItemsItemUnitMax).optional(),
-  "color": zod.string().max(confirmVoiceStockBodyItemsItemColorMax).nullish()
+  "quantity": zod.number().gt(confirmStockIntakeBodyItemsItemQuantityExclusiveMin),
+  "unit": zod.string().max(confirmStockIntakeBodyItemsItemUnitMax).optional(),
+  "color": zod.string().max(confirmStockIntakeBodyItemsItemColorMax).nullish(),
+  "size": zod.string().max(confirmStockIntakeBodyItemsItemSizeMax).nullish(),
+  "imageUrl": zod.string().max(confirmStockIntakeBodyItemsItemImageUrlMax).nullish()
 })).min(1)
 })
 
-export const confirmVoiceStockResponseProductsItemColorStockItemQuantityMin = 0;
+export const confirmStockIntakeResponseProductsItemColorStockItemQuantityMin = 0;
 
 
 
-export const ConfirmVoiceStockResponse = zod.object({
+export const ConfirmStockIntakeResponse = zod.object({
+  "idempotent": zod.boolean().optional(),
   "products": zod.array(zod.object({
   "id": zod.string(),
   "businessId": zod.string(),
@@ -544,7 +656,8 @@ export const ConfirmVoiceStockResponse = zod.object({
   "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
   "colorStock": zod.array(zod.object({
   "color": zod.string(),
-  "quantity": zod.number().min(confirmVoiceStockResponseProductsItemColorStockItemQuantityMin)
+  "quantity": zod.number().min(confirmStockIntakeResponseProductsItemColorStockItemQuantityMin),
+  "imageUrl": zod.string().nullish()
 })).optional(),
   "imageUrl": zod.string().nullish(),
   "active": zod.boolean(),
@@ -559,6 +672,178 @@ export const ConfirmVoiceStockResponse = zod.object({
   "quantity": zod.number(),
   "unit": zod.string(),
   "color": zod.string().nullish(),
+  "size": zod.string().nullish(),
+  "requestId": zod.string().nullish(),
+  "clientRequestId": zod.string().nullish(),
+  "rawTranscript": zod.string().nullish(),
+  "parserVersion": zod.string().nullish(),
+  "colorPreviousStock": zod.number().nullish(),
+  "colorResultingStock": zod.number().nullish(),
+  "delta": zod.number(),
+  "previousStock": zod.number(),
+  "resultingStock": zod.number(),
+  "transcript": zod.string().nullish(),
+  "createdAt": zod.string()
+}))
+})
+
+
+export const InterpretVoiceStockParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+export const interpretVoiceStockBodyTranscriptMax = 4000;
+
+
+
+export const InterpretVoiceStockBody = zod.object({
+  "transcript": zod.string().max(interpretVoiceStockBodyTranscriptMax)
+})
+
+export const InterpretVoiceStockResponse = zod.object({
+  "transcript": zod.string(),
+  "normalizedTranscript": zod.string(),
+  "items": zod.array(zod.object({
+  "productId": zod.string().nullable(),
+  "productName": zod.string().nullable(),
+  "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']).nullable(),
+  "quantity": zod.number().nullable(),
+  "unit": zod.string(),
+  "color": zod.string().nullish(),
+  "size": zod.string().nullish(),
+  "confidenceLevel": zod.enum(['high', 'review', 'blocked']),
+  "evidence": zod.string().nullish(),
+  "colorCurrentStock": zod.number().nullish(),
+  "colorProposedStock": zod.number().nullish(),
+  "confidence": zod.number(),
+  "currentStock": zod.number().nullable(),
+  "proposedStock": zod.number().nullable(),
+  "warning": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "matchType": zod.enum(['exact', 'suggested', 'new']),
+  "suggestedProduct": zod.object({
+  "id": zod.string().optional(),
+  "name": zod.string().optional()
+}).nullish()
+}))
+})
+
+
+export const TranscribeVoiceStockParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+export const TranscribeVoiceStockResponse = zod.object({
+  "rawTranscript": zod.string().optional(),
+  "transcript": zod.string(),
+  "cleanedTranscript": zod.string().optional(),
+  "normalizedTranscript": zod.string(),
+  "provider": zod.enum(['openai'])
+})
+
+
+export const UploadVoiceStockVariantImageParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+export const uploadVoiceStockVariantImageQueryColorMax = 50;
+
+
+
+export const UploadVoiceStockVariantImageQueryParams = zod.object({
+  "productId": zod.coerce.string(),
+  "color": zod.coerce.string().max(uploadVoiceStockVariantImageQueryColorMax)
+})
+
+export const UploadVoiceStockVariantImageResponse = zod.object({
+  "imageUrl": zod.string().url(),
+  "path": zod.string(),
+  "bytes": zod.number().int()
+})
+
+
+export const ConfirmVoiceStockParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+export const confirmVoiceStockBodyTranscriptMax = 4000;
+
+export const confirmVoiceStockBodyRequestIdMax = 100;
+
+export const confirmVoiceStockBodyClientRequestIdMax = 100;
+
+export const confirmVoiceStockBodyRawTranscriptMax = 12000;
+
+export const confirmVoiceStockBodyItemsItemProductNameMin = 3;
+export const confirmVoiceStockBodyItemsItemProductNameMax = 200;
+
+export const confirmVoiceStockBodyItemsItemQuantityExclusiveMin = 0;
+
+export const confirmVoiceStockBodyItemsItemUnitMax = 50;
+
+export const confirmVoiceStockBodyItemsItemColorMax = 50;
+
+export const confirmVoiceStockBodyItemsItemSizeMax = 50;
+
+export const confirmVoiceStockBodyItemsItemImageUrlMax = 500;
+
+
+
+
+export const ConfirmVoiceStockBody = zod.object({
+  "transcript": zod.string().max(confirmVoiceStockBodyTranscriptMax).optional(),
+  "requestId": zod.string().max(confirmVoiceStockBodyRequestIdMax).optional(),
+  "clientRequestId": zod.string().max(confirmVoiceStockBodyClientRequestIdMax).optional(),
+  "rawTranscript": zod.string().max(confirmVoiceStockBodyRawTranscriptMax).optional(),
+  "parserVersion": zod.string().optional(),
+  "items": zod.array(zod.object({
+  "productId": zod.string().nullish(),
+  "productName": zod.string().min(confirmVoiceStockBodyItemsItemProductNameMin).max(confirmVoiceStockBodyItemsItemProductNameMax).optional(),
+  "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']),
+  "quantity": zod.number().gt(confirmVoiceStockBodyItemsItemQuantityExclusiveMin),
+  "unit": zod.string().max(confirmVoiceStockBodyItemsItemUnitMax).optional(),
+  "color": zod.string().max(confirmVoiceStockBodyItemsItemColorMax).nullish(),
+  "size": zod.string().max(confirmVoiceStockBodyItemsItemSizeMax).nullish(),
+  "imageUrl": zod.string().max(confirmVoiceStockBodyItemsItemImageUrlMax).nullish()
+})).min(1)
+})
+
+export const confirmVoiceStockResponseProductsItemColorStockItemQuantityMin = 0;
+
+
+
+export const ConfirmVoiceStockResponse = zod.object({
+  "idempotent": zod.boolean().optional(),
+  "products": zod.array(zod.object({
+  "id": zod.string(),
+  "businessId": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "price": zod.number(),
+  "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
+  "colorStock": zod.array(zod.object({
+  "color": zod.string(),
+  "quantity": zod.number().min(confirmVoiceStockResponseProductsItemColorStockItemQuantityMin),
+  "imageUrl": zod.string().nullish()
+})).optional(),
+  "imageUrl": zod.string().nullish(),
+  "active": zod.boolean(),
+  "createdAt": zod.string()
+})),
+  "movements": zod.array(zod.object({
+  "id": zod.string(),
+  "businessId": zod.string(),
+  "productId": zod.string(),
+  "productName": zod.string(),
+  "action": zod.enum(['receive', 'sell', 'damage', 'missing', 'adjustment']),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "color": zod.string().nullish(),
+  "size": zod.string().nullish(),
+  "requestId": zod.string().nullish(),
+  "clientRequestId": zod.string().nullish(),
+  "rawTranscript": zod.string().nullish(),
+  "parserVersion": zod.string().nullish(),
   "colorPreviousStock": zod.number().nullish(),
   "colorResultingStock": zod.number().nullish(),
   "delta": zod.number(),
@@ -591,6 +876,11 @@ export const GetVoiceStockHistoryResponseItem = zod.object({
   "quantity": zod.number(),
   "unit": zod.string(),
   "color": zod.string().nullish(),
+  "size": zod.string().nullish(),
+  "requestId": zod.string().nullish(),
+  "clientRequestId": zod.string().nullish(),
+  "rawTranscript": zod.string().nullish(),
+  "parserVersion": zod.string().nullish(),
   "colorPreviousStock": zod.number().nullish(),
   "colorResultingStock": zod.number().nullish(),
   "delta": zod.number(),
@@ -694,6 +984,62 @@ export const AdminGetStatsResponse = zod.object({
 })
 
 
+export const adminGetGrowthSummaryQueryDaysDefault = 30;
+export const adminGetGrowthSummaryQueryDaysMax = 90;
+
+
+
+export const AdminGetGrowthSummaryQueryParams = zod.object({
+  "days": zod.coerce.number().int().min(1).max(adminGetGrowthSummaryQueryDaysMax).default(adminGetGrowthSummaryQueryDaysDefault)
+})
+
+export const AdminGetGrowthSummaryResponse = zod.object({
+  "periodDays": zod.number(),
+  "periodStart": zod.string(),
+  "totalBusinesses": zod.number(),
+  "connectedMerchants": zod.number(),
+  "activeMerchants": zod.number(),
+  "merchantsWithOrders": zod.number(),
+  "merchantsWithPaidOrders": zod.number(),
+  "usageRate": zod.number(),
+  "customerMessages": zod.number(),
+  "customerConversations": zod.number(),
+  "orders": zod.number(),
+  "paidOrders": zod.number(),
+  "pendingOrders": zod.number(),
+  "totalTransactionValue": zod.number(),
+  "mpesaValue": zod.number(),
+  "mpesaTransactions": zod.number(),
+  "averageOrderValue": zod.number(),
+  "trend": zod.array(zod.object({
+  "date": zod.string(),
+  "activeMerchants": zod.number(),
+  "customerMessages": zod.number(),
+  "orders": zod.number(),
+  "paidOrders": zod.number(),
+  "transactionValue": zod.number()
+})),
+  "merchants": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "plan": zod.string(),
+  "whatsappConnected": zod.boolean(),
+  "active": zod.boolean(),
+  "customerMessages": zod.number(),
+  "conversations": zod.number(),
+  "orders": zod.number(),
+  "paidOrders": zod.number(),
+  "transactionValue": zod.number(),
+  "mpesaValue": zod.number()
+})),
+  "recommendations": zod.array(zod.object({
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "title": zod.string(),
+  "detail": zod.string()
+}))
+})
+
+
 export const AdminListReportsResponseItem = zod.object({
   "business": zod.object({
   "id": zod.string(),
@@ -701,6 +1047,9 @@ export const AdminListReportsResponseItem = zod.object({
   "personaName": zod.string(),
   "category": zod.string(),
   "phone": zod.string(),
+  "personalPhone": zod.string().optional(),
+  "pesaAiNumber": zod.string().nullish(),
+  "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
   "createdAt": zod.string()

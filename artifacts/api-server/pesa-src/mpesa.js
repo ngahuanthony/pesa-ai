@@ -25,7 +25,6 @@
 // Adplay's own single Daraja app via MPESA_* env vars.
 
 const db = require("./db");
-const whatsapp = require("./whatsapp");
 
 const DARAJA_BASE =
   (process.env.DARAJA_ENV || process.env.MPESA_ENV) === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke";
@@ -39,9 +38,20 @@ function darajaTimestamp() {
 // Kenyan MSISDNs for Daraja must be in 2547XXXXXXXX / 2541XXXXXXXX format.
 function normalizeMsisdn(phone) {
   const digits = String(phone).replace(/\D/g, "");
-  if (digits.startsWith("254")) return digits;
-  if (digits.startsWith("0")) return `254${digits.slice(1)}`;
-  return `254${digits}`;
+  const normalized = digits.startsWith("254") ? digits : digits.startsWith("0") ? `254${digits.slice(1)}` : `254${digits}`;
+  if (!/^254(?:7|1)\d{8}$/.test(normalized)) {
+    throw db.httpError(400, "Enter a valid Kenyan M-Pesa phone number");
+  }
+  return normalized;
+}
+
+function callbackBaseUrl() {
+  const base = String(process.env.PUBLIC_BASE_URL || "").trim().replace(/\/$/, "");
+  if (!base) throw db.httpError(503, "M-Pesa callback URL is not configured");
+  if (!/^https:\/\//i.test(base) && (process.env.DARAJA_ENV || process.env.MPESA_ENV) === "production") {
+    throw db.httpError(503, "M-Pesa callback URL must use HTTPS in production");
+  }
+  return base;
 }
 
 async function getAccessToken(consumerKey, consumerSecret) {
@@ -62,6 +72,13 @@ async function getAccessToken(consumerKey, consumerSecret) {
 async function initiateStkPush({ orderId, phone }) {
   const order = db.getOrder(orderId);
   if (!order) throw db.httpError(404, "Order not found");
+  if (order.paymentStatus === "PAID") throw db.httpError(409, "This order is already paid");
+  if (String(order.fulfillmentStatus || "").toUpperCase() === "CANCELLED") throw db.httpError(409, "Cancelled orders cannot be paid");
+  if (!Number.isFinite(Number(order.totalAmount)) || Number(order.totalAmount) <= 0) throw db.httpError(409, "This order does not have a payable total");
+  const pendingAttempt = order.mpesaPaymentAttempt;
+  if (pendingAttempt?.status === "PENDING" && Date.now() - new Date(pendingAttempt.requestedAt || 0).getTime() < 120000) {
+    throw db.httpError(409, "An M-Pesa prompt is already pending for this order. Wait two minutes before retrying.");
+  }
 
   const credentials = db.getMpesaCredentialsDecrypted(order.businessId);
 
@@ -79,7 +96,7 @@ async function initiateStkPush({ orderId, phone }) {
   const password = Buffer.from(`${credentials.shortcode}${credentials.passkey}${timestamp}`).toString("base64");
   const accessToken = await getAccessToken(credentials.consumerKey, credentials.consumerSecret);
   const msisdn = normalizeMsisdn(phone);
-  const callbackBase = (process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
+  const callbackBase = callbackBaseUrl();
 
   const res = await fetch(`${DARAJA_BASE}/mpesa/stkpush/v1/processrequest`, {
     method: "POST",
@@ -109,7 +126,11 @@ async function initiateStkPush({ orderId, phone }) {
   // stays "pending" until /webhook/mpesa confirms success; do NOT mark it
   // paid here — a sent STK push is just a prompt on the customer's phone,
   // not a completed payment.
-  db.attachMpesaCheckoutRequest(order.id, data.CheckoutRequestID);
+  db.attachMpesaCheckoutRequest(order.id, data.CheckoutRequestID, {
+    merchantRequestId: data.MerchantRequestID || null,
+    phone: msisdn,
+    amount: Number(order.totalAmount),
+  });
 
   return {
     simulated: false,
@@ -144,11 +165,22 @@ function handleStkCallback(payload) {
       if (Name === "MpesaReceiptNumber")  meta.mpesaTxnId   = String(Value);
       if (Name === "PhoneNumber")         meta.mpesaPhone   = String(Value);
     });
+    if (!Number.isFinite(meta.mpesaAmount) || Number(meta.mpesaAmount) !== Number(order.totalAmount || 0)) {
+      console.warn(`[mpesa] Amount mismatch for order ${order.id}: expected ${order.totalAmount}, received ${meta.mpesaAmount}; leaving payment pending.`);
+      db.updateMpesaPaymentAttempt(stkCallback.CheckoutRequestID, {
+        status: "FAILED",
+        resultCode: "AMOUNT_MISMATCH",
+        resultDesc: `Expected KES ${order.totalAmount}, received KES ${meta.mpesaAmount}`,
+      });
+      return;
+    }
     if (meta.mpesaTxnId) {
       const recorded = db.recordMpesaTransaction({ businessId: order.businessId, transactionId: meta.mpesaTxnId, orderId: order.id, amount: meta.mpesaAmount, phone: meta.mpesaPhone, method: "stk" });
       if (!recorded.duplicate && order.status !== "paid" && order.status !== "fulfilled") {
         const paidOrder = db.updateOrderStatus(order.id, "paid", meta);
+        db.updateMpesaPaymentAttempt(stkCallback.CheckoutRequestID, { status: "SUCCESS", resultCode: 0, resultDesc: stkCallback.ResultDesc || "Payment completed", transactionId: meta.mpesaTxnId });
         db.recordSaleForOrder(paidOrder, meta);
+        const whatsapp = require("./whatsapp");
         const business = db.getBusiness(order.businessId);
         const customer = db.listOrders(order.businessId).find((item) => item.id === order.id);
         const token = whatsapp.resolveAccessToken(business);
@@ -156,12 +188,19 @@ function handleStkCallback(payload) {
           whatsapp.sendMessage(business.whatsappPhoneNumberId, customer.customerPhone, "✅ Payment received\nOrder: " + order.id.slice(0, 8) + "\nAmount: KSh " + Number(meta.mpesaAmount || order.totalAmount).toLocaleString("en-KE") + "\nRef: " + (meta.mpesaTxnId || "N/A") + "\nThank you!", token).catch((error) => console.warn("[mpesa] Receipt send failed: " + error.message));
         }
       }
+    } else {
+      db.updateMpesaPaymentAttempt(stkCallback.CheckoutRequestID, { status: "FAILED", resultCode: "MISSING_RECEIPT", resultDesc: "Safaricom confirmed payment without a receipt number" });
     }
   } else {
     // Customer cancelled, entered the wrong PIN, insufficient funds, etc.
     // Leave the order as-is (not "cancelled") so the business can see it
     // and ask the customer to retry, rather than silently losing it.
     console.log(`M-Pesa payment not completed for order ${order.id}: ${stkCallback.ResultDesc || "unknown reason"}`);
+    db.updateMpesaPaymentAttempt(stkCallback.CheckoutRequestID, {
+      status: "FAILED",
+      resultCode: stkCallback.ResultCode,
+      resultDesc: stkCallback.ResultDesc || "Payment was not completed",
+    });
   }
 }
 
@@ -223,6 +262,18 @@ async function registerC2BUrls(businessId, credentials, baseUrl) {
     console.warn(`[mpesa c2b] Registration error for ${businessId}: ${err.message}`);
     return { ok: false, error: err.message };
   }
+}
+
+async function verifyCredentials(businessId, credentials, baseUrl) {
+  if (!credentials) return { ok: false, error: "M-Pesa credentials are missing" };
+  try {
+    await getAccessToken(credentials.consumerKey, credentials.consumerSecret);
+  } catch (error) {
+    return { ok: false, error: error.message || "Safaricom authentication failed" };
+  }
+  if (credentials.method === "till") return { ok: true, c2bRegistered: false };
+  const registration = await registerC2BUrls(businessId, credentials, baseUrl);
+  return { ...registration, c2bRegistered: registration.ok };
 }
 
 // Handles Safaricom's C2B confirmation callback.
@@ -306,6 +357,7 @@ async function handleC2BConfirmation(payload) {
 
   // 4. WhatsApp reply to customer ────────────────────────────────────────────
   if (business.whatsappPhoneNumberId) {
+    const whatsapp = require("./whatsapp");
     const accessToken = whatsapp.resolveAccessToken(business);
     if (accessToken && customerPhone) {
       let msg;
@@ -330,4 +382,4 @@ async function handleC2BConfirmation(payload) {
   }
 }
 
-module.exports = { initiateStkPush, handleStkCallback, initiateSubscriptionStkPush, registerC2BUrls, handleC2BConfirmation };
+module.exports = { initiateStkPush, handleStkCallback, initiateSubscriptionStkPush, registerC2BUrls, verifyCredentials, handleC2BConfirmation, normalizeMsisdn };

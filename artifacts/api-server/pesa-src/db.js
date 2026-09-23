@@ -1760,6 +1760,13 @@ function createOrder(state, { businessId, customerId, items, serviceLocationId =
     totalAmount,
     items: resolvedItems,
     createdAt: now(),
+    updatedAt: now(),
+    revision: 1,
+    history: [{
+      type: "created",
+      at: now(),
+      detail: "Customer confirmed the order",
+    }],
   };
   state.orders.push(order);
   resolvedItems.forEach((i) => decrementStock(state, i.productId, i.quantity));
@@ -1783,10 +1790,13 @@ function getOrder(orderId) {
 
 // paymentMeta: optional object saved onto the order for reconciliation,
 // e.g. { mpesaTxnId, mpesaAmount, mpesaPhone, paymentMethod, paymentRef }
-function updateOrderStatus(orderId, status, paymentMeta = null) {
+function updateOrderStatus(orderId, status, paymentMeta = null, { actor = "system" } = {}) {
   return mutate((state) => {
     const o = state.orders.find((o) => o.id === orderId);
     if (!o) throw httpError(404, "Order not found");
+    const previousStatus = o.status;
+    const previousFulfillmentStatus = o.fulfillmentStatus || null;
+    const previousPaymentStatus = o.paymentStatus || null;
     o.status = status;
     if (o.fulfillmentStatus && !paymentMeta) {
       const fulfillment = ["pending", "confirmed", "paid", "fulfilled", "cancelled"].includes(status)
@@ -1799,7 +1809,90 @@ function updateOrderStatus(orderId, status, paymentMeta = null) {
       o.paymentStatus = "PAID";
       o.paymentMethod = paymentMeta.paymentMethod || o.paymentMethod || null;
     }
+    if (String(o.fulfillmentStatus || "").toUpperCase() === "CANCELLED" && !o.stockRestoredAt) {
+      for (const item of o.items || []) {
+        const product = state.products.find((candidate) => candidate.id === item.productId && candidate.businessId === o.businessId);
+        if (product) product.stockQty = Number(product.stockQty || 0) + Number(item.quantity || 0);
+      }
+      o.stockRestoredAt = now();
+    }
+    o.updatedAt = now();
+    o.revision = Number(o.revision || 1) + 1;
+    if (!Array.isArray(o.history)) o.history = [];
+    o.history.push({
+      type: paymentMeta ? "payment" : "status",
+      at: o.updatedAt,
+      actor,
+      from: paymentMeta ? previousPaymentStatus : previousFulfillmentStatus || previousStatus,
+      to: paymentMeta ? "PAID" : o.fulfillmentStatus || status,
+      ...(paymentMeta ? { paymentMethod: paymentMeta.paymentMethod || null, paymentRef: paymentMeta.mpesaTxnId || paymentMeta.paymentRef || null } : {}),
+    });
     return o;
+  });
+}
+
+function updateOrderItems(orderId, requestedItems, { actor = "merchant" } = {}) {
+  if (!Array.isArray(requestedItems) || requestedItems.length === 0) {
+    throw httpError(400, "An order must contain at least one item");
+  }
+  return mutate((state) => {
+    const order = state.orders.find((candidate) => candidate.id === orderId);
+    if (!order) throw httpError(404, "Order not found");
+    if (order.paymentStatus === "PAID" || ["paid", "fulfilled"].includes(String(order.status).toLowerCase())) {
+      throw httpError(409, "Paid orders cannot be edited; cancel and create a corrected order instead");
+    }
+    const fulfillment = String(order.fulfillmentStatus || order.status || "").toUpperCase();
+    if (!["NEW", "ACCEPTED", "PENDING", "CONFIRMED"].includes(fulfillment)) {
+      throw httpError(409, "Only new or accepted orders can be edited");
+    }
+
+    const quantities = new Map();
+    for (const item of requestedItems) {
+      const productId = String(item && item.productId || "");
+      const quantity = Number(item && item.quantity);
+      if (!productId || !Number.isInteger(quantity) || quantity < 1) {
+        throw httpError(400, "Each order item requires a productId and a whole quantity of at least 1");
+      }
+      quantities.set(productId, (quantities.get(productId) || 0) + quantity);
+    }
+
+    const oldByProduct = new Map((order.items || []).map((item) => [item.productId, Number(item.quantity || 0)]));
+    const resolvedItems = [];
+    for (const [productId, quantity] of quantities) {
+      const product = state.products.find((candidate) => candidate.id === productId && candidate.businessId === order.businessId && candidate.active !== false);
+      if (!product) throw httpError(400, `Unknown or inactive product: ${productId}`);
+      const previouslyReserved = oldByProduct.get(productId) || 0;
+      const available = Number(product.stockQty || 0) + previouslyReserved;
+      if (quantity > available) throw httpError(409, `Only ${available} of ${product.name} are available`);
+      resolvedItems.push({
+        productId: product.id,
+        productName: product.name,
+        quantity,
+        unitPrice: Number(product.price || 0),
+      });
+    }
+
+    for (const oldItem of order.items || []) {
+      const product = state.products.find((candidate) => candidate.id === oldItem.productId && candidate.businessId === order.businessId);
+      if (product) product.stockQty = Number(product.stockQty || 0) + Number(oldItem.quantity || 0);
+    }
+    for (const item of resolvedItems) decrementStock(state, item.productId, item.quantity);
+
+    const before = (order.items || []).map((item) => ({ productId: item.productId, productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice }));
+    order.items = resolvedItems;
+    order.totalAmount = resolvedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    order.updatedAt = now();
+    order.revision = Number(order.revision || 1) + 1;
+    if (!Array.isArray(order.history)) order.history = [];
+    order.history.push({
+      type: "items",
+      at: order.updatedAt,
+      actor,
+      before,
+      after: resolvedItems.map((item) => ({ productId: item.productId, productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice })),
+      totalAmount: order.totalAmount,
+    });
+    return order;
   });
 }
 
@@ -1808,12 +1901,60 @@ function updateOrderStatus(orderId, status, paymentMeta = null) {
 // /webhook/mpesa in server.js and src/mpesa.js's handleStkCallback), we
 // know which order to mark paid — the callback only carries Safaricom's
 // own CheckoutRequestID, not our order id.
-function attachMpesaCheckoutRequest(orderId, checkoutRequestId) {
+function attachMpesaCheckoutRequest(orderId, checkoutRequestId, { merchantRequestId = null, phone = null, amount = null } = {}) {
   return mutate((state) => {
     const o = state.orders.find((o) => o.id === orderId);
     if (!o) throw httpError(404, "Order not found");
     o.mpesaCheckoutRequestId = checkoutRequestId;
+    o.mpesaPaymentAttempt = {
+      status: "PENDING",
+      checkoutRequestId,
+      merchantRequestId,
+      phone,
+      amount: Number(amount ?? o.totalAmount),
+      requestedAt: now(),
+    };
+    o.updatedAt = now();
+    o.revision = Number(o.revision || 1) + 1;
+    if (!Array.isArray(o.history)) o.history = [];
+    o.history.push({
+      type: "payment_attempt",
+      at: o.updatedAt,
+      actor: "customer",
+      to: "PENDING",
+      checkoutRequestId,
+      amount: Number(amount ?? o.totalAmount),
+    });
     return o;
+  });
+}
+
+function updateMpesaPaymentAttempt(checkoutRequestId, { status, resultCode = null, resultDesc = null, transactionId = null } = {}) {
+  return mutate((state) => {
+    const order = state.orders.find((candidate) => candidate.mpesaCheckoutRequestId === checkoutRequestId);
+    if (!order) return null;
+    order.mpesaPaymentAttempt = {
+      ...(order.mpesaPaymentAttempt || { checkoutRequestId }),
+      status,
+      resultCode,
+      resultDesc: resultDesc ? String(resultDesc).slice(0, 300) : null,
+      transactionId,
+      completedAt: now(),
+    };
+    order.updatedAt = now();
+    order.revision = Number(order.revision || 1) + 1;
+    if (!Array.isArray(order.history)) order.history = [];
+    order.history.push({
+      type: "payment_attempt",
+      at: order.updatedAt,
+      actor: "safaricom",
+      from: "PENDING",
+      to: status,
+      resultCode,
+      resultDesc: resultDesc ? String(resultDesc).slice(0, 300) : null,
+      transactionId,
+    });
+    return order;
   });
 }
 
@@ -2193,7 +2334,9 @@ module.exports = {
   listOrders,
   getOrder,
   updateOrderStatus,
+  updateOrderItems,
   attachMpesaCheckoutRequest,
+  updateMpesaPaymentAttempt,
   getOrderByCheckoutRequestId,
   getBusinessByShortcode,
   getPendingOrdersForBusiness,
