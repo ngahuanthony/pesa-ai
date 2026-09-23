@@ -81,6 +81,7 @@ const conversationRoutes = require("./pesa-src/routes/conversations");
 const photoScanRoutes   = require("./pesa-src/routes/photo-scan");
 const voiceStockRoutes  = require("./pesa-src/routes/voice-stock");
 const publicShopRoutes  = require("./pesa-src/routes/public-shops");
+const merchantIntelligenceRoutes = require("./pesa-src/routes/merchant-intelligence");
 const videoProcessor = require("./pesa-src/video-processor");
 const whatsapp = require("./pesa-src/whatsapp");
 const mpesa = require("./pesa-src/mpesa");
@@ -156,6 +157,16 @@ router.post("/api/businesses/:businessId/products", productRoutes.create);
 router.post("/api/businesses/:businessId/products/import", productRoutes.importBulk);
 router.put("/api/businesses/:businessId/products/:productId", productRoutes.update);
 router.delete("/api/businesses/:businessId/products/:productId", productRoutes.remove);
+router.get("/api/businesses/:businessId/knowledge", merchantIntelligenceRoutes.knowledge.list);
+router.post("/api/businesses/:businessId/knowledge", merchantIntelligenceRoutes.knowledge.create);
+router.post("/api/businesses/:businessId/knowledge/extract", merchantIntelligenceRoutes.knowledge.extract);
+router.patch("/api/businesses/:businessId/knowledge/:entryId", merchantIntelligenceRoutes.knowledge.update);
+router.delete("/api/businesses/:businessId/knowledge/:entryId", merchantIntelligenceRoutes.knowledge.remove);
+router.get("/api/businesses/:businessId/service-locations", merchantIntelligenceRoutes.locations.list);
+router.post("/api/businesses/:businessId/service-locations", merchantIntelligenceRoutes.locations.create);
+router.patch("/api/businesses/:businessId/service-locations/:locationId", merchantIntelligenceRoutes.locations.update);
+router.delete("/api/businesses/:businessId/service-locations/:locationId", merchantIntelligenceRoutes.locations.remove);
+router.get("/api/public/service-locations/:token", merchantIntelligenceRoutes.locations.resolve);
 
 router.get("/api/businesses/:businessId/orders", orderRoutes.list);
 router.put("/api/businesses/:businessId/orders/:orderId/status", orderRoutes.updateStatus);
@@ -250,12 +261,12 @@ function sendJson(res, status, data, headers = {}) {
   res.end(payload);
 }
 
-function readBody(req) {
+function readBody(req, maxChars = 2_000_000) {
   return new Promise((resolve, reject) => {
     let chunks = "";
     req.on("data", (c) => {
       chunks += c;
-      if (chunks.length > 2_000_000) {
+      if (chunks.length > maxChars) {
         reject(db.httpError(413, "Request body too large"));
         req.destroy();
       }
@@ -506,7 +517,7 @@ const server = http.createServer(async (req, res) => {
   let body = {};
   try {
     if (["POST", "PUT", "PATCH"].includes(req.method)) {
-      body = await readBody(req);
+      body = await readBody(req, pathname === "/api/businesses/" + (match.params.businessId || "") + "/knowledge/extract" ? 3_000_000 : 2_000_000);
     }
     const result = await match.handler({ params: match.params, query, body, session, req });
 

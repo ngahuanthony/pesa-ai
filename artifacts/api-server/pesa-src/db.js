@@ -44,6 +44,8 @@ function emptyState() {
     deniBook: [],
     sales: [],
     dailyReportRuns: [],
+    knowledgeEntries: [],
+    serviceLocations: [],
   };
 }
 
@@ -419,7 +421,7 @@ function generateWelcomeMessage(business) {
 
 function createBusiness(
   state,
-  { name, category, phone, personalPhone, pesaAiNumber, paybillNumber, plan, buildingName, shopNumber, publicPhone, idOrKraPin, ownerName, personaInstructions, location, deliveryAreas }
+  { name, category, merchantType, phone, personalPhone, pesaAiNumber, paybillNumber, plan, buildingName, shopNumber, publicPhone, idOrKraPin, ownerName, personaInstructions, location, deliveryAreas }
 ) {
   const normalizedPhone = normalizePhone(phone);
   const normalizedPersonalPhone = normalizePhone(personalPhone || phone);
@@ -435,6 +437,7 @@ function createBusiness(
     id: id(),
     name,
     category,
+    merchantType: merchantType || "retail",
     phone: normalizedPhone,
     personalPhone: normalizedPersonalPhone,
     personalPhoneVerified: false,
@@ -556,6 +559,7 @@ function sanitizeBusiness(business) {
   const { mpesaCredentials, changeLog, idOrKraPin, ...rest } = business;
   return {
     ...rest,
+    merchantType: rest.merchantType || "retail",
     publicShopSlug: getPublicShopSlug(business),
     phone: maskPhone(rest.phone),
     personalPhone: maskPhone(rest.personalPhone),
@@ -637,7 +641,10 @@ function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verify
     if (verifyToken !== undefined) b.whatsappVerifyToken = verifyToken;
     if (wabaId !== undefined) b.whatsappWabaId = wabaId || null;
     if (displayName !== undefined) b.whatsappDisplayName = displayName || null;
-    if (waPhone !== undefined) b.whatsappRequestedPhone = waPhone || null;
+    if (waPhone !== undefined) {
+      b.whatsappRequestedPhone = waPhone || null;
+      b.whatsappNumber = waPhone ? normalizePhone(waPhone) : null;
+    }
     if (accessToken !== undefined) {
       b.whatsappAccessTokenEnc = accessToken ? fieldCrypto.encrypt(accessToken) : null;
     }
@@ -981,13 +988,14 @@ function verifyOtpChallenge(phone, code, purpose = "login") {
   });
 }
 
-function createPendingSignup(state, { businessName, personalPhone, pesaAiNumber }) {
+function createPendingSignup(state, { businessName, personalPhone, pesaAiNumber, merchantType }) {
   const normalizedPersonalPhone = normalizePhone(personalPhone);
   const normalizedShopNumber = normalizePhone(pesaAiNumber);
   if (normalizedPersonalPhone && normalizedPersonalPhone === normalizedShopNumber) throw httpError(400, "Use two different numbers: one public Duka number and one private number for alerts.");
   if ((state.businesses || []).some((b) => normalizePhone(b.pesaAiNumber) === normalizedShopNumber)) throw httpError(409, "This number is already on WhatsApp or is already registered as a shop number");
   if ((state.pendingSignups || []).some((p) => p.pesaAiNumber === normalizedShopNumber && !p.finalizedAt)) throw httpError(409, "This number is already being verified");
-  const pending = { id: id(), businessName: String(businessName).trim(), personalPhone: normalizedPersonalPhone, pesaAiNumber: normalizedShopNumber, personalVerified: false, shopVerified: false, status: "pending_verification", createdAt: now(), expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
+  const allowedMerchantTypes = ["retail", "hotel", "hospitality", "service", "other"];
+  const pending = { id: id(), businessName: String(businessName).trim(), merchantType: allowedMerchantTypes.includes(String(merchantType || "").toLowerCase()) ? String(merchantType).toLowerCase() : "retail", personalPhone: normalizedPersonalPhone, pesaAiNumber: normalizedShopNumber, personalVerified: false, shopVerified: false, status: "pending_verification", createdAt: now(), expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
   if (!Array.isArray(state.pendingSignups)) state.pendingSignups = [];
   state.pendingSignups.push(pending);
   return pending;
@@ -1012,7 +1020,7 @@ function finalizePendingSignup(pendingId) {
     const pending = (state.pendingSignups || []).find((item) => item.id === pendingId);
     if (!pending || !pending.personalVerified || !pending.shopVerified) throw httpError(400, "Both phone numbers must be verified first");
     if (pending.finalizedAt) throw httpError(409, "This signup has already been completed");
-    const business = createBusiness(state, { name: pending.businessName, category: null, phone: pending.personalPhone, personalPhone: pending.personalPhone, pesaAiNumber: pending.pesaAiNumber, plan: "free_trial" });
+    const business = createBusiness(state, { name: pending.businessName, category: null, merchantType: pending.merchantType, phone: pending.personalPhone, personalPhone: pending.personalPhone, pesaAiNumber: pending.pesaAiNumber, plan: "free_trial" });
     business.personalPhoneVerified = true;
     business.pesaAiNumberVerified = true;
     business.shopNumberStatus = "sms_verified";
@@ -1486,13 +1494,16 @@ function findOrCreateCustomer(state, businessId, phone, name) {
 
 // --- Conversations & messages ------------------------------------------
 
-function findOrCreateConversation(state, businessId, customerId, channel) {
+function findOrCreateConversation(state, businessId, customerId, channel, serviceLocationId = null) {
   let convo = state.conversations.find(
     (c) => c.businessId === businessId && c.customerId === customerId
   );
   if (!convo) {
-    convo = { id: id(), businessId, customerId, channel, createdAt: now(), humanHandover: false };
+    convo = { id: id(), businessId, customerId, channel, createdAt: now(), humanHandover: false, serviceLocationId: serviceLocationId || null };
     state.conversations.push(convo);
+  } else if (serviceLocationId && convo.serviceLocationId !== serviceLocationId) {
+    convo.previousServiceLocationId = convo.serviceLocationId || null;
+    convo.serviceLocationId = serviceLocationId;
   }
   return convo;
 }
@@ -1550,8 +1561,12 @@ function getConversationHistory(businessId, customerPhone, limit = 20) {
 
 // --- Orders --------------------------------------------------------------
 
-function createOrder(state, { businessId, customerId, items }) {
+function createOrder(state, { businessId, customerId, items, serviceLocationId = null }) {
   // items: [{ productId, quantity }]
+  if (serviceLocationId) {
+    const location = (state.serviceLocations || []).find((item) => item.id === serviceLocationId && item.businessId === businessId && item.active);
+    if (!location) throw httpError(400, "Invalid or inactive service location");
+  }
   const resolvedItems = items.map(({ productId, quantity }) => {
     const product = state.products.find((p) => p.id === productId && p.businessId === businessId);
     if (!product) throw httpError(400, `Unknown product: ${productId}`);
@@ -1563,11 +1578,17 @@ function createOrder(state, { businessId, customerId, items }) {
     };
   });
   const totalAmount = resolvedItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+  const location = serviceLocationId ? state.serviceLocations.find((item) => item.id === serviceLocationId) : null;
   const order = {
     id: id(),
     businessId,
     customerId,
     status: "pending",
+    fulfillmentStatus: "NEW",
+    paymentStatus: "PENDING",
+    paymentMethod: null,
+    serviceLocationId: serviceLocationId || null,
+    serviceLocationSnapshot: location ? { kind: location.kind, label: location.label } : null,
     totalAmount,
     items: resolvedItems,
     createdAt: now(),
@@ -1599,8 +1620,16 @@ function updateOrderStatus(orderId, status, paymentMeta = null) {
     const o = state.orders.find((o) => o.id === orderId);
     if (!o) throw httpError(404, "Order not found");
     o.status = status;
+    if (o.fulfillmentStatus && !paymentMeta) {
+      const fulfillment = ["pending", "confirmed", "paid", "fulfilled", "cancelled"].includes(status)
+        ? ({ pending: "NEW", confirmed: "ACCEPTED", paid: "COMPLETED", fulfilled: "COMPLETED", cancelled: "CANCELLED" }[status] || status)
+        : status;
+      o.fulfillmentStatus = fulfillment;
+    }
     if (paymentMeta && typeof paymentMeta === "object") {
       o.paymentMeta = { ...paymentMeta, paidAt: now() };
+      o.paymentStatus = "PAID";
+      o.paymentMethod = paymentMeta.paymentMethod || o.paymentMethod || null;
     }
     return o;
   });
@@ -1636,7 +1665,10 @@ function getBusinessByShortcode(shortcode) {
 function getPendingOrdersForBusiness(businessId) {
   const state = load();
   return (state.orders || [])
-    .filter((o) => o.businessId === businessId && (o.status === "pending" || o.status === "confirmed"))
+    .filter((o) => o.businessId === businessId && (
+      o.status === "pending" || o.status === "confirmed" ||
+      (o.fulfillmentStatus && !["COMPLETED", "CANCELLED"].includes(String(o.fulfillmentStatus).toUpperCase()) && o.paymentStatus !== "PAID")
+    ))
     .map((o) => {
       const customer = (state.customers || []).find((c) => c.id === o.customerId);
       return { ...o, customerPhone: customer ? customer.phone : null, customerName: customer ? customer.name : null };
@@ -2011,11 +2043,121 @@ module.exports = {
   updateVideoScan,
   listVideoScans,
   deleteVideoScan,
+  listKnowledgeEntries,
+  createKnowledgeEntry,
+  updateKnowledgeEntry,
+  deleteKnowledgeEntry,
+  createServiceLocation,
+  listServiceLocations,
+  updateServiceLocation,
+  deleteServiceLocation,
+  resolveServiceLocation,
+  getServiceLocationForBusiness,
 };
 
 // ── Video Scan ──────────────────────────────────────────────────────────────
 
 const SCAN_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// --- Reusable merchant intelligence and service locations -----------------
+function listKnowledgeEntries(businessId) {
+  return (load().knowledgeEntries || []).filter((entry) => entry.businessId === businessId && entry.approved !== false);
+}
+
+function createKnowledgeEntry(businessId, { title, category, text, source }) {
+  if (!String(title || "").trim() || !String(text || "").trim()) throw httpError(400, "title and text are required");
+  if (String(text).length > 100000) throw httpError(413, "knowledge text must be 100,000 characters or fewer");
+  return mutate((state) => {
+    if (!state.businesses.some((b) => b.id === businessId)) throw httpError(404, "Business not found");
+    if (!Array.isArray(state.knowledgeEntries)) state.knowledgeEntries = [];
+    const entry = { id: id(), businessId, title: String(title).trim().slice(0, 160), category: category ? String(category).trim().slice(0, 80) : "general", text: String(text).trim(), source: source ? String(source).trim().slice(0, 300) : "merchant", approved: true, createdAt: now(), updatedAt: now() };
+    state.knowledgeEntries.push(entry);
+    return entry;
+  });
+}
+
+function updateKnowledgeEntry(businessId, entryId, patch) {
+  return mutate((state) => {
+    if (!Array.isArray(state.knowledgeEntries)) state.knowledgeEntries = [];
+    const entry = state.knowledgeEntries.find((item) => item.id === entryId && item.businessId === businessId);
+    if (!entry) throw httpError(404, "Knowledge entry not found");
+    if (patch.title !== undefined && !String(patch.title).trim()) throw httpError(400, "title cannot be empty");
+    if (patch.text !== undefined && !String(patch.text).trim()) throw httpError(400, "text cannot be empty");
+    if (patch.text !== undefined && String(patch.text).length > 100000) throw httpError(413, "knowledge text must be 100,000 characters or fewer");
+    for (const key of ["title", "category", "text", "source"]) if (patch[key] !== undefined) entry[key] = String(patch[key]).trim().slice(0, key === "text" ? 100000 : 300);
+    entry.updatedAt = now();
+    return entry;
+  });
+}
+
+function deleteKnowledgeEntry(businessId, entryId) {
+  return mutate((state) => {
+    if (!Array.isArray(state.knowledgeEntries)) state.knowledgeEntries = [];
+    const before = state.knowledgeEntries.length;
+    state.knowledgeEntries = state.knowledgeEntries.filter((item) => !(item.id === entryId && item.businessId === businessId));
+    if (state.knowledgeEntries.length === before) throw httpError(404, "Knowledge entry not found");
+    return { ok: true };
+  });
+}
+
+function createServiceLocation(businessId, { kind = "TABLE", label, active = true } = {}) {
+  if (!String(label || "").trim()) throw httpError(400, "label is required");
+  return mutate((state) => {
+    if (!state.businesses.some((b) => b.id === businessId)) throw httpError(404, "Business not found");
+    if (!Array.isArray(state.serviceLocations)) state.serviceLocations = [];
+    if (state.serviceLocations.some((item) => item.businessId === businessId && item.label.trim().toLowerCase() === String(label).trim().toLowerCase())) {
+      throw httpError(409, "A service location with this label already exists");
+    }
+    const location = { id: id(), businessId, kind: String(kind).toUpperCase().slice(0, 40), label: String(label).trim().slice(0, 120), active: active !== false, publicToken: crypto.randomBytes(24).toString("base64url"), createdAt: now(), updatedAt: now() };
+    state.serviceLocations.push(location);
+    return location;
+  });
+}
+
+function listServiceLocations(businessId) {
+  return (load().serviceLocations || []).filter((item) => item.businessId === businessId);
+}
+
+function updateServiceLocation(businessId, locationId, patch) {
+  return mutate((state) => {
+    if (!Array.isArray(state.serviceLocations)) state.serviceLocations = [];
+    const location = state.serviceLocations.find((item) => item.id === locationId && item.businessId === businessId);
+    if (!location) throw httpError(404, "Service location not found");
+    if (patch.label !== undefined && !String(patch.label).trim()) throw httpError(400, "label cannot be empty");
+    if (patch.label !== undefined && state.serviceLocations.some((item) => item.id !== locationId && item.businessId === businessId && item.label.trim().toLowerCase() === String(patch.label).trim().toLowerCase())) {
+      throw httpError(409, "A service location with this label already exists");
+    }
+    if (patch.kind !== undefined) location.kind = String(patch.kind).toUpperCase().slice(0, 40);
+    if (patch.label !== undefined) location.label = String(patch.label).trim().slice(0, 120);
+    if (patch.active !== undefined) location.active = Boolean(patch.active);
+    location.updatedAt = now();
+    return location;
+  });
+}
+
+function deleteServiceLocation(businessId, locationId) {
+  return mutate((state) => {
+    if (!Array.isArray(state.serviceLocations)) state.serviceLocations = [];
+    const location = state.serviceLocations.find((item) => item.id === locationId && item.businessId === businessId);
+    if (!location) throw httpError(404, "Service location not found");
+    location.active = false;
+    location.updatedAt = now();
+    return location;
+  });
+}
+
+function resolveServiceLocation(publicToken) {
+  const token = String(publicToken || "");
+  if (!token || token.length < 20) return null;
+  const location = (load().serviceLocations || []).find((item) => item.publicToken === token && item.active);
+  if (!location) return null;
+  const business = load().businesses.find((item) => item.id === location.businessId);
+  return business ? { location, business } : null;
+}
+
+function getServiceLocationForBusiness(businessId, locationId) {
+  return (load().serviceLocations || []).find((item) => item.id === locationId && item.businessId === businessId && item.active) || null;
+}
 
 function createVideoScan(businessId, { name } = {}) {
   return mutate((state) => {

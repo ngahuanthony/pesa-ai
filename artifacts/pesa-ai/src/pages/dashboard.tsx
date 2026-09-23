@@ -15,6 +15,7 @@ import { WhatsAppAccountTab } from "@/components/dashboard/whatsapp-account-tab"
 import { VideoScanTab }       from "@/components/dashboard/video-scan-tab";
 import { VoiceStockTab }      from "@/components/dashboard/voice-stock-tab";
 import { BusinessProfileTab } from "@/components/dashboard/business-profile-tab";
+import { BusinessIntelligenceTab } from "@/components/dashboard/business-intelligence-tab";
 import { StockTab }           from "@/components/dashboard/stock-tab";
 import { PricesTab }          from "@/components/dashboard/prices-tab";
 import { CustomersTab }       from "@/components/dashboard/customers-tab";
@@ -26,6 +27,7 @@ function getSection(location: string): string {
   const raw = location.replace(/^\/dashboard\/?/, "");
   if (!raw) return "overview";
   if (raw === "voice-stock") return "voice-stock";
+  if (raw === "intelligence") return "intelligence";
   // stock sub-pages all collapse to "stock"
   if (raw.startsWith("stock")) return "stock";
   // product add hub sub-pages
@@ -50,6 +52,7 @@ function DashboardContent() {
       case "sales":             return <SalesTab />;
       case "billing":           return <BillingTab />;
       case "settings":          return <SettingsTab />;
+      case "intelligence":      return <BusinessIntelligenceTab />;
       case "whatsapp":          return <WhatsAppAccountTab />;
       case "video-scan":        return <VideoScanTab />;
       case "voice-stock":       return <VoiceStockTab />;
@@ -71,6 +74,7 @@ function DashboardContent() {
     "chat":               { title: "Chat Tester",     sub: "Preview how your shop responds." },
     "sales":              { title: "Reports",         sub: "Review your revenue and performance." },
     "billing":            { title: "Billing",         sub: "Manage your subscription." },
+    "intelligence":       { title: "Business Intelligence", sub: "Manage your knowledge base and service locations." },
     "settings":           { title: "Settings",        sub: "Manage your business profile, AI persona, and integrations." },
     "whatsapp":           { title: "WhatsApp Account",sub: "Connect your WhatsApp Business number to your shop." },
     "video-scan":         { title: "Stock Scanner",   sub: "Scan your shop and AI will build your product catalogue." },

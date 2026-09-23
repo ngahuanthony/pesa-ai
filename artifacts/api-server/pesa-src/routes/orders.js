@@ -10,12 +10,30 @@ function list({ params, session }) {
 
 function updateStatus({ params, body, session }) {
   auth.requireOwnBusiness(session, params.businessId);
-  const allowed = ["pending", "confirmed", "paid", "fulfilled", "cancelled"];
+  const allowed = ["pending", "confirmed", "paid", "fulfilled", "cancelled", "NEW", "ACCEPTED", "PREPARING", "READY", "SERVED", "COMPLETED", "CANCELLED"];
   if (!allowed.includes(body.status)) {
     throw db.httpError(400, `status must be one of: ${allowed.join(", ")}`);
   }
   const order = db.getOrder(params.orderId);
   if (!order || order.businessId !== params.businessId) throw db.httpError(404, "Order not found");
+  if (order.fulfillmentStatus) {
+    const next = String(body.status).toUpperCase();
+    const current = String(order.fulfillmentStatus).toUpperCase();
+    const transitions = {
+      NEW: ["ACCEPTED", "CANCELLED"],
+      ACCEPTED: ["PREPARING", "CANCELLED"],
+      PREPARING: ["READY", "CANCELLED"],
+      READY: ["SERVED", "CANCELLED"],
+      SERVED: ["COMPLETED"],
+      COMPLETED: [],
+      CANCELLED: [],
+    };
+    if (next === "CANCELLED" && current !== "COMPLETED" && current !== "CANCELLED") return db.updateOrderStatus(params.orderId, next);
+    if (!transitions[current] || !transitions[current].includes(next)) {
+      throw db.httpError(400, `Invalid fulfillment transition from ${current} to ${next}`);
+    }
+    return db.updateOrderStatus(params.orderId, next);
+  }
   return db.updateOrderStatus(params.orderId, body.status);
 }
 
@@ -34,7 +52,7 @@ function markPaid({ params, body, session }) {
   auth.requireOwnBusiness(session, params.businessId);
   const order = db.getOrder(params.orderId);
   if (!order || order.businessId !== params.businessId) throw db.httpError(404, "Order not found");
-  if (order.status === "paid" || order.status === "fulfilled") {
+  if (order.paymentStatus === "PAID" || order.status === "paid" || order.status === "fulfilled") {
     throw db.httpError(400, "Order is already paid or fulfilled");
   }
   const paymentRef = (body && body.paymentRef) ? String(body.paymentRef).trim() : null;

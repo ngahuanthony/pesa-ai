@@ -111,6 +111,7 @@ export function SettingsTab() {
   const [bizName,    setBizName]   = useState("");
   const [ownerName,  setOwnerName] = useState("");
   const [category,   setCategory]  = useState("");
+  const [merchantType, setMerchantType] = useState("retail");
 
   const [recoveryEmailInput, setRecoveryEmailInput] = useState("");
   const [editingRecoveryEmail, setEditingRecoveryEmail] = useState(false);
@@ -139,6 +140,7 @@ export function SettingsTab() {
       setBizName(business.name || "");
       setOwnerName(business.ownerName || "");
       setCategory(business.category || "");
+      setMerchantType((business as any).merchantType || "retail");
       setPersonaName(business.personaName || "");
       setPersonaInstructions(business.personaInstructions || "");
       setLocation((business as any).location || "");
@@ -159,7 +161,7 @@ export function SettingsTab() {
   const refetch = () => queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
 
   const saveProfile = () =>
-    updateBiz.mutate({ id: businessId, data: { name: bizName, ownerName, category } as any }, {
+    updateBiz.mutate({ id: businessId, data: { name: bizName, ownerName, category, merchantType } as any }, {
       onSuccess: () => { refetch(); toast({ title: "Profile saved!" }); },
     });
 
@@ -278,14 +280,29 @@ export function SettingsTab() {
             <Input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Your full name" />
           </div>
         </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">Category</label>
-          <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="w-full"><SelectValue placeholder="What type of business?" /></SelectTrigger>
-            <SelectContent className="max-h-52 overflow-y-auto">
-              {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Category</label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="What type of business?" /></SelectTrigger>
+              <SelectContent className="max-h-52 overflow-y-auto">
+                {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Merchant Type</label>
+            <Select value={merchantType} onValueChange={setMerchantType}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Select type..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="retail">Retail</SelectItem>
+                <SelectItem value="hotel">Hotel</SelectItem>
+                <SelectItem value="hospitality">Hospitality</SelectItem>
+                <SelectItem value="service">Service</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <SaveButton onClick={saveProfile} isPending={updateBiz.isPending} />
       </Section>

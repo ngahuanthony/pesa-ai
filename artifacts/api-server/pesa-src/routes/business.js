@@ -14,11 +14,15 @@ function get({ params, session }) {
 
 function update({ params, body, session }) {
   auth.requireOwnBusiness(session, params.id);
-  const allowed = ["name", "category", "ownerName", "personaName", "personaInstructions", "paymentMethod", "mpesaType", "paybillNumber", "paybillAccountNumber", "whatsappPhoneNumberId", "bankName", "bankAccountNumber", "whatsappPhone", "buildingName", "shopNumber", "publicPhone", "location", "deliveryAreas", "welcomeMessage"];
+  const allowed = ["name", "category", "merchantType", "ownerName", "personaName", "personaInstructions", "paymentMethod", "mpesaType", "paybillNumber", "paybillAccountNumber", "whatsappPhoneNumberId", "bankName", "bankAccountNumber", "whatsappPhone", "buildingName", "shopNumber", "publicPhone", "location", "deliveryAreas", "welcomeMessage"];
   const patch = {};
   for (const key of allowed) {
     if (body[key] !== undefined) patch[key] = body[key];
   }
+  if (patch.merchantType !== undefined && !["retail", "hotel", "hospitality", "service", "other"].includes(String(patch.merchantType).toLowerCase())) {
+    throw db.httpError(400, "merchantType must be retail, hotel, hospitality, service, or other");
+  }
+  if (patch.merchantType) patch.merchantType = String(patch.merchantType).toLowerCase();
   // Only auto-derive personaName from name+category if the client isn't
   // explicitly setting it themselves (i.e. via the AI Persona section).
   if ((patch.name || patch.category) && !patch.personaName) {

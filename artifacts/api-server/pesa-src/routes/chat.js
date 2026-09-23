@@ -9,7 +9,7 @@ const { handleCustomerMessage } = require("../core");
 async function send({ params, body, session }) {
   auth.requireOwnBusiness(session, params.businessId);
   const business = db.getBusiness(params.businessId);
-  const { customerPhone, customerName, message } = body || {};
+  const { customerPhone, customerName, message, serviceLocationToken } = body || {};
   if (!customerPhone || !message) {
     throw db.httpError(400, "customerPhone and message are required");
   }
@@ -19,6 +19,7 @@ async function send({ params, body, session }) {
     customerName,
     text: message,
     channel: "simulator",
+    serviceLocationToken: serviceLocationToken || null,
   });
   return { replyText: result.replyText, order: result.order || null };
 }

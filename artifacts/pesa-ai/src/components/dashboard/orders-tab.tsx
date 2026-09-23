@@ -11,10 +11,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
 const STATUS_STYLES: Record<string, string> = {
-  pending:   "bg-amber-100 text-amber-700",
-  confirmed: "bg-blue-100 text-blue-700",
-  paid:      "bg-primary/10 text-primary",
-  fulfilled: "bg-emerald-100 text-emerald-700",
+  new:       "bg-amber-100 text-amber-700",
+  accepted:  "bg-blue-100 text-blue-700",
+  preparing: "bg-purple-100 text-purple-700",
+  ready:     "bg-emerald-100 text-emerald-700",
+  served:    "bg-indigo-100 text-indigo-700",
+  completed: "bg-primary/10 text-primary",
   cancelled: "bg-rose-100 text-rose-700",
 };
 
@@ -49,18 +51,53 @@ function PaymentDetails({ meta }: { meta: PaymentMeta }) {
   );
 }
 
-function StatusSelect({ orderId, status, onChange }: { orderId: string; status: string; onChange: (id: string, val: string) => void }) {
+function StatusSelect({ order, onChange }: { order: any; onChange: (id: string, val: string) => void }) {
+  const isNewFlow = !!order.fulfillmentStatus;
+  const currentStatus = isNewFlow ? order.fulfillmentStatus : order.status;
+  const normStatus = (currentStatus || "").toLowerCase();
+
+  if (!isNewFlow) {
+    return (
+      <Select value={currentStatus} onValueChange={(val) => onChange(order.id, val)}>
+        <SelectTrigger className={`h-7 text-xs font-semibold border-none w-auto pr-2 ${STATUS_STYLES[normStatus] ?? "bg-muted text-foreground"}`}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="pending">Pending</SelectItem>
+          <SelectItem value="confirmed">Confirmed</SelectItem>
+          <SelectItem value="paid">Paid</SelectItem>
+          <SelectItem value="fulfilled">Fulfilled</SelectItem>
+          <SelectItem value="cancelled">Cancelled</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  const upperStatus = (currentStatus || "").toUpperCase();
+  const allowed = [upperStatus];
+  if (upperStatus === "NEW") allowed.push("ACCEPTED");
+  if (upperStatus === "ACCEPTED") allowed.push("PREPARING");
+  if (upperStatus === "PREPARING") allowed.push("READY");
+  if (upperStatus === "READY") allowed.push("SERVED");
+  if (upperStatus === "SERVED") allowed.push("COMPLETED");
+  if (upperStatus !== "CANCELLED" && upperStatus !== "COMPLETED") allowed.push("CANCELLED");
+
   return (
-    <Select value={status} onValueChange={(val) => onChange(orderId, val)}>
-      <SelectTrigger className={`h-7 text-xs font-semibold border-none w-auto pr-2 ${STATUS_STYLES[status] ?? "bg-muted text-foreground"}`}>
+    <Select value={upperStatus} onValueChange={(val) => onChange(order.id, val)}>
+      <SelectTrigger className={`h-7 text-xs font-semibold border-none w-auto pr-2 ${STATUS_STYLES[normStatus] ?? "bg-muted text-foreground"}`}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="pending">Pending</SelectItem>
-        <SelectItem value="confirmed">Confirmed</SelectItem>
-        <SelectItem value="paid">Paid</SelectItem>
-        <SelectItem value="fulfilled">Fulfilled</SelectItem>
-        <SelectItem value="cancelled">Cancelled</SelectItem>
+        {allowed.map(st => (
+          <SelectItem key={st} value={st}>
+            {st === "NEW" ? "New" :
+             st === "ACCEPTED" ? "Accepted" :
+             st === "PREPARING" ? "Preparing" :
+             st === "READY" ? "Ready" :
+             st === "SERVED" ? "Served" :
+             st === "COMPLETED" ? "Completed" : "Cancelled"}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );
@@ -70,7 +107,11 @@ export function OrdersTab() {
   const { data: me } = useGetMe();
   const businessId = me?.business?.id || "";
   const { data: orders, isLoading } = useListOrders(businessId, {
-    query: { enabled: !!businessId, queryKey: getListOrdersQueryKey(businessId) },
+    query: {
+      enabled: !!businessId,
+      queryKey: getListOrdersQueryKey(businessId),
+      refetchInterval: 10000
+    },
   });
 
   const updateStatus = useUpdateOrderStatus();
@@ -128,8 +169,25 @@ export function OrdersTab() {
   };
 
   const currentOrder = orders?.find((o) => o.id === payOrder);
-  const isPaidOrFulfilled = (s: string) => s === "paid" || s === "fulfilled";
-  const isActionable      = (s: string) => s === "pending" || s === "confirmed";
+  const isOrderPaid = (o: any) => {
+    if (o.fulfillmentStatus) {
+      return o.paymentStatus === "PAID";
+    }
+    const norm = (o.status || "").toLowerCase();
+    return norm === "paid" || norm === "fulfilled";
+  };
+
+  const isOrderActionableForPayment = (o: any) => {
+    if (o.fulfillmentStatus) {
+      return o.paymentStatus !== "PAID" && o.fulfillmentStatus !== "CANCELLED";
+    }
+    const norm = (o.status || "").toLowerCase();
+    return norm === "pending" || norm === "confirmed";
+  };
+
+  const newCount = orders?.filter((o: any) =>
+    o.fulfillmentStatus?.toUpperCase() === "NEW" || o.status?.toLowerCase() === "pending"
+  ).length || 0;
 
   if (isLoading) return <div className="py-16 text-center text-muted-foreground text-sm">Loading orders…</div>;
 
@@ -147,6 +205,14 @@ export function OrdersTab() {
 
   return (
     <>
+      {newCount > 0 && (
+        <div className="mb-4 flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+            <p className="text-sm font-medium text-amber-800">You have {newCount} new order{newCount > 1 ? "s" : ""} waiting.</p>
+          </div>
+        </div>
+      )}
       <div className="border border-border rounded-xl overflow-hidden bg-white">
 
         {/* ── Desktop table (hidden on mobile) ── */}
@@ -170,25 +236,37 @@ export function OrdersTab() {
                 <div>
                   <div className="text-sm font-medium text-foreground">{o.customerName || "Customer"}</div>
                   <div className="text-xs text-muted-foreground">{o.customerPhone}</div>
+                  {o.serviceLocationSnapshot && (
+                    <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/60 text-[10px] font-medium text-muted-foreground">
+                      <span className="uppercase text-[9px] font-bold">{o.serviceLocationSnapshot.kind}</span>
+                      <span>{o.serviceLocationSnapshot.label}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-0.5">
                   {o.items.map((item: any, idx: number) => (
-                    <div key={idx} className="text-xs text-foreground">{item.qty}× {item.productName}</div>
+                    <div key={idx} className="text-xs text-foreground">{item.quantity ?? item.qty}× {item.productName}</div>
                   ))}
                 </div>
-                <div className="text-sm font-bold text-foreground">KES {o.totalKES.toLocaleString()}</div>
+                <div className="text-sm font-bold text-foreground">KES {(o.totalAmount ?? o.totalKES).toLocaleString()}</div>
                 <div>
-                  <StatusSelect orderId={o.id} status={o.status} onChange={handleStatusChange} />
+                  <StatusSelect order={o} onChange={handleStatusChange} />
+                  {(o.paymentStatus || o.fulfillmentStatus) && (
+                    <div className="flex gap-1.5 mt-2">
+                      {o.paymentStatus && <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">{o.paymentStatus}</span>}
+                      {o.fulfillmentStatus && <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">{o.fulfillmentStatus}</span>}
+                    </div>
+                  )}
                 </div>
                 <div>
-                  {isPaidOrFulfilled(o.status) ? (
+                  {isOrderPaid(o) ? (
                     <div>
                       <div className="flex items-center gap-1 text-xs text-emerald-600 font-semibold">
                         <CheckCircle2 className="h-3.5 w-3.5" /> Paid
                       </div>
                       {meta && <PaymentDetails meta={meta} />}
                     </div>
-                  ) : isActionable(o.status) ? (
+                  ) : isOrderActionableForPayment(o) ? (
                     <div className="flex flex-col gap-1.5">
                       <button
                         onClick={() => { setPayOrder(o.id); setPayPhone(o.customerPhone); }}
@@ -223,8 +301,14 @@ export function OrdersTab() {
                     <span className="text-[11px] text-muted-foreground ml-2">
                       {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                     </span>
+                    {(o.paymentStatus || o.fulfillmentStatus) && (
+                      <div className="flex gap-1.5 mt-1">
+                        {o.paymentStatus && <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">{o.paymentStatus}</span>}
+                        {o.fulfillmentStatus && <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">{o.fulfillmentStatus}</span>}
+                      </div>
+                    )}
                   </div>
-                  <StatusSelect orderId={o.id} status={o.status} onChange={handleStatusChange} />
+                  <StatusSelect order={o} onChange={handleStatusChange} />
                 </div>
 
                 {/* Customer + total */}
@@ -235,24 +319,30 @@ export function OrdersTab() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-foreground">{o.customerName || "Customer"}</div>
                     <div className="text-xs text-muted-foreground">{o.customerPhone}</div>
+                    {o.serviceLocationSnapshot && (
+                      <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/60 text-[10px] font-medium text-muted-foreground">
+                        <span className="uppercase text-[9px] font-bold">{o.serviceLocationSnapshot.kind}</span>
+                        <span>{o.serviceLocationSnapshot.label}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm font-bold text-foreground flex-shrink-0">KES {o.totalKES.toLocaleString()}</div>
+                  <div className="text-sm font-bold text-foreground flex-shrink-0">KES {(o.totalAmount ?? o.totalKES).toLocaleString()}</div>
                 </div>
 
                 {/* Items */}
                 <div className="rounded-lg bg-muted/50 px-3 py-2.5 space-y-0.5">
                   {o.items.map((item: any, idx: number) => (
-                    <div key={idx} className="text-xs text-foreground">{item.qty}× {item.productName}</div>
+                    <div key={idx} className="text-xs text-foreground">{item.quantity ?? item.qty}× {item.productName}</div>
                   ))}
                 </div>
 
                 {/* Payment */}
-                {isPaidOrFulfilled(o.status) ? (
+                {isOrderPaid(o) ? (
                   <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
                     <CheckCircle2 className="h-3.5 w-3.5" /> Paid
                     {meta && <PaymentDetails meta={meta} />}
                   </div>
-                ) : isActionable(o.status) ? (
+                ) : isOrderActionableForPayment(o) ? (
                   <div className="flex gap-2">
                     <button
                       onClick={() => { setPayOrder(o.id); setPayPhone(o.customerPhone); }}
@@ -280,7 +370,7 @@ export function OrdersTab() {
           <DialogHeader><DialogTitle>Collect Payment via M-Pesa</DialogTitle></DialogHeader>
           <form onSubmit={handleMpesaPay} className="space-y-4 mt-4">
             <div className="p-4 bg-muted rounded-xl text-sm">
-              Amount to collect: <strong className="text-foreground">KES {currentOrder?.totalKES.toLocaleString()}</strong>
+              Amount to collect: <strong className="text-foreground">KES {((currentOrder as any)?.totalAmount ?? currentOrder?.totalKES)?.toLocaleString()}</strong>
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Customer's M-Pesa phone</label>
@@ -305,7 +395,7 @@ export function OrdersTab() {
               <form onSubmit={handleMarkPaid} className="space-y-4 mt-4">
                 <div className="p-4 bg-muted rounded-xl text-sm space-y-1">
                   <div>Order: <strong className="font-mono">#{o.id.substring(0, 8).toUpperCase()}</strong></div>
-                  <div>Amount: <strong>KES {o.totalKES.toLocaleString()}</strong></div>
+                  <div>Amount: <strong>KES {(o.totalAmount ?? o.totalKES).toLocaleString()}</strong></div>
                   <div className="text-muted-foreground text-xs">Use this for bank transfers or M-Pesa paybill payments you confirmed in your statement.</div>
                 </div>
                 <div className="space-y-1.5">

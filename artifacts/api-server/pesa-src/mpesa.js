@@ -263,23 +263,35 @@ async function handleC2BConfirmation(payload) {
     );
   }
 
-  // Priority 2: same customer phone + exact amount (±KES 5 tolerance)
+  // Priority 2: same customer phone + exact amount. Payment amount is an
+  // authoritative reconciliation field; never use a tolerance for matching.
   if (!matched && customerPhone) {
     matched = pending.find((o) => {
       if (!o.customerPhone) return false;
       return normalizeMsisdn(o.customerPhone) === customerPhone &&
-             Math.abs((o.totalAmount || 0) - amount) <= 5;
+             Number(o.totalAmount || 0) === amount;
     });
   }
 
   // Priority 3: only one pending order from that customer (unambiguous)
   if (!matched && customerPhone) {
     const byPhone = pending.filter((o) => o.customerPhone && normalizeMsisdn(o.customerPhone) === customerPhone);
-    if (byPhone.length === 1) matched = byPhone[0];
+    // Keep the legacy phone-only behavior for old shops, but never use an
+    // unauthenticated C2B callback to auto-settle a location-bound order.
+    const legacyByPhone = byPhone.filter((o) => !o.serviceLocationId);
+    if (legacyByPhone.length === 1) matched = legacyByPhone[0];
   }
 
   // 3. Update order ──────────────────────────────────────────────────────────
   if (matched) {
+    if (Number(matched.totalAmount || 0) !== amount) {
+      console.warn(`[mpesa c2b] Amount mismatch for order ${matched.id}; leaving payment pending.`);
+      return;
+    }
+    if (matched.serviceLocationId) {
+      console.warn(`[mpesa c2b] Location-bound order ${matched.id} requires owner payment confirmation; C2B callback is not trusted for auto-settlement.`);
+      return;
+    }
     const paidOrder = db.updateOrderStatus(matched.id, "paid", {
       paymentMethod: "mpesa-c2b",
       mpesaTxnId:    TransID,

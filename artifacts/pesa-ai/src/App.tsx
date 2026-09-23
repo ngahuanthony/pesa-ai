@@ -20,6 +20,7 @@ import DashboardPage from '@/pages/dashboard';
 import AdminPage from '@/pages/admin';
 import PrivacyPage from '@/pages/privacy';
 import PublicShopPage from '@/pages/public-shop';
+import PublicLocationPage from '@/pages/public-location';
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ function Router() {
       <Switch>
         <Route path="/" component={LandingPage} />
         <Route path="/shop/:slug" component={PublicShopPage} />
+        <Route path="/l/:token" component={PublicLocationPage} />
         <Route path="/login" component={LoginPage} />
         <Route path="/signup" component={SignupPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />

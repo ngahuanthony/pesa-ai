@@ -114,6 +114,8 @@ async function handleIncomingWebhook(body) {
   const contactName = value.contacts?.[0]?.profile?.name;
   const accessToken = resolveAccessToken(business);
   const normalizedText = String(text || "").trim().toLowerCase();
+  const locationMatch = String(text || "").match(/(?:location|service_location|service-location)=([A-Za-z0-9_-]{20,})/i);
+  const serviceLocationToken = locationMatch ? locationMatch[1] : null;
 
   // Public shop links use a short, deterministic greeting. Keep the first
   // response lightweight, then answer later product requests with only the
@@ -165,6 +167,7 @@ async function handleIncomingWebhook(body) {
     customerName:  contactName,
     text,
     channel: "whatsapp",
+    serviceLocationToken,
   });
 
   // Resolve the access token for THIS business (per-business, decrypted)

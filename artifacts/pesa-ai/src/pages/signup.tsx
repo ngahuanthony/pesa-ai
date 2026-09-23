@@ -22,7 +22,7 @@ const getShopSlug = (name: string, businessId?: string) => { const base = slugif
 
 export default function SignupPage() {
   const { me } = useAuthRedirect(); const [, setLocation] = useLocation();
-  const [step, setStep] = useState<"details" | "personal" | "shop" | "complete">("details"); const [busy, setBusy] = useState(false); const [resending, setResending] = useState<"personal" | "shop" | null>(null); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [otp, setOtp] = useState(""); const [pendingId, setPendingId] = useState(""); const [personalPhone, setPersonalPhone] = useState(""); const [shopPhone, setShopPhone] = useState(""); const [smsPending, setSmsPending] = useState(false); const [numberHelpOpen, setNumberHelpOpen] = useState(false); const [numberConflictOpen, setNumberConflictOpen] = useState(false); const [signupComplete, setSignupComplete] = useState(false); const [createdShop, setCreatedShop] = useState<{ name: string; phone: string; slug: string } | null>(null); const [form, setForm] = useState({ businessName: "", pesaAiNumber: "", personalPhone: "" });
+  const [step, setStep] = useState<"details" | "personal" | "shop" | "complete">("details"); const [busy, setBusy] = useState(false); const [resending, setResending] = useState<"personal" | "shop" | null>(null); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [otp, setOtp] = useState(""); const [pendingId, setPendingId] = useState(""); const [personalPhone, setPersonalPhone] = useState(""); const [shopPhone, setShopPhone] = useState(""); const [smsPending, setSmsPending] = useState(false); const [numberHelpOpen, setNumberHelpOpen] = useState(false); const [numberConflictOpen, setNumberConflictOpen] = useState(false); const [signupComplete, setSignupComplete] = useState(false); const [createdShop, setCreatedShop] = useState<{ name: string; phone: string; slug: string } | null>(null); const [form, setForm] = useState({ businessName: "", merchantType: "retail", pesaAiNumber: "", personalPhone: "" });
   useEffect(() => { if (signupComplete) return; if (me?.authenticated && !me?.isAdmin) setLocation("/dashboard"); if (me?.isAdmin) setLocation("/admin"); }, [me, setLocation, signupComplete]);
   const update = (key: keyof typeof form) => (event: any) => setForm({ ...form, [key]: event.target.value }); const updatePhone = (key: "pesaAiNumber" | "personalPhone") => (event: any) => setForm({ ...form, [key]: formatPhoneInput(event.target.value) });
   const post = async (url: string, payload: any) => { const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, credentials: "include", body: JSON.stringify(payload) }); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || "Something went wrong"); return body; };
@@ -60,6 +60,16 @@ export default function SignupPage() {
                 <div>
                   <label className="text-sm font-semibold">1. Shop Name / Business Name</label>
                   <input value={form.businessName} onChange={update("businessName")} placeholder="Digital Nation Accessories" className="mt-1 w-full rounded-xl border px-4 py-3.5 text-base" required />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Business Type</label>
+                  <select value={form.merchantType} onChange={update("merchantType")} className="mt-1 w-full rounded-xl border px-4 py-3.5 text-base" required>
+                    <option value="retail">Retail</option>
+                    <option value="hotel">Hotel</option>
+                    <option value="hospitality">Hospitality</option>
+                    <option value="service">Service</option>
+                    <option value="other">Other</option>
+                  </select>
                 </div>
                 <div>
                   <label className="flex flex-wrap items-center gap-2 text-sm font-semibold"><span>🏪</span><span>2. Duka Number (Public) — What customers will chat</span><span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Needs NEW SIM</span></label>

@@ -38,13 +38,32 @@ function isHandoverRequest(text) {
   return HANDOVER_TRIGGERS.some((t) => lower.includes(t));
 }
 
-async function handleCustomerMessage({ business, customerPhone, customerName, text, channel }) {
+async function handleCustomerMessage({ business, customerPhone, customerName, text, channel, serviceLocationToken = null, serviceLocationId = null }) {
+  let resolvedLocationId = serviceLocationId;
+  let locationChanged = false;
+  let locationContext = null;
+  if (serviceLocationToken) {
+    const resolved = db.resolveServiceLocation(serviceLocationToken);
+    if (!resolved || resolved.business.id !== business.id) {
+      return { replyText: "This service location is no longer available.", order: null };
+    }
+    resolvedLocationId = resolved.location.id;
+    locationContext = resolved.location;
+  } else if (resolvedLocationId) {
+    locationContext = db.getServiceLocationForBusiness(business.id, resolvedLocationId);
+  }
   const { customer, conversation } = db.mutate((state) => {
     const customer      = db.findOrCreateCustomer(state, business.id, customerPhone, customerName);
-    const conversation  = db.findOrCreateConversation(state, business.id, customer.id, channel);
+    const existing = state.conversations.find((item) => item.businessId === business.id && item.customerId === customer.id);
+    if (!resolvedLocationId && existing && existing.serviceLocationId) resolvedLocationId = existing.serviceLocationId;
+    locationChanged = Boolean(existing && resolvedLocationId && existing.serviceLocationId && existing.serviceLocationId !== resolvedLocationId);
+    const conversation  = db.findOrCreateConversation(state, business.id, customer.id, channel, resolvedLocationId);
     db.addMessage(state, conversation.id, "customer", text);
     return { customer, conversation };
   });
+  if (!locationContext && resolvedLocationId) {
+    locationContext = db.getServiceLocationForBusiness(business.id, resolvedLocationId);
+  }
 
   // ── Human handover: AI is paused for this conversation ───────────────────
   // Vendor has taken over. Don't auto-reply — return null so the caller
@@ -74,20 +93,23 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
   const isFirstMessage = priorHistory.length === 0;
   const isShopLinkEntry = text.trim().toLowerCase() === SHOP_LINK_TRIGGER;
 
-  if (isFirstMessage) {
+   if (isFirstMessage || locationChanged) {
     if (isShopLinkEntry) {
       // Customer tapped the QR / shop link.
       // 1. Send the welcome message instantly (if one is configured).
       // 2. Then run the AI to fetch and present the live catalog as a second message.
       // Both land in sequence — greeting first, products right behind it.
-      const welcomeReply = business.welcomeMessage || null;
+       const locationGreeting = locationContext
+         ? `Welcome to ${business.name}. You are at ${locationContext.label}. I can help you explore our services and place an order.`
+         : business.welcomeMessage;
+       const welcomeReply = locationGreeting || null;
       if (welcomeReply) {
         db.mutate((state) => {
           db.addMessage(state, conversation.id, "assistant", welcomeReply);
         });
       }
 
-      const { replyText: catalogReply, order } = await getAssistantReply(business, customer.id, [], text, { shopEntry: true });
+       const { replyText: catalogReply, order } = await getAssistantReply(business, customer.id, [], text, { shopEntry: true, serviceLocationId: resolvedLocationId });
       const prepared = orderActions(catalogReply, order);
       db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", prepared.replyText); });
 
@@ -111,7 +133,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     }
   }
 
-  const { replyText, mediaReplies, order } = await getAssistantReply(business, customer.id, priorHistory, text);
+  const { replyText, mediaReplies, order } = await getAssistantReply(business, customer.id, priorHistory, text, { serviceLocationId: resolvedLocationId });
   const prepared = orderActions(replyText, order);
   db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", prepared.replyText); });
   return { replyText: prepared.replyText, mediaReplies, interactiveButtons: prepared.interactiveButtons, order, customer, conversation };

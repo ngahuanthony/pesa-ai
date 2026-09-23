@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, MessageSquare,
   Settings, LogOut, Phone, ChevronDown, User, Tag,
   Users, CreditCard, Layers, ScanLine, BarChart2,
-  Menu, X, Mic,
+  Menu, X, Mic, BrainCircuit
 } from "lucide-react";
 import { useLogout, useGetMe } from "@workspace/api-client-react";
 import { useState } from "react";
@@ -169,6 +169,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </p>
 
         {navLink("/dashboard/profile",   "Business Profile", User)}
+        {navLink("/dashboard/intelligence", "Business Intelligence", BrainCircuit)}
 
         {expandable(
           "WhatsApp Account", Phone,
