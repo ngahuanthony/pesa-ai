@@ -4,6 +4,7 @@ import { LogOut, ShieldCheck, Users, MessageSquare, BarChart3, AlertTriangle } f
 import { AdminBusinessesTab } from "@/components/admin/businesses-tab";
 import { AdminReportsTab } from "@/components/admin/reports-tab";
 import { AdminWhatsAppTab } from "@/components/admin/whatsapp-tab";
+import { AdminOverviewTab } from "@/components/admin/overview-tab";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -74,10 +75,10 @@ function AdminLogin() {
 }
 
 // ── Admin Shell ───────────────────────────────────────────────────────────
-type Section = "businesses" | "whatsapp" | "reports";
+type Section = "overview" | "businesses" | "whatsapp" | "reports";
 
 function AdminShell() {
-  const [section, setSection] = useState<Section>("businesses");
+  const [section, setSection] = useState<Section>("overview");
   const [clientsTab, setClientsTab] = useState<"clients" | "reports">("clients");
   const logout = useLogout();
   const { data: stats } = useAdminGetStats();
@@ -90,6 +91,7 @@ function AdminShell() {
   };
 
   const navItems: { key: Section; icon: typeof Users; label: string }[] = [
+    { key: "overview", icon: BarChart3, label: "Growth Summary" },
     { key: "businesses", icon: Users, label: "Businesses" },
     { key: "whatsapp", icon: MessageSquare, label: "WhatsApp" },
   ];
@@ -138,6 +140,12 @@ function AdminShell() {
 
       {/* ── Main ── */}
       <main className="flex-1 overflow-auto bg-white min-h-screen">
+        {section === "overview" && (
+          <div className="p-8 max-w-6xl">
+            <AdminOverviewTab />
+          </div>
+        )}
+
         {section === "businesses" && (
           <div className="p-8 max-w-6xl">
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">System Administration</h1>

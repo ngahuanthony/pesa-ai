@@ -72,7 +72,7 @@ export default function SignupPage() {
                   <label className="flex flex-wrap items-center gap-2 text-sm font-semibold"><span>🏪</span><span>2. Duka Number (Public) — What customers will chat</span><span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Needs NEW SIM</span></label>
                   <input type="tel" inputMode="tel" autoComplete="tel" value={form.pesaAiNumber} onChange={updatePhone("pesaAiNumber")} placeholder="07XX XX XX XX" className="mt-1 w-full rounded-xl border px-4 py-3.5 text-base" required />
                   <p className="mt-2 text-xs leading-relaxed text-slate-600">This is your shop's public number on poster and QR. It must be a new line never registered on WhatsApp.</p>
-                  <button type="button" onClick={() => { setNumberConflictOpen(false); setNumberHelpOpen(true); }} className="mt-2 text-left text-xs font-semibold text-[#168447] underline underline-offset-4">Already using this number on WhatsApp? Click to fix in 2 mins →</button>
+                  <button type="button" onClick={() => { setNumberConflictOpen(false); setNumberHelpOpen(true); }} className="mt-2 text-left text-xs font-semibold text-[#168447] underline underline-offset-4">Already using this number on WhatsApp? See how to prepare a Meta-ready line →</button>
                 </div>
                 <div>
                   <label className="flex flex-wrap items-center gap-2 text-sm font-semibold"><span>👤</span><span>3. Your Number (Private) — For order alerts</span><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">Your existing WhatsApp</span></label>
@@ -128,8 +128,21 @@ export default function SignupPage() {
       {numberHelpOpen && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100] bg-black/40" onClick={() => setNumberHelpOpen(false)}>
           <div className="fixed bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl md:bottom-1/2 md:left-1/2 md:right-auto md:w-[min(92vw,520px)] md:translate-x-[-50%] md:translate-y-[50%] md:rounded-3xl" onClick={(event) => event.stopPropagation()}>
-            <h2 className="text-xl font-extrabold text-foreground">Already use this on WhatsApp?</h2>
-            <p className="mt-2 text-sm text-slate-600">Buy a new Safaricom or Airtel SIM, move your personal WhatsApp to it, then return and use the freed number as your public shop number.</p>
+            <h2 className="text-xl font-extrabold text-foreground">Prepare a line for Meta</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">Meta needs a separate line for your public Duka number. Do not move your personal WhatsApp to this line.</p>
+            <ol className="mt-4 list-decimal space-y-2 pl-5 text-left text-sm leading-relaxed text-slate-700">
+              <li>Get a dedicated Safaricom or Airtel SIM for the shop.</li>
+              <li>Register the line in the business owner’s name and keep the SIM active.</li>
+              <li>Make sure the line can receive SMS and phone calls for Meta verification.</li>
+              <li>Do not register this line on WhatsApp or WhatsApp Business before setup.</li>
+              <li>Enter the number here and complete the SMS verification when prompted.</li>
+            </ol>
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-xs leading-relaxed text-amber-950">
+              <p className="font-bold">If the line is already on WhatsApp</p>
+              <p className="mt-1">The safer option is WhatsApp → Settings → Account → Change number, then move your personal account to your private line. If you no longer need that WhatsApp account, back up anything important first, then use Settings → Account → Delete my account. Uninstalling the app or turning off notifications does not free the number.</p>
+              <p className="mt-2 font-semibold">After changing or deleting the account, do not register this number on WhatsApp again. Keep the SIM active in a phone that can receive SMS or calls, then enter the number here and complete verification so Meta can use it for your public shop.</p>
+            </div>
+            <p className="mt-4 rounded-xl bg-[#f4fff7] p-3 text-left text-xs leading-relaxed text-[#0a4a3a]">Keep your existing WhatsApp number in the private number field for order alerts and login codes.</p>
             <button type="button" onClick={() => setNumberHelpOpen(false)} className="mt-6 w-full rounded-xl bg-[#08b968] py-3.5 text-sm font-bold text-white">Got it — back to signup</button>
           </div>
         </div>

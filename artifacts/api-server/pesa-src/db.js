@@ -1276,6 +1276,167 @@ function getAdminStats() {
   };
 }
 
+function getAdminGrowthSummary({ days = 30 } = {}) {
+  const state = load();
+  const boundedDays = Math.min(Math.max(Math.round(Number(days) || 30), 1), 90);
+  const periodStart = Date.now() - boundedDays * 24 * 60 * 60 * 1000;
+  const businesses = state.businesses || [];
+  const businessById = new Map(businesses.map((business) => [business.id, business]));
+  const conversations = state.conversations || [];
+  const conversationById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
+  const activityByBusiness = new Map();
+  const messageCountByBusiness = new Map();
+  const conversationIdsByBusiness = new Map();
+
+  const addActivity = (businessId, timestamp, messageCount = 0) => {
+    if (!businessId) return;
+    if (!activityByBusiness.has(businessId)) activityByBusiness.set(businessId, true);
+    messageCountByBusiness.set(businessId, (messageCountByBusiness.get(businessId) || 0) + messageCount);
+  };
+
+  for (const message of state.messages || []) {
+    const createdAt = new Date(message.createdAt || 0).getTime();
+    if (message.role !== "customer" || !Number.isFinite(createdAt) || createdAt < periodStart) continue;
+    const conversation = conversationById.get(message.conversationId);
+    if (!conversation) continue;
+    addActivity(conversation.businessId, createdAt, 1);
+    if (!conversationIdsByBusiness.has(conversation.businessId)) conversationIdsByBusiness.set(conversation.businessId, new Set());
+    conversationIdsByBusiness.get(conversation.businessId).add(conversation.id);
+  }
+
+  const ordersInPeriod = (state.orders || []).filter((order) => {
+    const createdAt = new Date(order.createdAt || 0).getTime();
+    return Number.isFinite(createdAt) && createdAt >= periodStart;
+  });
+  const paidOrdersInPeriod = (state.orders || []).filter((order) => {
+    const paidAt = new Date(
+      (order.paymentMeta && order.paymentMeta.paidAt) || order.updatedAt || order.createdAt || 0
+    ).getTime();
+    return ["paid", "fulfilled"].includes(order.status) && Number.isFinite(paidAt) && paidAt >= periodStart;
+  });
+  const pendingOrdersInPeriod = ordersInPeriod.filter((order) =>
+    ["pending", "confirmed"].includes(order.status)
+  );
+
+  for (const order of ordersInPeriod) addActivity(order.businessId, order.createdAt);
+  for (const order of paidOrdersInPeriod) addActivity(order.businessId, order.updatedAt || order.createdAt);
+
+  const sumOrderValue = (orders) => orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+  const totalTransactionValue = sumOrderValue(paidOrdersInPeriod);
+  const mpesaOrders = paidOrdersInPeriod.filter((order) =>
+    String((order.paymentMeta && order.paymentMeta.paymentMethod) || order.paymentMethod || "").toLowerCase().startsWith("mpesa")
+  );
+  const mpesaValue = sumOrderValue(mpesaOrders);
+  const activeBusinessIds = new Set(activityByBusiness.keys());
+  const businessesWithOrders = new Set(ordersInPeriod.map((order) => order.businessId));
+  const businessesWithPaidOrders = new Set(paidOrdersInPeriod.map((order) => order.businessId));
+
+  const merchants = businesses
+    .map((business) => {
+      const businessOrders = ordersInPeriod.filter((order) => order.businessId === business.id);
+      const businessPaidOrders = paidOrdersInPeriod.filter((order) => order.businessId === business.id);
+      const transactionValue = sumOrderValue(businessPaidOrders);
+      const customerMessages = messageCountByBusiness.get(business.id) || 0;
+      const conversationsCount = conversationIdsByBusiness.get(business.id)?.size || 0;
+      return {
+        id: business.id,
+        name: business.name,
+        plan: (state.subscriptions || []).find((subscription) => subscription.businessId === business.id)?.plan || "free_trial",
+        whatsappConnected: Boolean(business.whatsappPhoneNumberId),
+        active: activeBusinessIds.has(business.id),
+        customerMessages,
+        conversations: conversationsCount,
+        orders: businessOrders.length,
+        paidOrders: businessPaidOrders.length,
+        transactionValue,
+        mpesaValue: sumOrderValue(businessPaidOrders.filter((order) =>
+          String((order.paymentMeta && order.paymentMeta.paymentMethod) || order.paymentMethod || "").toLowerCase().startsWith("mpesa")
+        )),
+      };
+    })
+    .sort((a, b) => b.transactionValue - a.transactionValue || b.customerMessages - a.customerMessages)
+    .slice(0, 10);
+
+  const toDateKey = (value) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date(value));
+  const trend = [];
+  for (let index = boundedDays - 1; index >= 0; index--) {
+    const timestamp = Date.now() - index * 24 * 60 * 60 * 1000;
+    const date = toDateKey(timestamp);
+    const dayOrders = ordersInPeriod.filter((order) => toDateKey(order.createdAt) === date);
+    const dayPaidOrders = paidOrdersInPeriod.filter((order) =>
+      toDateKey((order.paymentMeta && order.paymentMeta.paidAt) || order.updatedAt || order.createdAt) === date
+    );
+    const dayMessages = (state.messages || []).filter((message) => {
+      if (message.role !== "customer" || toDateKey(message.createdAt) !== date) return false;
+      const conversation = conversationById.get(message.conversationId);
+      return Boolean(conversation && businessById.has(conversation.businessId));
+    });
+    trend.push({
+      date,
+      activeMerchants: new Set([
+        ...dayMessages.map((message) => conversationById.get(message.conversationId)?.businessId),
+        ...dayOrders.map((order) => order.businessId),
+        ...dayPaidOrders.map((order) => order.businessId),
+      ].filter(Boolean)).size,
+      customerMessages: dayMessages.length,
+      orders: dayOrders.length,
+      paidOrders: dayPaidOrders.length,
+      transactionValue: sumOrderValue(dayPaidOrders),
+    });
+  }
+
+  const connectedCount = businesses.filter((business) => business.whatsappPhoneNumberId).length;
+  const activeCount = activeBusinessIds.size;
+  const averageOrderValue = paidOrdersInPeriod.length ? totalTransactionValue / paidOrdersInPeriod.length : 0;
+  const recommendations = [];
+  const addRecommendation = (priority, title, detail) => recommendations.push({ priority, title, detail });
+
+  if (connectedCount > activeCount) {
+    addRecommendation(
+      "high",
+      "Activate connected merchants",
+      `${connectedCount - activeCount} connected merchant${connectedCount - activeCount === 1 ? "" : "s"} had no customer activity in this period. Focus onboarding on their first shop link, catalogue, and test order.`
+    );
+  }
+  if (activeCount > 0 && paidOrdersInPeriod.length === 0) {
+    addRecommendation("high", "Turn conversations into paid orders", "Merchants are receiving customer activity but no paid orders were recorded. Review catalogue clarity, checkout prompts, and M-Pesa setup.");
+  } else if (ordersInPeriod.length > paidOrdersInPeriod.length * 2 && ordersInPeriod.length > 0) {
+    addRecommendation("medium", "Reduce order drop-off", `${ordersInPeriod.length - paidOrdersInPeriod.length} orders were not paid or fulfilled in this period. Follow up on payment prompts and merchant fulfilment response time.`);
+  }
+  if (pendingOrdersInPeriod.length > 0) {
+    addRecommendation("medium", "Clear the pending queue", `${pendingOrdersInPeriod.length} recent orders are still pending or confirmed. A faster merchant response can improve customer trust and conversion.`);
+  }
+  if (totalTransactionValue > 0 && merchants[0] && merchants[0].transactionValue / totalTransactionValue > 0.7) {
+    addRecommendation("medium", "Reduce revenue concentration", `${merchants[0].name} contributes more than 70% of tracked transaction value. Replicate that merchant's onboarding and catalogue practices across the next best prospects.`);
+  }
+  if (!recommendations.length) {
+    addRecommendation("low", "Scale what is working", "Usage and paid orders are active across the platform. Double down on the highest-performing merchant's catalogue, WhatsApp setup, and customer acquisition pattern.");
+  }
+
+  return {
+    periodDays: boundedDays,
+    periodStart: new Date(periodStart).toISOString(),
+    totalBusinesses: businesses.length,
+    connectedMerchants: connectedCount,
+    activeMerchants: activeCount,
+    merchantsWithOrders: businessesWithOrders.size,
+    merchantsWithPaidOrders: businessesWithPaidOrders.size,
+    usageRate: businesses.length ? (activeCount / businesses.length) * 100 : 0,
+    customerMessages: [...messageCountByBusiness.values()].reduce((sum, count) => sum + count, 0),
+    customerConversations: new Set([...conversationIdsByBusiness.values()].flatMap((ids) => [...ids])).size,
+    orders: ordersInPeriod.length,
+    paidOrders: paidOrdersInPeriod.length,
+    pendingOrders: pendingOrdersInPeriod.length,
+    totalTransactionValue,
+    mpesaValue,
+    mpesaTransactions: mpesaOrders.length,
+    averageOrderValue,
+    trend,
+    merchants,
+    recommendations,
+  };
+}
+
 // --- Products ------------------------------------------------------------
 
 function createProduct(businessId, { name, description, price, stockQty, imageUrl, source }) {
@@ -2046,6 +2207,7 @@ module.exports = {
   suspendBusiness,
   unsuspendBusiness,
   getAdminStats,
+  getAdminGrowthSummary,
   createVideoScan,
   getVideoScan,
   updateVideoScan,
