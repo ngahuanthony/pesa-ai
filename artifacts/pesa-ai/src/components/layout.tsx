@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { SiWhatsapp } from "react-icons/si";
+import { BRAND_NAME, BRAND_SUPPORT_EMAIL, BRAND_SUPPORT_PHONE } from "@/constants/brand";
 
 export function Footer() {
   return (
@@ -12,7 +13,7 @@ export function Footer() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <SiWhatsapp className="h-5 w-5 text-white" />
               </div>
-              <span className="text-xl font-bold">Pesa AI</span>
+               <span className="text-xl font-bold">{BRAND_NAME}</span>
             </div>
             <p className="text-sm text-white/70">Empowering Kenyan SMEs on WhatsApp.</p>
             <div className="mt-3 inline-flex items-center gap-2 border border-white/20 rounded-lg px-3 py-1.5">
@@ -40,9 +41,9 @@ export function Footer() {
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-3">Contact</p>
             <ul className="space-y-2 text-sm text-white/70">
-              <li>📞 +254 741 387 785</li>
-              <li>💬 WhatsApp: +254 741 387 785</li>
-              <li>✉️ hello@pesaai.africa</li>
+               <li>📞 {BRAND_SUPPORT_PHONE}</li>
+               <li>💬 WhatsApp: {BRAND_SUPPORT_PHONE}</li>
+               <li>✉️ {BRAND_SUPPORT_EMAIL}</li>
             </ul>
           </div>
         </div>
@@ -64,7 +65,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
               <SiWhatsapp className="h-5 w-5" />
             </div>
-            <span className="text-xl font-bold tracking-tight">Pesa AI</span>
+             <span className="text-xl font-bold tracking-tight">{BRAND_NAME}</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">
             <a href="/#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Features</a>

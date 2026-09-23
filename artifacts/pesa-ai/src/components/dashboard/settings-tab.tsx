@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Store, Bot, CreditCard, CheckCircle2, Headphones, MapPin, Mail } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BRAND_NAME } from "@/constants/brand";
 
 const CATEGORIES = [
   "Retail & Fashion",
@@ -202,7 +203,7 @@ export function SettingsTab() {
       <div className="flex items-start gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-5 py-4">
         <Headphones className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
         <p className="text-sm text-foreground leading-relaxed">
-          Your WhatsApp connection and payment gateway are <strong>managed by the Pesa AI team</strong> — you don't need to touch any of that.
+          Your WhatsApp connection and payment gateway are <strong>managed by the {BRAND_NAME} team</strong> — you don't need to touch any of that.
           Just fill in your shop details below and we handle the rest.
         </p>
       </div>

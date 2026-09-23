@@ -136,12 +136,12 @@ async function handleIncomingWebhook(body) {
   if (normalizedText === "login") {
     const account = db.getAccountByPersonalPhone(from);
     if (!account) {
-      await sendMessage(phoneNumberId, from, "We could not start login for this number. Send LOGIN from the personal WhatsApp number registered to your Pesa AI shop.", accessToken);
+      await sendMessage(phoneNumberId, from, "We could not start login for this number. Send LOGIN from the personal WhatsApp number registered to your Pesa SI shop.", accessToken);
       return;
     }
     try {
       const challenge = db.createOtpChallenge(from, "login", { source: "whatsapp_service_window" });
-      const sent = await sendMessage(phoneNumberId, from, "Pesa AI login code: " + challenge.code + ". It expires in 5 minutes. Do not share this code.", accessToken);
+      const sent = await sendMessage(phoneNumberId, from, "Pesa SI login code: " + challenge.code + ". It expires in 5 minutes. Do not share this code.", accessToken);
       if (!sent) console.error("[whatsapp] Could not send service-window login OTP to " + db.maskPhone(from));
     } catch (error) {
       const status = error?.status || error?.statusCode;
@@ -271,8 +271,8 @@ async function sendPlatformOtp(to, code, context = {}) {
   if (!accessToken || !phoneNumberId) throw new Error("WhatsApp OTP sender is not configured");
   const templateName = process.env.WHATSAPP_OTP_TEMPLATE_NAME || "pesa_ai_otp";
   const languageCode = process.env.WHATSAPP_OTP_LANGUAGE || "en_US";
-  const message = context.shopName ? "Pesa AI code is " + code + ". Enter it to create " + context.shopName + " shop." : "Pesa AI login code: " + code;
-  const res = await fetch("https://graph.facebook.com/" + GRAPH_API_VERSION + "/" + phoneNumberId + "/messages", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + accessToken }, body: JSON.stringify({ messaging_product: "whatsapp", to, type: "template", template: { name: templateName, language: { code: languageCode }, components: [{ type: "body", parameters: [{ type: "text", text: code }, { type: "text", text: context.shopName || "Pesa AI" }] }] } }) });
+  const message = context.shopName ? "Pesa SI code is " + code + ". Enter it to create " + context.shopName + " shop." : "Pesa SI login code: " + code;
+  const res = await fetch("https://graph.facebook.com/" + GRAPH_API_VERSION + "/" + phoneNumberId + "/messages", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + accessToken }, body: JSON.stringify({ messaging_product: "whatsapp", to, type: "template", template: { name: templateName, language: { code: languageCode }, components: [{ type: "body", parameters: [{ type: "text", text: code }, { type: "text", text: context.shopName || "Pesa SI" }] }] } }) });
   if (!res.ok) { const errorText = await res.text().catch(() => ""); throw new Error("WhatsApp OTP send failed (" + res.status + "): " + errorText.slice(0, 300)); }
   return { message };
 }

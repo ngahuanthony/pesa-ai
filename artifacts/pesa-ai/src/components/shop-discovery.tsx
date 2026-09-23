@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, ExternalLink, Link as LinkIcon, LoaderCircle, QrCode, Search, Upload, X } from "lucide-react";
 import { useLocation } from "wouter";
+import { BRAND_NAME } from "@/constants/brand";
 
 type PublicShop = {
   name: string;
@@ -84,7 +85,7 @@ function ShopSearch() {
               {shop.imageUrl || shop.logoUrl ? <img src={shop.imageUrl || shop.logoUrl || ""} alt="" className="h-12 w-12 rounded-xl object-cover" /> : <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#e7f7ed] text-lg font-extrabold text-[#0a4a3a]">{shop.name.slice(0, 1).toUpperCase()}</span>}
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-bold text-[#0a4a3a]">{shop.name}</span>
-                <span className="mt-1 block truncate text-xs text-slate-500">{[shop.category, shop.location].filter(Boolean).join(" · ") || "Public Pesa AI shop"}</span>
+                <span className="mt-1 block truncate text-xs text-slate-500">{[shop.category, shop.location].filter(Boolean).join(" · ") || `Public ${BRAND_NAME} shop`}</span>
               </span>
               <ExternalLink className="h-4 w-4 shrink-0 text-[#25a85a]" />
             </button>
@@ -107,7 +108,7 @@ function ShopScanner() {
   function openShopFromValue(value: string) {
     const slug = extractShopSlug(value);
     if (!slug) {
-      setMessage("That QR code is not a Pesa AI public shop link.");
+      setMessage(`That QR code is not a ${BRAND_NAME} public shop link.`);
       return;
     }
     stopCamera();
@@ -188,7 +189,7 @@ function ShopScanner() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#25a85a]">Scan a shop QR</p>
           <h2 className="mt-1 text-2xl font-extrabold text-[#0a4a3a]">Open a shop without typing</h2>
-          <p className="mt-2 text-sm leading-relaxed text-slate-600">Your camera only starts after you tap scan. Pesa AI QR codes open public shop pages, not merchant accounts.</p>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600">Your camera only starts after you tap scan. {BRAND_NAME} QR codes open public shop pages, not merchant accounts.</p>
         </div>
       </div>
       <div className="mt-5 flex flex-wrap gap-3">
@@ -202,7 +203,7 @@ function ShopScanner() {
         </div>
       )}
       <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-        <div className="relative min-w-0 flex-1"><LinkIcon className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" /><input value={pastedLink} onChange={(event) => setPastedLink(event.target.value)} placeholder="Or paste a Pesa AI shop link" className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#25a85a]" /></div>
+        <div className="relative min-w-0 flex-1"><LinkIcon className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" /><input value={pastedLink} onChange={(event) => setPastedLink(event.target.value)} placeholder={`Or paste a ${BRAND_NAME} shop link`} className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#25a85a]" /></div>
         <button type="button" onClick={() => openShopFromValue(pastedLink)} className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700">Open link</button>
       </div>
       {message && <p role="alert" className="mt-3 text-sm text-amber-800">{message}</p>}

@@ -3,6 +3,7 @@ import { useGetMe } from "@workspace/api-client-react";
 import { Wifi, CheckCircle2, Clock, AlertCircle, Phone, RefreshCw, Copy, Check, Pencil, X, Share2, QrCode } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ShopQRCard } from "@/components/dashboard/shop-qr-card";
+import { BRAND_NAME } from "@/constants/brand";
 
 export function WhatsAppAccountTab() {
   const { data: me } = useGetMe();
@@ -151,7 +152,7 @@ export function WhatsAppAccountTab() {
           </div>
           <div className="px-4 pb-3">
             <p className="text-xs text-muted-foreground">
-              This is what customers see when they message or save your contact. The name is set by your WhatsApp Business registration — contact the Pesa AI team to update it.
+              This is what customers see when they message or save your contact. The name is set by your WhatsApp Business registration — contact the {BRAND_NAME} team to update it.
             </p>
           </div>
         </div>
@@ -301,7 +302,7 @@ export function WhatsAppAccountTab() {
           <div className="rounded-xl border border-border bg-gray-50 p-4 space-y-1">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Webhook Verify Token</p>
             <p className="text-xs font-mono text-gray-700 break-all">{status.verifyToken}</p>
-            <p className="text-[11px] text-gray-400">Only the Pesa AI team needs this. Your account is already configured.</p>
+            <p className="text-[11px] text-gray-400">Only the {BRAND_NAME} team needs this. Your account is already configured.</p>
           </div>
         )}
       </div>
@@ -400,7 +401,7 @@ export function WhatsAppAccountTab() {
       <div className="w-full rounded-xl border border-border bg-gray-50 p-4 text-left space-y-1.5">
         <p className="text-xs font-semibold text-gray-600">What happens next?</p>
         <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
-          <li>Our team connects your number to Pesa AI via Meta Business Manager</li>
+          <li>Our team connects your number to {BRAND_NAME} via Meta Business Manager</li>
           <li>Your personalised welcome message is auto-generated from your shop details</li>
           <li>Customers can then WhatsApp your number to browse and buy from your shop</li>
           <li>You'll see orders arrive in real time in your Orders tab</li>

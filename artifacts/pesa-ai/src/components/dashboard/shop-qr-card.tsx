@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import QRCode from "qrcode";
 import { Download, QrCode } from "lucide-react";
+import { BRAND_NAME } from "@/constants/brand";
 
 interface ShopQRCardProps {
   businessName: string;
@@ -172,7 +173,7 @@ export function ShopQRCard({ businessName, phone, shopSlug }: ShopQRCardProps) {
     const pfSize = Math.round(W * 0.025);
     ctx.font = `${pfSize}px Arial`;
     ctx.fillStyle = "#9ca3af";
-    ctx.fillText("Powered by Pesa AI", W / 2, H - Math.round(H * 0.04));
+    ctx.fillText(`Powered by ${BRAND_NAME}`, W / 2, H - Math.round(H * 0.04));
 
     // Border
     ctx.strokeStyle = "#25D366";

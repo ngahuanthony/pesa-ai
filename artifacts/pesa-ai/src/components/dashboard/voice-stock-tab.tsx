@@ -9,6 +9,7 @@ import {
   useListProducts, useTranscribeVoiceStock, getListProductsQueryKey, getGetVoiceStockHistoryQueryKey,
   VoiceStockItem, VoiceStockItemAction, VoiceStockConfirmInputItemsItemAction,
 } from "@workspace/api-client-react";
+import { BRAND_NAME } from "@/constants/brand";
 
 type Draft = VoiceStockItem & { id: string; imageUrl?: string | null; imageUploading?: boolean; imageError?: string };
 const MIN_RECORDING_MS = 800;
@@ -83,7 +84,9 @@ function productMatchScore(candidate: string, productName: string) {
   return (2 * precision * recall) / Math.max(precision + recall, 1);
 }
 
-function rankedProductMatches(candidate: string | null | undefined, products: Array<{ id: string; name: string }>) {
+type MatchableProduct = { id: string; name: string; stockQty?: number };
+
+function rankedProductMatches(candidate: string | null | undefined, products: Array<MatchableProduct>) {
   if (!normalizedProductText(candidate)) return [];
   return products
     .map((product) => ({ product, score: productMatchScore(String(candidate), product.name) }))
@@ -91,7 +94,7 @@ function rankedProductMatches(candidate: string | null | undefined, products: Ar
     .sort((a, b) => b.score - a.score || a.product.name.localeCompare(b.product.name));
 }
 
-function findSafeProductMatch(candidate: string | null | undefined, products: Array<{ id: string; name: string }>) {
+function findSafeProductMatch(candidate: string | null | undefined, products: Array<MatchableProduct>) {
   const ranked = rankedProductMatches(candidate, products);
   const best = ranked[0];
   const second = ranked[1];
@@ -301,7 +304,7 @@ export function VoiceStockTab() {
   const previews = useMemo(() => {
     const result = new Map<string, { current: number; next: number }>();
     const stock = new Map(products.map((product) => [product.id, product.stockQty]));
-    const colors = new Map(products.flatMap((product) =>
+    const colors = new Map<string, number>(products.flatMap((product) =>
       (product.colorStock ?? []).map((entry) => [`${product.id}:${entry.color.toLowerCase()}`, entry.quantity] as const)
     ));
     for (const item of draft ?? []) {
@@ -342,7 +345,7 @@ export function VoiceStockTab() {
   return <main className="mx-auto min-h-[100dvh] max-w-5xl space-y-5 px-3 py-4 sm:px-6 sm:py-7">
     <input ref={photoInput} type="file" accept="image/*" capture="environment" onChange={handlePhotoSelected} className="hidden" aria-label="Take product photo" />
     <header className="flex items-start justify-between gap-4">
-      <div><div className="mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-primary"><Sparkles className="h-3.5 w-3.5" /> Pesa AI · stock desk</div><h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Voice to stock</h1><p className="mt-1 max-w-xl text-sm text-muted-foreground">Say what moved. We’ll prepare it, you decide what gets recorded.</p></div>
+      <div><div className="mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-primary"><Sparkles className="h-3.5 w-3.5" /> {BRAND_NAME} · stock desk</div><h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Voice to stock</h1><p className="mt-1 max-w-xl text-sm text-muted-foreground">Say what moved. We’ll prepare it, you decide what gets recorded.</p></div>
       <div className="hidden rounded-xl border border-border bg-card px-3 py-2 text-right sm:block"><p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Daily safeguard</p><p className="text-sm font-semibold text-primary">Review before apply</p></div>
     </header>
     <section className="overflow-hidden rounded-2xl border border-primary/15 bg-card shadow-[0_12px_35px_-25px_hsl(var(--primary))]">

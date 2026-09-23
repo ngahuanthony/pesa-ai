@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useLogout, useGetMe } from "@workspace/api-client-react";
 import { useState } from "react";
+import { BRAND_NAME } from "@/constants/brand";
 
 const WA_SUB_ITEMS = [
   { label: "Phone Number",     href: "/dashboard/whatsapp" },
@@ -123,7 +124,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <SiWhatsapp className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <span className="text-sm font-bold tracking-tight text-foreground">Pesa AI</span>
+             <span className="text-sm font-bold tracking-tight text-foreground">{BRAND_NAME}</span>
             <p className="text-[10px] text-muted-foreground leading-none mt-0.5">Vendor Dashboard</p>
           </div>
         </div>

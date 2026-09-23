@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { PublicLayout } from "@/components/layout";
 import { ShopDiscovery } from "@/components/shop-discovery";
 import { SignupQRCard } from "@/components/signup-qr-card";
+import { BRAND_NAME } from "@/constants/brand";
 
 const plans = [
   { name: "Starter", price: 600, description: "A simple shop link that starts selling", features: ["Up to 100 products", "WhatsApp shop link", "Order notifications", "5-day free trial"], href: "/signup?plan=starter" },
@@ -11,7 +12,32 @@ const plans = [
 ];
 
 function PhoneMockup() {
-  return <div className="mx-auto w-full max-w-[310px] rounded-[2.5rem] bg-slate-900 p-2 shadow-2xl ring-1 ring-black/10"><div className="overflow-hidden rounded-[2rem] bg-[#efe7df]"><div className="flex items-center gap-3 bg-[#075e54] px-4 py-3 text-white"><div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-xs font-bold">DN</div><div><p className="text-sm font-semibold leading-none">Digital Nation Acc.</p><p className="mt-1 text-[11px] text-white/70">WhatsApp Shop</p></div></div><div className="space-y-3 p-4 text-xs"><div className="w-fit rounded-full bg-[#e9f8ed] px-2.5 py-1 text-[10px] font-medium text-[#0B6B3A]">✓ Verified Shop • Real photos • Stock live</div><div className="max-w-[85%] rounded-xl rounded-tl-none bg-white p-3 shadow-sm">Karibu Digital Nation Accessories 👋 What do you need today?</div><div className="ml-auto max-w-[88%] rounded-xl rounded-tr-none bg-[#dcf8c6] p-3 shadow-sm">Niaje! Mko na iPhone 16 Pro Max cover, charger na power bank?</div><div className="max-w-[88%] rounded-xl rounded-tl-none bg-white p-3 shadow-sm">Iko! Clear cover, 20W fast charger na 10,000mAh power bank. Unataka nikutumie options?</div><div className="rounded-xl border border-black/5 bg-white p-3 shadow-sm"><p className="font-semibold text-[#0a4a3a]">Popular picks today</p><div className="mt-2 space-y-2 text-slate-600"><div className="flex items-center justify-between gap-2"><span>📱 iPhone 16 Pro Max Cover</span><span className="font-semibold">KSh 800</span></div><div className="flex items-center justify-between gap-2"><span>⚡ 20W Fast Charger</span><span className="font-semibold">KSh 1,200</span></div><div className="flex items-center justify-between gap-2"><span>🔋 Power Bank 10,000mAh</span><span className="font-semibold">KSh 1,800</span></div></div><button className="mt-3 w-full rounded-lg bg-[#25D366] py-2 font-semibold text-white">Shop on WhatsApp</button></div><div className="max-w-[88%] rounded-xl rounded-tl-none bg-white p-3 shadow-sm"><p>✅ Order received! Asante sana. Tunatuma na rider. Pay on Paybill.</p><p className="mt-1 text-[10px] text-slate-400">✓✓ 10:42 AM</p></div></div></div></div>;
+  return (
+    <div className="mx-auto w-full max-w-[310px] rounded-[2.5rem] bg-slate-900 p-2 shadow-2xl ring-1 ring-black/10">
+      <div className="overflow-hidden rounded-[2rem] bg-[#efe7df]">
+        <div className="flex items-center gap-3 bg-[#075e54] px-4 py-3 text-white">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-xs font-bold">DN</div>
+          <div><p className="text-sm font-semibold leading-none">Digital Nation Acc.</p><p className="mt-1 text-[11px] text-white/70">WhatsApp Shop</p></div>
+        </div>
+        <div className="space-y-3 p-4 text-xs">
+          <div className="w-fit rounded-full bg-[#e9f8ed] px-2.5 py-1 text-[10px] font-medium text-[#0B6B3A]">✓ Verified Shop • Real photos • Stock live</div>
+          <div className="max-w-[85%] rounded-xl rounded-tl-none bg-white p-3 shadow-sm">Karibu Digital Nation Accessories 👋 What do you need today?</div>
+          <div className="ml-auto max-w-[88%] rounded-xl rounded-tr-none bg-[#dcf8c6] p-3 shadow-sm">Niaje! Mko na iPhone 16 Pro Max cover, charger na power bank?</div>
+          <div className="max-w-[88%] rounded-xl rounded-tl-none bg-white p-3 shadow-sm">Iko! Clear cover, 20W fast charger na 10,000mAh power bank. Unataka nikutumie options?</div>
+          <div className="rounded-xl border border-black/5 bg-white p-3 shadow-sm">
+            <p className="font-semibold text-[#0a4a3a]">Popular picks today</p>
+            <div className="mt-2 space-y-2 text-slate-600">
+              <div className="flex items-center justify-between gap-2"><span>📱 iPhone 16 Pro Max Cover</span><span className="font-semibold">KSh 800</span></div>
+              <div className="flex items-center justify-between gap-2"><span>⚡ 20W Fast Charger</span><span className="font-semibold">KSh 1,200</span></div>
+              <div className="flex items-center justify-between gap-2"><span>🔋 Power Bank 10,000mAh</span><span className="font-semibold">KSh 1,800</span></div>
+            </div>
+            <button className="mt-3 w-full rounded-lg bg-[#25D366] py-2 font-semibold text-white">Shop on WhatsApp</button>
+          </div>
+          <div className="max-w-[88%] rounded-xl rounded-tl-none bg-white p-3 shadow-sm"><p>✅ Order received! Asante sana. Tunatuma na rider. Pay on Paybill.</p><p className="mt-1 text-[10px] text-slate-400">✓✓ 10:42 AM</p></div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function LandingPage() {
@@ -101,12 +127,12 @@ export default function LandingPage() {
 
         <section id="about" className="bg-white px-5 py-16">
           <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-2 md:items-center">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#25a85a]">About Pesa AI</p>
+             <div>
+               <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#25a85a]">About {BRAND_NAME}</p>
               <h2 className="mt-2 text-3xl font-extrabold">Built for the way Kenyan shops actually sell.</h2>
             </div>
             <p className="text-base leading-relaxed text-slate-600">
-              Pesa AI helps small businesses turn the WhatsApp conversations they already have into a simple, always-open shop. Your customers can ask, browse, and order while you keep control of your stock, payments, and personal WhatsApp.
+               {BRAND_NAME} helps small businesses turn the WhatsApp conversations they already have into a simple, always-open shop. Your customers can ask, browse, and order while you keep control of your stock, payments, and personal WhatsApp.
             </p>
           </div>
         </section>

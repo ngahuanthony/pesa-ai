@@ -24,7 +24,7 @@ async function sendShopSmsOtp(phone, challenge) {
   const headers = { "content-type": "application/json" };
   const smsToken = process.env.SMS_PROVIDER_TOKEN || process.env.SMS_API_KEY;
   if (smsToken) headers.authorization = "Bearer " + smsToken;
-  const response = await fetch(url, { method: "POST", headers, body: JSON.stringify({ to: phone, message: "Pesa AI: " + challenge.code + " is your verification code to reserve " + phone + " as your shop number." }) });
+  const response = await fetch(url, { method: "POST", headers, body: JSON.stringify({ to: phone, message: "Pesa SI: " + challenge.code + " is your verification code to reserve " + phone + " as your shop number." }) });
   if (!response.ok) throw new Error("SMS provider returned " + response.status);
   return true;
 }
@@ -94,7 +94,7 @@ async function requestLoginOtp({ body }) {
         phone: db.maskPhone(phone),
         whatsappNumber: displayNumber,
         whatsappLink: "https://wa.me/" + displayNumber + "?text=LOGIN",
-        message: "Send LOGIN from your registered WhatsApp number. Pesa AI will reply with a five-minute login code.",
+        message: "Send LOGIN from your registered WhatsApp number. Pesa SI will reply with a five-minute login code.",
       },
     };
   }

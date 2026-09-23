@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Mail, ArrowLeft, MessageCircle, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { BRAND_NAME } from "@/constants/brand";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail]       = useState("");
@@ -93,7 +94,7 @@ export default function ForgotPasswordPage() {
                   WhatsApp our support team directly and we'll reset your password on the spot.
                 </p>
                 <a
-                  href={`https://wa.me/254741387785?text=${encodeURIComponent(`Hi, I need help resetting my Pesa AI password. My email is ${email || 'my email'}.`)}`}
+                  href={`https://wa.me/254741387785?text=${encodeURIComponent(`Hi, I need help resetting my ${BRAND_NAME} password. My email is ${email || 'my email'}.`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 mt-2 text-sm font-semibold text-primary hover:underline"

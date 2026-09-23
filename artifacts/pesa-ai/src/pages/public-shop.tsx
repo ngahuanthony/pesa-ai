@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, ExternalLink, LoaderCircle, MapPin, Package, Search } from "lucide-react";
 import { Link, useRoute } from "wouter";
 import { PublicLayout } from "@/components/layout";
+import { BRAND_NAME } from "@/constants/brand";
 
 type Shop = {
   name: string;
@@ -73,7 +74,7 @@ export default function PublicShopPage() {
     <PublicLayout>
       <main className="min-h-screen bg-[#f7faf8] px-5 py-8 text-[#0a4a3a]">
         <div className="mx-auto max-w-5xl">
-          <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-[#0a4a3a]"><ArrowLeft className="h-4 w-4" /> Back to Pesa AI</Link>
+          <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-[#0a4a3a]"><ArrowLeft className="h-4 w-4" /> Back to {BRAND_NAME}</Link>
           {state === "loading" && <div className="flex min-h-[50vh] items-center justify-center"><LoaderCircle className="h-7 w-7 animate-spin text-[#25a85a]" /></div>}
           {state === "error" && <div className="mx-auto mt-12 max-w-md rounded-2xl border bg-white p-8 text-center"><h1 className="text-2xl font-extrabold">Shop not found</h1><p className="mt-2 text-sm text-slate-600">This shop is private or the link is no longer available.</p><Link href="/#find-shop" className="mt-5 inline-flex rounded-xl bg-[#0a4a3a] px-5 py-3 text-sm font-bold text-white">Find another shop</Link></div>}
           {state === "ready" && shop && (

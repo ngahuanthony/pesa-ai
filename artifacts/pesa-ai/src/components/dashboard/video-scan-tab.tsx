@@ -4,6 +4,7 @@ import { Upload, Camera, CheckCircle2, AlertCircle, Loader2, Video, Trash2, Plus
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { BRAND_NAME } from "@/constants/brand";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -888,7 +889,7 @@ function ProcessingView({ businessId, scanId, onDone }: { businessId: string; sc
         <Camera className="absolute inset-0 m-auto h-8 w-8 text-primary" />
       </div>
       <div className="space-y-1">
-        <p className="text-lg font-bold text-foreground">🔍 Pesa AI is scanning your shop{dots}</p>
+        <p className="text-lg font-bold text-foreground">🔍 {BRAND_NAME} is scanning your shop{dots}</p>
         <p className="text-sm text-muted-foreground">Estimated time: 2–5 minutes</p>
       </div>
       {((scan?.frames ?? 0) > 0 || (scan?.productCount ?? 0) > 0) && (

@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle2, MessageSquare, Wifi } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import QRCode from "qrcode";
+import { BRAND_NAME } from "@/constants/brand";
 
 async function buildQrProfilePicture(businessName: string, phone: string): Promise<string> {
   const canvas = document.createElement("canvas");
@@ -159,7 +160,7 @@ export function AdminWhatsAppTab() {
       <div>
         <h2 className="text-lg font-bold text-zinc-100">Connect a business to WhatsApp</h2>
         <p className="text-sm text-zinc-400 mt-1">
-          Pesa AI securely manages the Meta credentials and webhook. You only need the customer-facing number.
+          {BRAND_NAME} securely manages the Meta credentials and webhook. You only need the customer-facing number.
         </p>
       </div>
 

@@ -1,3 +1,5 @@
+import { BRAND_NAME } from "@/constants/brand";
+
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-white">
@@ -8,7 +10,7 @@ export default function PrivacyPage() {
         <section className="mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-3">1. Who We Are</h2>
           <p className="text-gray-600 leading-relaxed">
-            Pesa AI is a product of <strong>Adplay Media Ltd</strong>, a company registered in Kenya.
+             {BRAND_NAME} is a product of <strong>Adplay Media Ltd</strong>, a company registered in Kenya.
             We provide an AI-powered WhatsApp sales assistant platform for Kenyan small and medium businesses.
             Contact us at <a href="tel:+254741387785" className="text-green-600 underline">+254 741 387 785</a>.
           </p>
@@ -38,8 +40,8 @@ export default function PrivacyPage() {
         <section className="mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-3">4. WhatsApp &amp; Meta</h2>
           <p className="text-gray-600 leading-relaxed">
-            Pesa AI uses the WhatsApp Business Platform (Meta Platforms, Inc.) to send and receive messages.
-            Messages are transmitted through Meta's infrastructure. By interacting with a Pesa AI–powered
+             {BRAND_NAME} uses the WhatsApp Business Platform (Meta Platforms, Inc.) to send and receive messages.
+             Messages are transmitted through Meta's infrastructure. By interacting with a {BRAND_NAME}–powered
             business on WhatsApp, your messages are subject to Meta's{" "}
             <a href="https://www.whatsapp.com/legal/privacy-policy" className="text-green-600 underline" target="_blank" rel="noopener noreferrer">
               WhatsApp Privacy Policy

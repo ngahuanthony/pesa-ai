@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { Download, ExternalLink, QrCode } from "lucide-react";
+import { BRAND_NAME } from "@/constants/brand";
 
 function roundRect(
   ctx: CanvasRenderingContext2D,
@@ -82,7 +83,7 @@ export function SignupQRCard() {
     ctx.fillText("Start selling on WhatsApp", width / 2, cardY + cardHeight + Math.round(height * 0.135));
     ctx.fillStyle = "#9ca3af";
     ctx.font = `${Math.round(width * 0.024)}px Arial`;
-    ctx.fillText("Powered by Pesa AI", width / 2, height - Math.round(height * 0.04));
+    ctx.fillText(`Powered by ${BRAND_NAME}`, width / 2, height - Math.round(height * 0.04));
 
     ctx.strokeStyle = "#25D366";
     ctx.lineWidth = Math.round(width * 0.008);

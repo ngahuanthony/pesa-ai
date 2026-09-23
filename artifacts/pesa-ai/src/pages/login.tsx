@@ -2,6 +2,7 @@ import { PublicLayout } from "@/components/layout";
 import { Link, useLocation } from "wouter";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { useEffect, useState } from "react";
+import { BRAND_NAME } from "@/constants/brand";
 
 const maskPhone = (value: string) => value.length > 6 ? value.slice(0, 4) + "***" + value.slice(-3) : value;
 
@@ -101,7 +102,7 @@ export default function LoginPage() {
     <PublicLayout>
       <div className="flex flex-1 items-center justify-center bg-[#f7faf8] px-4 py-12">
         <div className="w-full max-w-md rounded-3xl border bg-white p-8 shadow-sm">
-          <h1 className="text-3xl font-extrabold text-foreground">Log in to Pesa AI</h1>
+           <h1 className="text-3xl font-extrabold text-foreground">Log in to {BRAND_NAME}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {mode === "password" ? "Use your existing account email and password." : "Receive a one-time code on your personal WhatsApp."}
           </p>
@@ -132,7 +133,7 @@ export default function LoginPage() {
               </div>
               {error && <div className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
               <button type="submit" disabled={busy} className="w-full rounded-xl bg-[#0a4a3a] py-3.5 text-sm font-bold text-white disabled:opacity-60">{busy ? "Sending code…" : "Send me a code"}</button>
-              <p className="text-xs text-slate-500">WhatsApp code delivery depends on Meta approving the Pesa AI authentication template.</p>
+               <p className="text-xs text-slate-500">WhatsApp code delivery depends on Meta approving the {BRAND_NAME} authentication template.</p>
             </form>
           ) : (
             <form onSubmit={verifyOtp} className="mt-7 space-y-5">
