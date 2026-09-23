@@ -121,6 +121,7 @@ router.delete("/api/admin/businesses/:businessId", adminRoutes.deleteBusiness);
 router.post("/api/admin/businesses/:businessId/suspend", adminRoutes.suspendBusiness);
 router.post("/api/admin/businesses/:businessId/unsuspend", adminRoutes.unsuspendBusiness);
 router.get("/api/admin/stats", adminRoutes.getStats);
+router.get("/api/admin/growth-summary", adminRoutes.getGrowthSummary);
 router.get("/api/admin/platform-defaults",                adminRoutes.getPlatformDefaults);
 router.post("/api/admin/import-db",                       adminRoutes.importDb);
 router.post("/api/admin/businesses/:businessId/whatsapp", adminRoutes.setWhatsAppCredentials);

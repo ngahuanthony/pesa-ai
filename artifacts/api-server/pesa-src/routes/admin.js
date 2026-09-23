@@ -99,6 +99,13 @@ function getStats({ session }) {
   return db.getAdminStats();
 }
 
+function getGrowthSummary({ query, session }) {
+  auth.requireAdmin(session);
+  const requestedDays = Number(query && query.days);
+  const days = Number.isFinite(requestedDays) ? Math.min(Math.max(Math.round(requestedDays), 1), 90) : 30;
+  return db.getAdminGrowthSummary({ days });
+}
+
 // GET /api/admin/platform-defaults
 // Returns the platform-level WABA ID and whether the system token is configured.
 // The token itself is never sent to the browser — only a boolean flag.
@@ -248,7 +255,7 @@ function resetPassword({ params, body, session }) {
 module.exports = {
   importDb,
   login, listBusinesses, chargeSubscription, deleteBusiness, suspendBusiness, unsuspendBusiness,
-  getStats, getPlatformDefaults, setWhatsAppCredentials, getWhatsAppStatus,
+  getStats, getGrowthSummary, getPlatformDefaults, setWhatsAppCredentials, getWhatsAppStatus,
   setMpesaCredentials, verifyMpesa, getMpesaStatus, disconnectMpesa, resetPassword,
   regenerateWelcomeMessage,
 };
