@@ -11,7 +11,8 @@ async function stkPush({ body, session }) {
   return mpesa.initiateStkPush({ orderId, phone });
 }
 
-async function callback({ body }) {
+async function callback({ body, query }) {
+  if (!mpesa.isAuthorizedStkCallback(query, body)) throw db.httpError(403, "Invalid M-Pesa callback");
   await mpesa.handleStkCallback(body || {});
   return { ok: true };
 }

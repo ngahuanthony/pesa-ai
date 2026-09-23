@@ -140,7 +140,32 @@ function load() {
   ensureFile();
   const raw = fs.readFileSync(DATA_FILE, "utf-8");
   try {
-    return JSON.parse(raw);
+    const state = JSON.parse(raw);
+    // One-time, idempotent retirement of merchant-owned Daraja secrets.
+    // Keep receiving details but never migrate old passkeys/OAuth into the
+    // new Pesa SI app. Every merchant must be authorized again by admin.
+    let changed = false;
+    for (const business of state.businesses || []) {
+      if (!business.mpesaCredentials) continue;
+      const old = business.mpesaCredentials;
+      const config = business.mpesa || {};
+      const shortcode = String(config.shortcode || old.shortcode || "").trim();
+      if (/^\d{5,10}$/.test(shortcode)) {
+        const method = ["till", "paybill", "paybill_account"].includes(config.method) ? config.method : "paybill";
+        business.mpesa = {
+          method, shortcode,
+          tillNumber: method === "till" ? shortcode : null,
+          paybillNumber: method === "till" ? null : shortcode,
+          accountNumber: config.accountNumber || null,
+          accountMode: config.accountMode || "static",
+          passkeyEnc: null, verified: false, enabled: false, updatedAt: now(),
+        };
+      } else business.mpesa = null;
+      delete business.mpesaCredentials;
+      changed = true;
+    }
+    if (changed) save(state);
+    return state;
   } catch (err) {
     throw new Error(`Corrupt data file at ${DATA_FILE}: ${err.message}`);
   }
@@ -537,6 +562,15 @@ function updateBusiness(businessId, patch, actor) {
   return mutate((state) => {
     const b = state.businesses.find((b) => b.id === businessId);
     if (!b) throw httpError(404, "Business not found");
+    if (patch.paybillNumber !== undefined && patch.paymentMethod === "mpesa" &&
+        String(patch.paybillNumber || "") !== String(b.mpesa?.shortcode || "")) {
+      throw httpError(409, "Connect your Till or Paybill in Payments before saving M-Pesa details");
+    }
+    if (patch.paymentMethod === "bank" && b.mpesa) {
+      b.mpesa.enabled = false;
+      b.mpesa.verified = false;
+      appendChangeLog(b, "mpesaDisabledForBank", actor);
+    }
     Object.assign(b, patch);
     Object.keys(patch).forEach((field) => appendChangeLog(b, field, actor));
     return b;
@@ -564,49 +598,89 @@ function appendChangeLog(business, field, actor) {
 // record.
 function sanitizeBusiness(business) {
   if (!business) return business;
-  const { mpesaCredentials, changeLog, idOrKraPin, ...rest } = business;
+  const { mpesaCredentials, mpesa, changeLog, idOrKraPin, ...rest } = business;
   return {
     ...rest,
+    mpesa: mpesa ? { method: mpesa.method, verified: mpesa.verified === true, enabled: mpesa.enabled === true } : null,
     merchantType: normalizeMerchantType(rest.merchantType),
     publicShopSlug: getPublicShopSlug(business),
     phone: maskPhone(rest.phone),
     personalPhone: maskPhone(rest.personalPhone),
     pesaAiNumber: maskPhone(rest.pesaAiNumber),
     publicPhone: maskPhone(rest.publicPhone),
-    mpesaConnected: Boolean(mpesaCredentials),
-    mpesaShortcodeMasked: mpesaCredentials ? fieldCrypto.maskShortcode(mpesaCredentials.shortcode) : null,
+    mpesaConnected: Boolean(mpesa?.shortcode),
+    mpesaShortcodeMasked: fieldCrypto.maskShortcode(mpesa?.shortcode),
   };
 }
 
-// --- M-Pesa credentials (per-business, pass-through model) ---------------
-//
-// Each business connects their OWN Safaricom Daraja API app so customer
-// order payments land straight in their own paybill — Pesa AI (Adplay
-// Media Ltd) never collects or holds a business's sales revenue itself.
-// That keeps this a "protect these credentials well" problem rather than
-// a payment-aggregator problem (which would carry much heavier regulatory
-// obligations). The Consumer Secret and Passkey are real API credentials,
-// so they're encrypted at rest (see src/crypto.js) and never returned to
-// the client once saved — only sanitizeBusiness()'s connected/masked
-// summary is.
+// Pesa SI owns OAuth credentials. Each merchant owns a receiving shortcode.
+// Safaricom issues the STK passkey for a specific shortcode; admins configure
+// that authorization separately. No merchant can set or retrieve API secrets.
+function setPlatformDaraja({ consumerKey, consumerSecret }) {
+  if (!fieldCrypto.isConfigured()) throw httpError(503, "ENCRYPTION_KEY is required");
+  if (!String(consumerKey || "").trim() || !String(consumerSecret || "").trim()) throw httpError(400, "Consumer Key and Consumer Secret are required");
+  return mutate((state) => {
+    state.platformDaraja = {
+      consumerKeyEnc: fieldCrypto.encrypt(String(consumerKey).trim()),
+      consumerSecretEnc: fieldCrypto.encrypt(String(consumerSecret).trim()),
+      updatedAt: now(),
+    };
+    // Rotating the app requires re-checking every receiving account.
+    for (const business of state.businesses) {
+      if (business.mpesa) business.mpesa.verified = false;
+    }
+    return { configured: true, updatedAt: state.platformDaraja.updatedAt };
+  });
+}
 
-function setMpesaCredentials(businessId, { consumerKey, consumerSecret, passkey, shortcode, method = "paybill", tillNumber = null, paybillNumber = null, accountNumber = null, accountMode = "static" }, actor) {
+function getPlatformDarajaStatus() {
+  const config = load().platformDaraja;
+  return { configured: Boolean(config?.consumerKeyEnc && config?.consumerSecretEnc), updatedAt: config?.updatedAt || null };
+}
+
+function getPlatformDarajaDecrypted() {
+  const config = load().platformDaraja;
+  if (!config?.consumerKeyEnc || !config?.consumerSecretEnc) return null;
+  return { consumerKey: fieldCrypto.decrypt(config.consumerKeyEnc), consumerSecret: fieldCrypto.decrypt(config.consumerSecretEnc) };
+}
+
+function setMpesaReceivingAccount(businessId, { shortcode, method = "paybill", accountNumber = null, accountMode = "static" }, actor) {
   return mutate((state) => {
     const business = state.businesses.find((b) => b.id === businessId);
     if (!business) throw httpError(404, "Business not found");
-    if (!["till", "paybill", "paybill_account", "sendmoney"].includes(method)) throw httpError(400, "Invalid M-Pesa method");
+    if (!["till", "paybill", "paybill_account"].includes(method)) throw httpError(400, "Invalid M-Pesa method");
     if (!["static", "dynamic_customer_phone"].includes(accountMode)) throw httpError(400, "Invalid M-Pesa account mode");
-    business.mpesa = { method, tillNumber: tillNumber || (method === "till" ? String(shortcode) : null), paybillNumber: paybillNumber || (method !== "till" ? String(shortcode) : null), accountNumber: accountNumber || null, accountMode, enabled: true, verified: false, updatedAt: now() };
-    business.mpesaCredentials = {
-      consumerKeyEnc: fieldCrypto.encrypt(consumerKey),
-      consumerSecretEnc: fieldCrypto.encrypt(consumerSecret),
-      passkeyEnc: fieldCrypto.encrypt(passkey),
-      shortcode: String(shortcode),
-      verified: false,
-      updatedAt: now(),
+    const number = String(shortcode || "").trim();
+    if (!/^\d{5,10}$/.test(number)) throw httpError(400, "Enter a valid Till or Paybill number (5–10 digits)");
+    if (state.businesses.some((b) => b.id !== businessId && b.mpesa?.shortcode === number)) throw httpError(409, "This receiving number is already assigned to another merchant");
+    if (method === "paybill_account" && accountMode === "static" && !String(accountNumber || "").trim()) throw httpError(400, "Account Number is required");
+    const previous = business.mpesa || {};
+    const sameShortcode = previous.shortcode === number && previous.method === method;
+    business.mpesa = {
+      method, shortcode: number, tillNumber: method === "till" ? number : null,
+      paybillNumber: method === "till" ? null : number,
+      accountNumber: method === "paybill_account" && accountMode === "static" ? String(accountNumber).trim() : null,
+      accountMode, passkeyEnc: sameShortcode ? previous.passkeyEnc || null : null,
+      enabled: false, verified: false, updatedAt: now(),
     };
-    appendChangeLog(business, "mpesaCredentials", actor);
-    return { connected: true, shortcodeMasked: fieldCrypto.maskShortcode(shortcode) };
+    // Legacy merchant-owned OAuth credentials must not be used for new payments.
+    business.mpesaCredentials = null;
+    appendChangeLog(business, "mpesaReceivingAccount", actor);
+    return getMpesaStatusFromBusiness(business);
+  });
+}
+
+function setMerchantStkPasskey(businessId, passkey) {
+  if (!fieldCrypto.isConfigured()) throw httpError(503, "ENCRYPTION_KEY is required");
+  if (!String(passkey || "").trim()) throw httpError(400, "STK Passkey is required");
+  return mutate((state) => {
+    const business = state.businesses.find((b) => b.id === businessId);
+    if (!business?.mpesa?.shortcode) throw httpError(404, "Merchant receiving details are missing");
+    business.mpesa.passkeyEnc = fieldCrypto.encrypt(String(passkey).trim());
+    business.mpesa.verified = false;
+    business.mpesa.enabled = false;
+    appendChangeLog(business, "mpesaStkPasskey", "admin");
+    return { passkeyConfigured: true, verified: false };
   });
 }
 
@@ -701,27 +775,29 @@ function clearMpesaCredentials(businessId, actor) {
     const business = state.businesses.find((b) => b.id === businessId);
     if (!business) throw httpError(404, "Business not found");
     business.mpesaCredentials = null;
+    business.mpesa = null;
     appendChangeLog(business, "mpesaCredentials", actor);
     return { connected: false };
   });
 }
 
 function getMpesaStatus(businessId) {
-  const business = getBusiness(businessId);
-  if (!business.mpesaCredentials) return { connected: false, verified: false, method: null };
-  const config = business.mpesa || {};
-  return { connected: true, verified: business.mpesaCredentials.verified === true && config.verified !== false, method: config.method || "paybill", accountMode: config.accountMode || "static", shortcodeMasked: fieldCrypto.maskShortcode(config.method === "till" ? config.tillNumber : config.paybillNumber || business.mpesaCredentials.shortcode) };
+  return getMpesaStatusFromBusiness(getBusiness(businessId));
+}
+
+function getMpesaStatusFromBusiness(business) {
+  const config = business.mpesa;
+  return { connected: Boolean(config?.shortcode), verified: Boolean(config?.verified && config?.enabled && getPlatformDarajaStatus().configured), method: config?.method || null, accountMode: config?.accountMode || "static", shortcodeMasked: fieldCrypto.maskShortcode(config?.shortcode), passkeyConfigured: Boolean(config?.passkeyEnc), platformConfigured: getPlatformDarajaStatus().configured };
 }
 
 function verifyMpesaCredentials(businessId, actor) {
   return mutate((state) => {
     const business = state.businesses.find((item) => item.id === businessId);
-    if (!business || !business.mpesaCredentials) throw httpError(404, "M-Pesa credentials not found");
-    business.mpesaCredentials.verified = true;
-    business.mpesaCredentials.verifiedAt = now();
+    if (!business?.mpesa?.shortcode || !business.mpesa.passkeyEnc) throw httpError(409, "Receiving shortcode and its STK passkey are required");
+    if (!state.platformDaraja?.consumerKeyEnc) throw httpError(409, "Pesa SI Daraja app is not configured");
     business.mpesa = { ...(business.mpesa || {}), enabled: true, verified: true, verifiedAt: now() };
-    appendChangeLog(business, "mpesaCredentialsVerified", actor || "admin");
-    return { connected: true, verified: true, method: business.mpesa.method || "paybill", shortcodeMasked: fieldCrypto.maskShortcode(business.mpesa.method === "till" ? business.mpesa.tillNumber : business.mpesa.paybillNumber || business.mpesaCredentials.shortcode) };
+    appendChangeLog(business, "mpesaReceivingAccountVerified", actor || "admin");
+    return getMpesaStatusFromBusiness(business);
   });
 }
 
@@ -743,15 +819,16 @@ function recordMpesaTransaction({ businessId, transactionId, orderId = null, amo
 // src/mpesa.js should call it.
 function getMpesaCredentialsDecrypted(businessId) {
   const business = getBusiness(businessId);
-  if (!business.mpesaCredentials) return null;
-  const c = business.mpesaCredentials;
+  const config = business.mpesa;
+  const app = getPlatformDarajaDecrypted();
+  if (!config?.shortcode || !config?.passkeyEnc || !app) return null;
   return {
-    consumerKey: fieldCrypto.decrypt(c.consumerKeyEnc),
-    consumerSecret: fieldCrypto.decrypt(c.consumerSecretEnc),
-    passkey: fieldCrypto.decrypt(c.passkeyEnc),
-    shortcode: c.shortcode,
-    verified: c.verified === true,
-    ...(business.mpesa || {}),
+    ...app,
+    passkey: fieldCrypto.decrypt(config.passkeyEnc),
+    shortcode: config.shortcode,
+    verified: config.verified === true && config.enabled === true,
+    method: config.method, tillNumber: config.tillNumber, paybillNumber: config.paybillNumber,
+    accountNumber: config.accountNumber, accountMode: config.accountMode,
   };
 }
 
@@ -1965,8 +2042,7 @@ function getBusinessByShortcode(shortcode) {
   if (!code) return null;
   return load().businesses.find(
     (b) =>
-      (b.mpesaCredentials && b.mpesaCredentials.shortcode === code) ||
-      b.paybillNumber === code
+      b.mpesa?.shortcode === code && b.mpesa?.verified === true && b.mpesa?.enabled === true && b.paymentMethod !== "bank"
   ) || null;
 }
 
@@ -2285,7 +2361,8 @@ module.exports = {
   setWhatsAppConnectionStatus,
   getWhatsAppStatus,
   sanitizeBusiness,
-  setMpesaCredentials,
+  setPlatformDaraja, getPlatformDarajaStatus, getPlatformDarajaDecrypted,
+  setMpesaReceivingAccount, setMerchantStkPasskey,
   verifyMpesaCredentials,
   recordMpesaTransaction,
   createDeniEntry, listDeniEntries, updateDeniEntry,

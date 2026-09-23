@@ -193,35 +193,28 @@ function getWhatsAppStatus({ params, session }) {
   return db.getWhatsAppStatus(params.businessId);
 }
 
-async function setMpesaCredentials({ params, body, session }) {
+function getPlatformDaraja({ session }) {
   auth.requireAdmin(session);
-  if (!fieldCrypto.isConfigured()) {
-    throw db.httpError(503, "ENCRYPTION_KEY is not set on the server — add it in environment secrets before saving M-Pesa credentials.");
-  }
-  const { consumerKey, consumerSecret, passkey, shortcode, method, tillNumber, paybillNumber, accountNumber, accountMode } = body || {};
-  if (!consumerKey || !consumerSecret || !passkey || !shortcode) {
-    throw db.httpError(400, "consumerKey, consumerSecret, passkey and shortcode are all required");
-  }
-  const result = db.setMpesaCredentials(params.businessId, { consumerKey, consumerSecret, passkey, shortcode, method, tillNumber, paybillNumber, accountNumber, accountMode }, "admin");
-
-  // Register C2B webhook URLs with Safaricom in the background so we're
-  // notified whenever a customer manually pays to this business's paybill/till.
-  if (result.connected) {
-    const credentials = db.getMpesaCredentialsDecrypted(params.businessId);
-    if (credentials) {
-      mpesa.registerC2BUrls(params.businessId, credentials, process.env.PUBLIC_BASE_URL).catch((err) => {
-        console.warn(`[admin] C2B registration error for ${params.businessId}: ${err.message}`);
-      });
-    }
-  }
-
-  return result;
+  return db.getPlatformDarajaStatus();
 }
 
-async function verifyMpesa({ params, session }) {
+function setPlatformDaraja({ body, session }) {
   auth.requireAdmin(session);
+  return db.setPlatformDaraja(body || {});
+}
+
+function setMpesaCredentials({ params, body, session }) {
+  auth.requireAdmin(session);
+  if (["consumerKey", "consumerSecret"].some((key) => Object.hasOwn(body || {}, key))) throw db.httpError(400, "App credentials belong in Pesa SI Daraja settings");
+  return db.setMerchantStkPasskey(params.businessId, body?.passkey);
+}
+
+async function verifyMpesa({ params, body, session }) {
+  auth.requireAdmin(session);
+  if (body?.receivingAccountAuthorized !== true) throw db.httpError(400, "Confirm Safaricom authorization and ownership of this merchant receiving shortcode before enabling STK");
+  if (db.getBusiness(params.businessId).paymentMethod === "bank") throw db.httpError(409, "Merchant selected bank transfer; select M-Pesa first");
   const credentials = db.getMpesaCredentialsDecrypted(params.businessId);
-  if (!credentials) throw db.httpError(404, "M-Pesa credentials not found");
+  if (!credentials) throw db.httpError(409, "Pesa SI app, merchant receiving number, and shortcode-specific STK Passkey must all be configured");
   const verification = await mpesa.verifyCredentials(params.businessId, credentials, process.env.PUBLIC_BASE_URL);
   if (!verification.ok) throw db.httpError(502, `Safaricom verification failed: ${verification.error || "Credential validation failed"}`);
   return db.verifyMpesaCredentials(params.businessId, "admin");
@@ -260,6 +253,6 @@ module.exports = {
   importDb,
   login, listBusinesses, chargeSubscription, deleteBusiness, suspendBusiness, unsuspendBusiness,
   getStats, getGrowthSummary, getPlatformDefaults, setWhatsAppCredentials, getWhatsAppStatus,
-  setMpesaCredentials, verifyMpesa, getMpesaStatus, disconnectMpesa, resetPassword,
+  getPlatformDaraja, setPlatformDaraja, setMpesaCredentials, verifyMpesa, getMpesaStatus, disconnectMpesa, resetPassword,
   regenerateWelcomeMessage,
 };

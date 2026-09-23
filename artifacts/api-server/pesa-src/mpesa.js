@@ -1,22 +1,10 @@
-// M-Pesa (Safaricom Daraja API) — order payments now use the PASS-THROUGH
-// model: each business connects their own Daraja app (Settings tab), and
-// a real STK push is sent using THEIR OWN shortcode/passkey, so a paying
-// customer's money lands directly in that business's own paybill. Pesa AI
-// (Adplay Media Ltd) never collects or holds a business's sales revenue —
-// deliberately, since actually intermediating other people's money would
-// bring a very different set of regulatory obligations (Central Bank of
-// Kenya Payment Service Provider licensing under the National Payment
-// System Act) than "we help you collect your own payments" does.
+// Pesa SI owns one Daraja OAuth app. Each merchant configures a separate
+// receiving shortcode and admin provides its Safaricom-authorized STK passkey.
+// BusinessShortCode AND PartyB must refer to that merchant's approved account;
+// never substitute Pesa SI's receiving shortcode.
 //
-// If a business HASN'T connected their own paybill yet, order payment
-// falls back to the original simulated flow so the rest of the app (and
-// the demo/trial experience) still works with zero setup.
-//
-// IMPORTANT — this real STK push implementation is written to Safaricom's
-// documented Daraja API shape but has not been exercised against the live
-// sandbox in this environment (no test credentials, no outbound network
-// access to safaricom.co.ke here). Test it end-to-end against the Daraja
-// sandbox with a real test business before relying on it in production.
+// Safaricom must explicitly authorize the app for each merchant shortcode;
+// OAuth alone does not establish permission to collect into arbitrary tills.
 //
 // Adplay's OWN subscription billing (businesses paying Adplay, not their
 // customers paying them) is a different, simpler case — Adplay collecting
@@ -25,6 +13,7 @@
 // Adplay's own single Daraja app via MPESA_* env vars.
 
 const db = require("./db");
+const crypto = require("node:crypto");
 
 const DARAJA_BASE =
   (process.env.DARAJA_ENV || process.env.MPESA_ENV) === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke";
@@ -54,6 +43,23 @@ function callbackBaseUrl() {
   return base;
 }
 
+// Safaricom STK callbacks are not signed. Use an unpredictable, per-order
+// callback URL so an unauthenticated POST cannot invent a successful payment.
+// This is an additional gate, not a substitute for reconciliation with
+// Safaricom; keep operational verification of first live payments mandatory.
+function stkCallbackSignature(orderId) {
+  if (!process.env.ENCRYPTION_KEY) throw db.httpError(503, "M-Pesa callback signing is not configured");
+  return crypto.createHmac("sha256", process.env.ENCRYPTION_KEY).update(`stk:${orderId}`).digest("hex");
+}
+
+function isAuthorizedStkCallback(query, payload) {
+  const checkoutId = payload?.Body?.stkCallback?.CheckoutRequestID;
+  const order = checkoutId && db.getOrderByCheckoutRequestId(checkoutId);
+  if (!order || query?.orderId !== order.id || !/^[0-9a-f]{64}$/.test(String(query?.signature || ""))) return false;
+  const expected = Buffer.from(stkCallbackSignature(order.id), "hex");
+  return crypto.timingSafeEqual(expected, Buffer.from(query.signature, "hex"));
+}
+
 async function getAccessToken(consumerKey, consumerSecret) {
   const basicAuth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
   const res = await fetch(`${DARAJA_BASE}/oauth/v1/generate?grant_type=client_credentials`, {
@@ -72,6 +78,7 @@ async function getAccessToken(consumerKey, consumerSecret) {
 async function initiateStkPush({ orderId, phone }) {
   const order = db.getOrder(orderId);
   if (!order) throw db.httpError(404, "Order not found");
+  if (db.getBusiness(order.businessId).paymentMethod === "bank") throw db.httpError(409, "This merchant has selected bank transfer, not M-Pesa STK");
   if (order.paymentStatus === "PAID") throw db.httpError(409, "This order is already paid");
   if (String(order.fulfillmentStatus || "").toUpperCase() === "CANCELLED") throw db.httpError(409, "Cancelled orders cannot be paid");
   if (!Number.isFinite(Number(order.totalAmount)) || Number(order.totalAmount) <= 0) throw db.httpError(409, "This order does not have a payable total");
@@ -88,7 +95,7 @@ async function initiateStkPush({ orderId, phone }) {
     return { simulated: true, checkoutRequestId: null, order, note: "Sandbox simulation only — no payment was recorded and stock was not reduced." };
   }
 
-  if (!credentials.verified) throw db.httpError(409, "M-Pesa credentials are awaiting admin verification");
+  if (!credentials.verified) throw db.httpError(409, "M-Pesa receiving account is awaiting Pesa SI verification");
 
   if (!phone) throw db.httpError(400, "Customer phone number is required to send a real M-Pesa STK push");
 
@@ -97,6 +104,9 @@ async function initiateStkPush({ orderId, phone }) {
   const accessToken = await getAccessToken(credentials.consumerKey, credentials.consumerSecret);
   const msisdn = normalizeMsisdn(phone);
   const callbackBase = callbackBaseUrl();
+  if (credentials.shortcode !== (credentials.method === "till" ? credentials.tillNumber : credentials.paybillNumber)) {
+    throw db.httpError(409, "Merchant receiving shortcode does not match the configured STK destination");
+  }
 
   const res = await fetch(`${DARAJA_BASE}/mpesa/stkpush/v1/processrequest`, {
     method: "POST",
@@ -110,7 +120,7 @@ async function initiateStkPush({ orderId, phone }) {
       PartyA: msisdn,
       PartyB: credentials.method === "till" ? credentials.tillNumber : credentials.paybillNumber || credentials.shortcode,
       PhoneNumber: msisdn,
-      CallBackURL: `${callbackBase}/webhook/mpesa`,
+      CallBackURL: `${callbackBase}/webhook/mpesa?orderId=${encodeURIComponent(order.id)}&signature=${stkCallbackSignature(order.id)}`,
       AccountReference: credentials.accountMode === "dynamic_customer_phone" ? msisdn : (credentials.accountNumber || order.id.slice(0, 12)),
       TransactionDesc: `Order ${order.id.slice(0, 8)}`,
     }),
@@ -153,6 +163,13 @@ function handleStkCallback(payload) {
   const order = db.getOrderByCheckoutRequestId(stkCallback.CheckoutRequestID);
   if (!order) {
     console.warn(`M-Pesa callback for unknown CheckoutRequestID: ${stkCallback.CheckoutRequestID}`);
+    return;
+  }
+  if (db.getBusiness(order.businessId).paymentMethod === "bank") {
+    db.updateMpesaPaymentAttempt(stkCallback.CheckoutRequestID, {
+      status: "FAILED", resultCode: "PAYMENT_METHOD_CHANGED",
+      resultDesc: "Merchant switched to bank transfer; review any completed STK transaction manually",
+    });
     return;
   }
 
@@ -271,6 +288,8 @@ async function verifyCredentials(businessId, credentials, baseUrl) {
   } catch (error) {
     return { ok: false, error: error.message || "Safaricom authentication failed" };
   }
+  // Safaricom does not provide a read-only ownership/authorization check for
+  // STK on a merchant shortcode here. Admin attestation is mandatory as well.
   if (credentials.method === "till") return { ok: true, c2bRegistered: false };
   const registration = await registerC2BUrls(businessId, credentials, baseUrl);
   return { ...registration, c2bRegistered: registration.ok };
@@ -382,4 +401,4 @@ async function handleC2BConfirmation(payload) {
   }
 }
 
-module.exports = { initiateStkPush, handleStkCallback, initiateSubscriptionStkPush, registerC2BUrls, verifyCredentials, handleC2BConfirmation, normalizeMsisdn };
+module.exports = { initiateStkPush, isAuthorizedStkCallback, handleStkCallback, initiateSubscriptionStkPush, registerC2BUrls, verifyCredentials, handleC2BConfirmation, normalizeMsisdn };

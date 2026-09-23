@@ -12,7 +12,4 @@ export interface MpesaConnectInput {
   paybillNumber?: string | null;
   accountNumber?: string | null;
   accountMode?: 'static' | 'dynamic_customer_phone';
-  consumerKey: string;
-  consumerSecret: string;
-  passkey: string;
 }

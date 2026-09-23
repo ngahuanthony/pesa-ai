@@ -123,6 +123,8 @@ router.post("/api/admin/businesses/:businessId/unsuspend", adminRoutes.unsuspend
 router.get("/api/admin/stats", adminRoutes.getStats);
 router.get("/api/admin/growth-summary", adminRoutes.getGrowthSummary);
 router.get("/api/admin/platform-defaults",                adminRoutes.getPlatformDefaults);
+router.get("/api/admin/daraja", adminRoutes.getPlatformDaraja);
+router.post("/api/admin/daraja", adminRoutes.setPlatformDaraja);
 router.post("/api/admin/import-db",                       adminRoutes.importDb);
 router.post("/api/admin/businesses/:businessId/whatsapp", adminRoutes.setWhatsAppCredentials);
 router.get("/api/admin/businesses/:businessId/whatsapp",  adminRoutes.getWhatsAppStatus);
@@ -234,14 +236,14 @@ router.post("/webhook/mpesa/c2b/validate", () => {
   return { ResultCode: 0, ResultDesc: "Accepted" };
 });
 // Safaricom calls ConfirmationURL after the payment clears — we process it.
-router.post("/webhook/mpesa/c2b/confirm", async ({ body }) => {
-  await mpesa.handleC2BConfirmation(body).catch((err) =>
-    console.error("[c2b confirm] unhandled error:", err.message)
-  );
+router.post("/webhook/mpesa/c2b/confirm", () => {
+  // Safaricom does not sign this callback. Do not let anonymous requests
+  // create transactions or mark merchant orders paid.
   return { ResultCode: 0, ResultDesc: "Accepted" };
 });
 
-router.post("/webhook/mpesa", ({ body }) => {
+router.post("/webhook/mpesa", ({ body, query }) => {
+  if (!mpesa.isAuthorizedStkCallback(query, body)) return { status: 403, data: { error: "Invalid M-Pesa callback" } };
   try {
     mpesa.handleStkCallback(body);
   } catch (err) {

@@ -278,11 +278,8 @@ function ResetPasswordDialog({ business, onClose }: { business: any; onClose: ()
 
 // ── M-Pesa admin dialog ────────────────────────────────────────────────────
 function MpesaDialog({ business, onClose }: { business: any; onClose: () => void }) {
-  const [consumerKey,    setConsumerKey]    = useState("");
-  const [consumerSecret, setConsumerSecret] = useState("");
-  const [passkey,        setPasskey]        = useState("");
-  const [shortcode,      setShortcode]      = useState("");
-  const [showSecret,     setShowSecret]     = useState(false);
+  const [passkey, setPasskey] = useState("");
+  const [authorized, setAuthorized] = useState(false);
   const [saving,         setSaving]         = useState(false);
   const [verifying,      setVerifying]      = useState(false);
   const [mpesaStatus,    setMpesaStatus]    = useState<any>(null);
@@ -298,8 +295,7 @@ function MpesaDialog({ business, onClose }: { business: any; onClose: () => void
     } finally { setLoadingStatus(false); }
   };
 
-  // Load on first render
-  useState(() => { load(); });
+  useEffect(() => { void load(); }, [business.id]);
 
   const save = async () => {
     setSaving(true);
@@ -308,11 +304,11 @@ function MpesaDialog({ business, onClose }: { business: any; onClose: () => void
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consumerKey, consumerSecret, passkey, shortcode }),
+        body: JSON.stringify({ passkey }),
       });
       if (res.ok) {
-        toast({ title: "M-Pesa credentials saved!" });
-        setConsumerKey(""); setConsumerSecret(""); setPasskey(""); setShortcode("");
+        toast({ title: "Merchant STK passkey saved" });
+        setPasskey("");
         load();
         qc.invalidateQueries({ queryKey: getAdminListBusinessesQueryKey() });
       } else {
@@ -331,10 +327,11 @@ function MpesaDialog({ business, onClose }: { business: any; onClose: () => void
   const verify = async () => {
     setVerifying(true);
     try {
-      const res = await fetch(`/api/admin/businesses/${business.id}/mpesa/verify`, { method: "POST", credentials: "include" });
+      if (!authorized) throw new Error("Confirm the merchant shortcode is Safaricom-authorized for the Pesa SI app.");
+      const res = await fetch(`/api/admin/businesses/${business.id}/mpesa/verify`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ receivingAccountAuthorized: true }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Safaricom verification failed");
-      toast({ title: "M-Pesa verified", description: "Safaricom accepted the credentials and callback URLs." });
+      toast({ title: "M-Pesa enabled", description: "Pesa SI app and merchant receiving account configured." });
       await load();
       qc.invalidateQueries({ queryKey: getAdminListBusinessesQueryKey() });
     } catch (error: any) {
@@ -359,7 +356,7 @@ function MpesaDialog({ business, onClose }: { business: any; onClose: () => void
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               <div>
-                <p className="text-sm font-semibold text-emerald-700">{mpesaStatus.verified ? "Verified and live" : "Credentials saved"}</p>
+                <p className="text-sm font-semibold text-emerald-700">{mpesaStatus.verified ? "Verified and enabled" : "Receiving details awaiting verification"}</p>
                 <p className="text-xs text-emerald-600">Shortcode: {mpesaStatus.shortcodeMasked}</p>
               </div>
             </div>
@@ -370,72 +367,65 @@ function MpesaDialog({ business, onClose }: { business: any; onClose: () => void
         ) : (
           <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
             <AlertCircle className="h-4 w-4 text-amber-500" />
-            <p className="text-sm text-amber-700 font-medium">Not connected — enter Daraja credentials below</p>
+            <p className="text-sm text-amber-700 font-medium">Merchant must first enter their receiving Till or Paybill</p>
           </div>
         )}
-        {mpesaStatus?.connected && !mpesaStatus?.verified && (
-          <button onClick={verify} disabled={verifying} className="w-full h-10 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors">
-            {verifying ? "Verifying with Safaricom…" : "Verify credentials and callbacks"}
-          </button>
-        )}
-
-        {/* Info */}
-        <p className="text-xs text-gray-500 leading-relaxed">
-          Get these from <strong>developer.safaricom.co.ke</strong> under the business's Daraja app.
-          All values are encrypted and never echoed back.
-        </p>
-
-        {/* Form */}
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Shortcode (Paybill/Till)</label>
-            <Input value={shortcode} onChange={(e) => setShortcode(e.target.value)} placeholder="e.g. 174379" className="bg-gray-50" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Consumer Key</label>
-            <Input value={consumerKey} onChange={(e) => setConsumerKey(e.target.value)} placeholder="Daraja consumer key" className="bg-gray-50" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Consumer Secret</label>
-            <div className="relative">
-              <Input
-                type={showSecret ? "text" : "password"}
-                value={consumerSecret}
-                onChange={(e) => setConsumerSecret(e.target.value)}
-                placeholder="Daraja consumer secret"
-                className="bg-gray-50 pr-10"
-              />
-              <button type="button" onClick={() => setShowSecret(!showSecret)} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
-                {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Lipa na M-Pesa Passkey</label>
-            <Input
-              type="password"
-              value={passkey}
-              onChange={(e) => setPasskey(e.target.value)}
-              placeholder="STK Push passkey"
-              className="bg-gray-50"
-            />
-          </div>
-        </div>
+        <p className="text-xs text-gray-500 leading-relaxed">Pesa SI's shared Daraja app is configured once in the admin portal. Safaricom must authorize this merchant's shortcode for STK. Enter its shortcode-specific STK Passkey here; it is encrypted and never returned.</p>
+        <div className="space-y-1.5"><label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Merchant shortcode STK Passkey</label><Input type="password" value={passkey} onChange={(e) => setPasskey(e.target.value)} placeholder={mpesaStatus?.passkeyConfigured ? "Configured — enter to replace" : "Shortcode-specific passkey"} autoComplete="new-password" /></div>
 
         <button
           onClick={save}
-          disabled={saving || !consumerKey || !consumerSecret || !passkey || !shortcode}
+          disabled={saving || !mpesaStatus?.connected || !passkey}
           className="w-full h-10 rounded-xl bg-primary text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
         >
           <KeyRound className="h-4 w-4" />
-          {saving ? "Saving…" : "Save M-Pesa Credentials"}
+          {saving ? "Saving…" : "Save merchant STK passkey"}
         </button>
+        {mpesaStatus?.connected && !mpesaStatus?.verified && <>
+          <label className="flex items-start gap-2 text-xs text-gray-700"><input type="checkbox" checked={authorized} onChange={(e) => setAuthorized(e.target.checked)} /> I have confirmed this shortcode belongs to the merchant and Safaricom authorized it for the Pesa SI Daraja app.</label>
+          <button onClick={verify} disabled={verifying || !authorized || !mpesaStatus.passkeyConfigured || !mpesaStatus.platformConfigured} className="w-full h-10 rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-50">{verifying ? "Checking with Safaricom…" : "Enable merchant M-Pesa STK"}</button>
+        </>}
       </div>
     </DialogContent>
   );
 }
 
 // ── Main tab ───────────────────────────────────────────────────────────────
+function PlatformDarajaCard() {
+  const [key, setKey] = useState("");
+  const [secret, setSecret] = useState("");
+  const [configured, setConfigured] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetch("/api/admin/daraja", { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Could not load Daraja status");
+        setConfigured((await response.json()).configured);
+      })
+      .catch((error) => toast({ title: error.message, variant: "destructive" }));
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const response = await fetch("/api/admin/daraja", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ consumerKey: key, consumerSecret: secret }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not save Daraja app");
+      setConfigured(true); setKey(""); setSecret("");
+      toast({ title: "Pesa SI Daraja app saved", description: "Merchant accounts must be verified before STK is enabled." });
+    } catch (error: any) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); }
+    finally { setSaving(false); }
+  }
+
+  return <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+    <div><h3 className="text-sm font-semibold text-gray-900">Pesa SI Daraja application</h3><p className="text-xs text-gray-600 mt-1">{configured ? "App credentials configured. Enter both fields to rotate; this pauses STK until merchants are reverified." : "Configure the shared Daraja app before enabling any merchant."} Merchants cannot see these credentials. Funds must go directly to each merchant's authorized receiving shortcode.</p></div>
+    <div className="grid gap-3 sm:grid-cols-2"><div><label className="text-xs font-semibold">Consumer Key</label><Input value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" placeholder="Pesa SI app key" /></div><div><label className="text-xs font-semibold">Consumer Secret</label><Input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="new-password" placeholder="Pesa SI app secret" /></div></div>
+    <button type="button" onClick={save} disabled={saving || !key.trim() || !secret.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : configured ? "Rotate app credentials" : "Save app credentials"}</button>
+  </div>;
+}
+
 export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
   const { data: businesses, isLoading } = useAdminListBusinesses();
   const [search, setSearch]             = useState("");
@@ -520,6 +510,7 @@ export function AdminBusinessesTab({ onConfigureWhatsApp }: Props) {
       </Dialog>
 
       <div className="space-y-4">
+        <PlatformDarajaCard />
         {/* Search */}
         <div className="relative w-72">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />

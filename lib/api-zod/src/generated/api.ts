@@ -477,6 +477,11 @@ export const GetMpesaStatusParams = zod.object({
 
 export const GetMpesaStatusResponse = zod.object({
   "connected": zod.boolean(),
+  "verified": zod.boolean().optional(),
+  "method": zod.enum(['till','paybill','paybill_account']).nullish(),
+  "accountMode": zod.enum(['static','dynamic_customer_phone']).optional(),
+  "passkeyConfigured": zod.boolean().optional(),
+  "platformConfigured": zod.boolean().optional(),
   "shortcodeMasked": zod.string().nullish()
 })
 
@@ -490,10 +495,7 @@ export const ConnectMpesaBody = zod.object({
   "tillNumber": zod.string().nullish(),
   "paybillNumber": zod.string().nullish(),
   "accountNumber": zod.string().nullish(),
-  "accountMode": zod.enum(['static','dynamic_customer_phone']).optional(),
-  "consumerKey": zod.string(),
-  "consumerSecret": zod.string(),
-  "passkey": zod.string()
+  "accountMode": zod.enum(['static','dynamic_customer_phone']).optional()
 })
 
 export const ConnectMpesaResponse = zod.void()

@@ -1375,6 +1375,19 @@ components:
       properties:
         connected:
           type: boolean
+        verified:
+          type: boolean
+        method:
+          type: string
+          nullable: true
+          enum: [till, paybill, paybill_account]
+        accountMode:
+          type: string
+          enum: [static, dynamic_customer_phone]
+        passkeyConfigured:
+          type: boolean
+        platformConfigured:
+          type: boolean
         shortcodeMasked:
           type: string
           nullable: true
@@ -1799,17 +1812,8 @@ components:
         accountMode:
           type: string
           enum: [static, dynamic_customer_phone]
-        consumerKey:
-          type: string
-        consumerSecret:
-          type: string
-        passkey:
-          type: string
       required:
         - method
-        - consumerKey
-        - consumerSecret
-        - passkey
 
     PlanInput:
       type: object

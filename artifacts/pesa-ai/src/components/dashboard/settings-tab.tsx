@@ -176,7 +176,16 @@ export function SettingsTab() {
       onSuccess: () => { refetch(); toast({ title: "Location saved!" }); },
     });
 
-  const savePayment = () => {
+  const savePayment = async () => {
+    if (paymentMethod === "mpesa") {
+      try {
+        const response = await fetch(`/api/businesses/${businessId}/mpesa/connect`, {
+          method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method: mpesaType === "till" ? "till" : paybillAccountNumber ? "paybill_account" : "paybill", tillNumber: mpesaType === "till" ? paybillNumber : null, paybillNumber: mpesaType === "paybill" ? paybillNumber : null, accountNumber: mpesaType === "paybill" ? paybillAccountNumber : null }),
+        });
+        if (!response.ok) throw new Error((await response.json()).error || "Could not save receiving details");
+      } catch (error: any) { toast({ title: "Could not connect M-Pesa", description: error.message, variant: "destructive" }); return; }
+    }
     const data: any = { paymentMethod };
     if (paymentMethod === "mpesa") {
       data.mpesaType = mpesaType;

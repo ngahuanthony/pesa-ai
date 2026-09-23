@@ -308,6 +308,11 @@ export interface SalesSummary {
 
 export interface MpesaStatus {
   connected: boolean;
+  verified?: boolean;
+  method?: 'till' | 'paybill' | 'paybill_account' | null;
+  accountMode?: 'static' | 'dynamic_customer_phone';
+  passkeyConfigured?: boolean;
+  platformConfigured?: boolean;
   shortcodeMasked?: string | null;
 }
 
@@ -509,9 +514,6 @@ export interface MpesaConnectInput {
   paybillNumber?: string | null;
   accountNumber?: string | null;
   accountMode?: 'static' | 'dynamic_customer_phone';
-  consumerKey: string;
-  consumerSecret: string;
-  passkey: string;
 }
 
 export interface PlanInput {
