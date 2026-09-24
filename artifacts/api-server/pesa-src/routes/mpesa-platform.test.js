@@ -113,3 +113,89 @@ test("bank selection disables merchant STK even if it was verified", () => {
   assert.equal(db.getMpesaStatus(account.id).verified, false);
   assert.equal(db.getBusinessByShortcode("987654"), null);
 });
+
+test("admin WhatsApp readiness recognizes the production legacy shared token", () => {
+  const keys = [
+    "WHATSAPP_PLATFORM_TOKEN", "WHATSAPP_TOKEN",
+    "WHATSAPP_PLATFORM_PHONE_NUMBER_ID", "WHATSAPP_PHONE_NUMBER_ID",
+    "WHATSAPP_PLATFORM_WABA_ID", "WHATSAPP_VERIFY_TOKEN",
+  ];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  try {
+    delete process.env.WHATSAPP_PLATFORM_TOKEN;
+    process.env.WHATSAPP_TOKEN = "legacy-shared-token-for-test";
+    delete process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID;
+    process.env.WHATSAPP_PHONE_NUMBER_ID = "sender-123";
+    process.env.WHATSAPP_PLATFORM_WABA_ID = "waba-456";
+    process.env.WHATSAPP_VERIFY_TOKEN = "verify-token-for-test";
+    const defaults = admin.getPlatformDefaults({ session: { isAdmin: true } });
+    assert.equal(defaults.hasToken, true);
+    assert.equal(defaults.phoneNumberId, "sender-123");
+    assert.equal(defaults.wabaId, "waba-456");
+    assert.equal(defaults.hasWebhookVerifyToken, true);
+    assert.equal(JSON.stringify(defaults).includes("legacy-shared-token-for-test"), false);
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
+});
+
+test("admin WhatsApp activation uses the same legacy token and sender aliases as runtime", async () => {
+  const account = business("WhatsApp alias connection");
+  const keys = [
+    "WHATSAPP_PLATFORM_TOKEN", "WHATSAPP_TOKEN",
+    "WHATSAPP_PLATFORM_PHONE_NUMBER_ID", "WHATSAPP_PHONE_NUMBER_ID",
+    "WHATSAPP_PLATFORM_WABA_ID", "WHATSAPP_VERIFY_TOKEN",
+  ];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  const oldFetch = global.fetch;
+  const requests = [];
+  try {
+    delete process.env.WHATSAPP_PLATFORM_TOKEN;
+    process.env.WHATSAPP_TOKEN = "legacy-shared-token-for-test";
+    delete process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID;
+    process.env.WHATSAPP_PHONE_NUMBER_ID = "sender-123";
+    process.env.WHATSAPP_PLATFORM_WABA_ID = "waba-456";
+    process.env.WHATSAPP_VERIFY_TOKEN = "verify-token-for-test";
+    global.fetch = async (url, options) => {
+      requests.push({ url: String(url), authorization: options?.headers?.authorization });
+      return { ok: true, text: async () => "" };
+    };
+    const result = await admin.setWhatsAppCredentials({
+      session: { isAdmin: true },
+      params: { businessId: account.id },
+      body: { displayName: account.name },
+    });
+    assert.equal(result.connected, true);
+    assert.equal(result.connectionStatus, "live");
+    assert.equal(db.getWhatsAppStatus(account.id).connected, true);
+    assert.equal(requests.length >= 2, true);
+    assert.equal(requests.every((request) => request.authorization === "Bearer legacy-shared-token-for-test"), true);
+  } finally {
+    global.fetch = oldFetch;
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
+});
+
+test("WhatsApp admin status does not label a failed subscription as live", () => {
+  const account = business("WhatsApp status");
+  db.setWhatsAppCredentials(account.id, {
+    phoneNumberId: "sender-status-test",
+    accessToken: "encrypted-token-test",
+    verifyToken: "verify-test",
+    wabaId: "waba-status-test",
+    displayName: account.name,
+    waPhone: "254700000001",
+  });
+  db.setWhatsAppConnectionStatus(account.id, "failed", "Meta webhook subscription failed");
+  const status = db.getWhatsAppStatus(account.id);
+  assert.equal(status.connected, false);
+  assert.equal(status.connectionStatus, "failed");
+  assert.equal(status.connectionError, "Meta webhook subscription failed");
+  assert.equal(db.getVendorWhatsAppStatus(account.id).connected, false);
+});

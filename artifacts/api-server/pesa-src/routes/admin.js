@@ -111,10 +111,17 @@ function getGrowthSummary({ query, session }) {
 // The token itself is never sent to the browser — only a boolean flag.
 function getPlatformDefaults({ session }) {
   auth.requireAdmin(session);
+  // Keep the admin status aligned with whatsapp.resolveAccessToken(), which
+  // still accepts the legacy shared-token and sender-ID variable names.
+  const phoneNumberId =
+    process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID ||
+    process.env.WHATSAPP_PHONE_NUMBER_ID ||
+    "1414909975031488";
   return {
     wabaId:   process.env.WHATSAPP_PLATFORM_WABA_ID || "1051176054371123",
-    phoneNumberId: process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID || "1414909975031488",
-    hasToken: !!process.env.WHATSAPP_PLATFORM_TOKEN,
+    phoneNumberId,
+    hasToken: Boolean(process.env.WHATSAPP_PLATFORM_TOKEN || process.env.WHATSAPP_TOKEN),
+    hasWebhookVerifyToken: Boolean(process.env.WHATSAPP_VERIFY_TOKEN),
   };
 }
 
@@ -122,8 +129,8 @@ async function setWhatsAppCredentials({ params, body, session }) {
   auth.requireAdmin(session);
   let { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone, profileImageDataUrl } = body || {};
   const business = db.getBusiness(params.businessId);
-  if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID;
-  if (!accessToken) accessToken = process.env.WHATSAPP_PLATFORM_TOKEN;
+  if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if (!accessToken) accessToken = process.env.WHATSAPP_PLATFORM_TOKEN || process.env.WHATSAPP_TOKEN;
   if (!wabaId) wabaId = process.env.WHATSAPP_PLATFORM_WABA_ID;
   if (!verifyToken) verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
   if (!waPhone) waPhone = business.pesaAiNumber || business.shopNumber || business.publicPhone || null;
@@ -142,6 +149,7 @@ async function setWhatsAppCredentials({ params, body, session }) {
   let profilePictureUpdated = false;
   let webhookSubscribed = false;
   let vendorAlertSent = false;
+  let connectionStatus = "connecting";
   const savedBusiness = db.getBusiness(params.businessId);
 
   if (result.connected) {
@@ -165,7 +173,8 @@ async function setWhatsAppCredentials({ params, body, session }) {
       }
     }
     const setupLive = !wabaId || webhookSubscribed;
-    db.setWhatsAppConnectionStatus(params.businessId, setupLive ? "live" : "failed", setupLive ? null : "Meta WABA subscription did not complete");
+    connectionStatus = setupLive ? "live" : "failed";
+    db.setWhatsAppConnectionStatus(params.businessId, connectionStatus, setupLive ? null : "Meta WABA subscription did not complete");
     const vendorPhone = setupLive ? (savedBusiness.personalPhone || null) : null;
     const shopDigits = db.normalizePhone(savedBusiness.whatsappNumber || savedBusiness.whatsappRequestedPhone || savedBusiness.pesaAiNumber || savedBusiness.shopPhone || waPhone || "");
     if (vendorPhone) {
@@ -181,6 +190,8 @@ async function setWhatsAppCredentials({ params, body, session }) {
 
   return {
     ...result,
+    connected: Boolean(result.connected && connectionStatus === "live"),
+    connectionStatus,
     profilePictureUpdated,
     webhookSubscribed,
     vendorAlertSent,

@@ -57,7 +57,7 @@ export function AdminWhatsAppTab() {
   const [wabaId, setWabaId] = useState("");
   const [platformReady, setPlatformReady] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<"connected" | "not_connected" | null>(null);
+  const [status, setStatus] = useState<"connected" | "not_connected" | "failed" | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -68,7 +68,7 @@ export function AdminWhatsAppTab() {
         const defaults = await res.json();
         setPhoneNumberId(defaults.phoneNumberId || "");
         setWabaId(defaults.wabaId || "");
-        setPlatformReady(Boolean(defaults.hasToken && defaults.phoneNumberId && defaults.wabaId));
+        setPlatformReady(Boolean(defaults.hasToken && defaults.phoneNumberId && defaults.wabaId && defaults.hasWebhookVerifyToken));
       })
       .catch(() => setPlatformReady(false));
   }, []);
@@ -88,7 +88,7 @@ export function AdminWhatsAppTab() {
       const data = await res.json();
       setWaPhone(data.requestedPhone || "");
       setVerifyToken(data.verifyToken || "");
-      setStatus(data.connected ? "connected" : "not_connected");
+      setStatus(data.connectionStatus === "failed" ? "failed" : data.connected ? "connected" : "not_connected");
     } catch {
       toast({
         title: "Could not load WhatsApp status",
@@ -134,12 +134,16 @@ export function AdminWhatsAppTab() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not activate WhatsApp");
-      setStatus(data.connected ? "connected" : "not_connected");
-      toast({
+      setStatus(data.connectionStatus === "failed" ? "failed" : data.connected ? "connected" : "not_connected");
+      toast(data.connected ? {
         title: "WhatsApp connected",
         description: data.profilePictureUpdated
           ? "Connected and the QR profile picture was applied."
           : "Connected. Meta did not update the profile picture yet; click Update to retry.",
+      } : {
+        title: "WhatsApp setup needs attention",
+        description: "Meta did not finish subscribing the business number to the webhook.",
+        variant: "destructive",
       });
       queryClient.invalidateQueries({ queryKey: getAdminListBusinessesQueryKey() });
     } catch (error) {
@@ -179,7 +183,7 @@ export function AdminWhatsAppTab() {
           <p className="text-xs opacity-80 mt-0.5">
             {platformReady
               ? "Phone Number ID, WABA ID, access token, and webhook are managed by the server."
-              : "The server-managed Meta token or sender identifiers are missing."}
+              : "A Meta token, sender ID, WABA ID, or webhook verification token is missing."}
           </p>
         </div>
       </div>
@@ -228,11 +232,15 @@ export function AdminWhatsAppTab() {
               <div className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm ${
                 status === "connected"
                   ? "bg-emerald-950/40 text-emerald-300"
-                  : "bg-amber-950/40 text-amber-300"
+                  : status === "failed"
+                    ? "bg-rose-950/40 text-rose-300"
+                    : "bg-amber-950/40 text-amber-300"
               }`}>
                 {status === "connected"
                   ? <><CheckCircle2 className="h-4 w-4" /> Connected &amp; live</>
-                  : <><MessageSquare className="h-4 w-4" /> Ready to activate</>}
+                  : status === "failed"
+                    ? <><AlertCircle className="h-4 w-4" /> Connection needs attention</>
+                    : <><MessageSquare className="h-4 w-4" /> Ready to activate</>}
               </div>
             )}
 
