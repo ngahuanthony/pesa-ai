@@ -148,6 +148,7 @@ async function setWhatsAppCredentials({ params, body, session }) {
   }
   let profilePictureUpdated = false;
   let webhookSubscribed = false;
+  let webhookSubscriptionError = null;
   let vendorAlertSent = false;
   let connectionStatus = "connecting";
   const savedBusiness = db.getBusiness(params.businessId);
@@ -169,12 +170,16 @@ async function setWhatsAppCredentials({ params, body, session }) {
       try {
         webhookSubscribed = await whatsapp.subscribeWaba(wabaId, accessToken);
       } catch (err) {
+        webhookSubscriptionError = err.message || "Meta WABA subscription failed";
         console.warn(`[whatsapp] WABA subscription failed: ${err.message}`);
       }
     }
     const setupLive = !wabaId || webhookSubscribed;
     connectionStatus = setupLive ? "live" : "failed";
-    db.setWhatsAppConnectionStatus(params.businessId, connectionStatus, setupLive ? null : "Meta WABA subscription did not complete");
+    const connectionError = setupLive
+      ? null
+      : webhookSubscriptionError || "Meta WABA subscription did not complete";
+    db.setWhatsAppConnectionStatus(params.businessId, connectionStatus, connectionError);
     const vendorPhone = setupLive ? (savedBusiness.personalPhone || null) : null;
     const shopDigits = db.normalizePhone(savedBusiness.whatsappNumber || savedBusiness.whatsappRequestedPhone || savedBusiness.pesaAiNumber || savedBusiness.shopPhone || waPhone || "");
     if (vendorPhone) {
@@ -192,6 +197,7 @@ async function setWhatsAppCredentials({ params, body, session }) {
     ...result,
     connected: Boolean(result.connected && connectionStatus === "live"),
     connectionStatus,
+    connectionError: db.getWhatsAppStatus(params.businessId).connectionError,
     profilePictureUpdated,
     webhookSubscribed,
     vendorAlertSent,

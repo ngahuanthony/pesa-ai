@@ -58,6 +58,7 @@ export function AdminWhatsAppTab() {
   const [platformReady, setPlatformReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<"connected" | "not_connected" | "failed" | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -80,6 +81,7 @@ export function AdminWhatsAppTab() {
     setWaPhone("");
     setVerifyToken("");
     setStatus(null);
+    setConnectionError(null);
     try {
       const res = await fetch(`/api/admin/businesses/${id}/whatsapp`, {
         credentials: "include",
@@ -89,6 +91,7 @@ export function AdminWhatsAppTab() {
       setWaPhone(data.requestedPhone || "");
       setVerifyToken(data.verifyToken || "");
       setStatus(data.connectionStatus === "failed" ? "failed" : data.connected ? "connected" : "not_connected");
+      setConnectionError(data.connectionError || null);
     } catch {
       toast({
         title: "Could not load WhatsApp status",
@@ -135,6 +138,7 @@ export function AdminWhatsAppTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not activate WhatsApp");
       setStatus(data.connectionStatus === "failed" ? "failed" : data.connected ? "connected" : "not_connected");
+      setConnectionError(data.connectionError || null);
       toast(data.connected ? {
         title: "WhatsApp connected",
         description: data.profilePictureUpdated
@@ -142,7 +146,7 @@ export function AdminWhatsAppTab() {
           : "Connected. Meta did not update the profile picture yet; click Update to retry.",
       } : {
         title: "WhatsApp setup needs attention",
-        description: "Meta did not finish subscribing the business number to the webhook.",
+        description: data.connectionError || "Meta did not finish subscribing the business number to the webhook.",
         variant: "destructive",
       });
       queryClient.invalidateQueries({ queryKey: getAdminListBusinessesQueryKey() });
@@ -242,6 +246,11 @@ export function AdminWhatsAppTab() {
                     ? <><AlertCircle className="h-4 w-4" /> Connection needs attention</>
                     : <><MessageSquare className="h-4 w-4" /> Ready to activate</>}
               </div>
+            )}
+            {status === "failed" && connectionError && (
+              <p role="alert" className="rounded-lg border border-rose-800 bg-rose-950/30 px-3 py-2 text-xs text-rose-200">
+                Setup error: {connectionError}
+              </p>
             )}
 
             <button

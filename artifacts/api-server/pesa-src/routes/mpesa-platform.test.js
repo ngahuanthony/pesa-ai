@@ -182,6 +182,42 @@ test("admin WhatsApp activation uses the same legacy token and sender aliases as
   }
 });
 
+test("failed WABA subscription preserves a useful admin error without reporting live", async () => {
+  const account = business("WhatsApp webhook error");
+  const oldFetch = global.fetch;
+  try {
+    global.fetch = async (url) => {
+      if (String(url).includes("/subscribed_apps")) {
+        return {
+          ok: false,
+          status: 403,
+          text: async () => JSON.stringify({ error: { message: "Missing whatsapp_business_management permission" } }),
+        };
+      }
+      return { ok: true, status: 200, text: async () => "" };
+    };
+    const result = await admin.setWhatsAppCredentials({
+      session: { isAdmin: true },
+      params: { businessId: account.id },
+      body: {
+        phoneNumberId: "sender-error-test",
+        accessToken: "error-test-token",
+        verifyToken: "error-test-verify",
+        wabaId: "waba-error-test",
+        displayName: account.name,
+        waPhone: "254700000002",
+      },
+    });
+    assert.equal(result.connected, false);
+    assert.equal(result.connectionStatus, "failed");
+    assert.match(result.connectionError, /Missing whatsapp_business_management permission/);
+    assert.equal(db.getWhatsAppStatus(account.id).connectionError, result.connectionError);
+    assert.equal(result.vendorAlertSent, false);
+  } finally {
+    global.fetch = oldFetch;
+  }
+});
+
 test("WhatsApp admin status does not label a failed subscription as live", () => {
   const account = business("WhatsApp status");
   db.setWhatsAppCredentials(account.id, {
