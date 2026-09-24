@@ -5,7 +5,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ShoppingBag, Smartphone, CheckCircle2, Pencil, Minus, Plus, Trash2 } from "lucide-react";
+import { ShoppingBag, Smartphone, CheckCircle2, Pencil, Minus, Plus, Trash2, Printer } from "lucide-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -60,6 +60,97 @@ function PaymentDetails({ meta }: { meta: PaymentMeta }) {
       <div className="text-[10px] text-muted-foreground">{paymentMethodLabel(meta.paymentMethod)}</div>
     </div>
   );
+}
+
+function escapePrintText(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function printOrderDocument({
+  order,
+  businessName,
+  kind,
+  paperWidth,
+}: {
+  order: any;
+  businessName: string;
+  kind: "order" | "bill";
+  paperWidth: 58 | 80;
+}) {
+  const printWindow = window.open("", "_blank", "width=420,height=900");
+  if (!printWindow) return false;
+
+  const orderRef = `#${String(order.id || "").slice(0, 8).toUpperCase()}`;
+  const createdAt = order.createdAt
+    ? new Date(order.createdAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })
+    : "";
+  const items = Array.isArray(order.items) ? order.items : [];
+  const total = Number(order.totalAmount ?? order.totalKES ?? 0);
+  const location = order.serviceLocationSnapshot;
+  const itemRows = items.map((item: any) => {
+    const quantity = Number(item.quantity ?? item.qty ?? 1);
+    const unitPrice = Number(item.unitPrice ?? item.price ?? 0);
+    const lineTotal = Number(item.total ?? item.lineTotal ?? unitPrice * quantity);
+    return kind === "bill"
+      ? `<div class="item"><span>${quantity} × ${escapePrintText(item.productName || item.name || "Item")}</span><strong>KES ${lineTotal.toLocaleString("en-KE")}</strong></div>`
+      : `<div class="item"><strong class="quantity">${quantity} ×</strong><span>${escapePrintText(item.productName || item.name || "Item")}</span></div>`;
+  }).join("");
+  const paymentMeta = order.paymentMeta || {};
+  const paymentStatus = String(order.paymentStatus || order.status || "").toLowerCase();
+  const paymentLabel = paymentStatus === "paid" || paymentStatus === "fulfilled" ? "Paid" : "Payment pending";
+  const paymentRef = paymentMeta.mpesaTxnId || paymentMeta.paymentRef;
+  const locationLine = location
+    ? `<div class="detail">${escapePrintText(location.kind || "Location")}: ${escapePrintText(location.label || "")}</div>`
+    : "";
+
+  printWindow.document.write(`<!doctype html>
+<html><head><meta charset="utf-8"><title>${kind === "bill" ? "Bill" : "Order"} ${escapePrintText(orderRef)}</title>
+<style>
+  @page { size: ${paperWidth}mm auto; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { width: ${paperWidth}mm; margin: 0; padding: 0; background: #fff; color: #000; }
+  body { font: 11px/1.35 Arial, sans-serif; }
+  .receipt { width: ${paperWidth}mm; padding: 3mm; }
+  header { text-align: center; padding-bottom: 3mm; border-bottom: 1px dashed #000; }
+  h1 { margin: 0 0 2mm; font-size: 16px; line-height: 1.2; overflow-wrap: anywhere; }
+  h2 { margin: 0; font-size: 12px; text-transform: uppercase; }
+  .reference { margin-top: 1mm; font: bold 12px monospace; }
+  .details { padding: 3mm 0; border-bottom: 1px dashed #000; }
+  .detail { overflow-wrap: anywhere; }
+  .detail + .detail { margin-top: 1mm; }
+  .items { padding: 2mm 0; border-bottom: 1px dashed #000; }
+  .item { display: flex; align-items: flex-start; justify-content: space-between; gap: 2mm; padding: 1mm 0; }
+  .item > span { min-width: 0; overflow-wrap: anywhere; }
+  .item > strong { flex-shrink: 0; text-align: right; }
+  .quantity { min-width: 9mm; }
+  .total { display: flex; justify-content: space-between; gap: 2mm; padding: 3mm 0; font-size: 14px; font-weight: bold; }
+  .payment { padding: 2mm 0; border-top: 1px dashed #000; font-weight: bold; overflow-wrap: anywhere; }
+  footer { margin-top: 3mm; padding-top: 2mm; border-top: 1px dashed #000; text-align: center; font-size: 9px; }
+  @media print { html, body, .receipt { width: ${paperWidth}mm; } }
+</style></head><body><main class="sheet">
+  <div class="receipt">
+  <header><h1>${escapePrintText(businessName || "Pesa SI shop")}</h1><h2>${kind === "bill" ? "Customer Bill" : "Order Ticket"}</h2><div class="reference">${escapePrintText(orderRef)}</div></header>
+  <section class="details">
+    <div class="detail"><strong>Customer:</strong> ${escapePrintText(order.customerName || "Customer")}</div>
+    ${order.customerPhone ? `<div class="detail">${escapePrintText(order.customerPhone)}</div>` : ""}
+    ${locationLine}
+    <div class="detail">${escapePrintText(createdAt)}</div>
+    <div class="detail"><strong>Status:</strong> ${escapePrintText(order.fulfillmentStatus || order.status || "New")}</div>
+  </section>
+  <section class="items">${itemRows || `<div>No items recorded</div>`}</section>
+  <div class="total"><span>Total</span><span>KES ${total.toLocaleString("en-KE")}</span></div>
+  ${kind === "bill" ? `<div class="payment">${escapePrintText(paymentLabel)}${paymentRef ? `<br>Ref: ${escapePrintText(paymentRef)}` : ""}</div>` : ""}
+  <footer>Thank you · ${escapePrintText(orderRef)}</footer>
+  </div>
+</main><script>window.onload = function () { window.focus(); window.print(); window.onafterprint = function () { window.close(); }; };</script>
+</body></html>`);
+  printWindow.document.close();
+  return true;
 }
 
 function StatusSelect({ order, onChange }: { order: any; onChange: (id: string, val: string) => void }) {
@@ -142,6 +233,32 @@ export function OrdersTab() {
   const [editOrder, setEditOrder] = useState<any | null>(null);
   const [editItems, setEditItems] = useState<{ productId: string; productName: string; quantity: number }[]>([]);
   const [savingItems, setSavingItems] = useState(false);
+
+  const businessName = me?.business?.name || "Pesa SI shop";
+  const [receiptWidth, setReceiptWidth] = useState<"58" | "80">(() => {
+    if (typeof window === "undefined") return "80";
+    try {
+      const saved = window.localStorage.getItem("pesa-si-receipt-width");
+      return saved === "58" ? "58" : "80";
+    } catch {
+      return "80";
+    }
+  });
+
+  const printOrder = (order: any, kind: "order" | "bill") => {
+    if (!printOrderDocument({ order, businessName, kind, paperWidth: Number(receiptWidth) as 58 | 80 })) {
+      toast({ title: "Printing window was blocked", description: "Allow pop-ups for this site, then try again.", variant: "destructive" });
+    }
+  };
+
+  const changeReceiptWidth = (width: "58" | "80") => {
+    setReceiptWidth(width);
+    try {
+      window.localStorage.setItem("pesa-si-receipt-width", width);
+    } catch {
+      // Keep the current selection for this session if browser storage is disabled.
+    }
+  };
 
   const openEdit = (order: any) => {
     setEditOrder(order);
@@ -275,6 +392,18 @@ export function OrdersTab() {
 
   return (
     <>
+      <div className="mb-4 flex items-center justify-end gap-2">
+        <label htmlFor="receipt-paper-width" className="text-xs font-medium text-muted-foreground">Receipt printer width</label>
+        <Select value={receiptWidth} onValueChange={(value) => changeReceiptWidth(value as "58" | "80")}>
+          <SelectTrigger id="receipt-paper-width" className="h-9 w-28 bg-white text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="58">58 mm roll</SelectItem>
+            <SelectItem value="80">80 mm roll</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
       {newCount > 0 && (
         <div className="mb-4 flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
           <div className="flex items-center gap-3">
@@ -301,6 +430,14 @@ export function OrdersTab() {
                   <div className="font-mono text-xs font-medium text-foreground">#{o.id.substring(0, 8).toUpperCase()}</div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
                     {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <button onClick={() => printOrder(o, "order")} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-muted" title="Print order receipt on thermal paper">
+                      <Printer className="h-3 w-3" /> Receipt
+                    </button>
+                    <button onClick={() => printOrder(o, "bill")} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-muted" title="Print customer bill on thermal paper">
+                      <Printer className="h-3 w-3" /> Bill
+                    </button>
                   </div>
                 </div>
                 <div>
@@ -377,6 +514,14 @@ export function OrdersTab() {
                     <span className="text-[11px] text-muted-foreground ml-2">
                       {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                     </span>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      <button onClick={() => printOrder(o, "order")} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-muted" title="Print order receipt on thermal paper">
+                        <Printer className="h-3 w-3" /> Receipt
+                      </button>
+                      <button onClick={() => printOrder(o, "bill")} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-muted" title="Print customer bill on thermal paper">
+                        <Printer className="h-3 w-3" /> Bill
+                      </button>
+                    </div>
                     {(o.paymentStatus || o.fulfillmentStatus) && (
                       <div className="flex gap-1.5 mt-1">
                         {o.paymentStatus && <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">{o.paymentStatus}</span>}
