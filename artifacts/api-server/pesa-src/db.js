@@ -715,12 +715,18 @@ function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verify
   return mutate((state) => {
     const b = state.businesses.find((b) => b.id === businessId);
     if (!b) throw httpError(404, "Business not found");
+    if (b.metaVerified && waPhone && normalizePhone(waPhone) !== normalizePhone(b.pesaAiNumber)) {
+      throw httpError(400, "The connected WhatsApp number must match this shop's verified Duka number");
+    }
+    if (b.metaVerified && phoneNumberId && b.whatsappPhoneNumberId && phoneNumberId !== b.whatsappPhoneNumberId) {
+      throw httpError(409, "This shop's Meta-verified phone number cannot be replaced with a different number");
+    }
     if (phoneNumberId) {
       const duplicate = state.businesses.find((other) => other.id !== businessId && other.whatsappPhoneNumberId === phoneNumberId);
       if (duplicate) throw httpError(409, "This Meta Phone Number ID is already connected to another shop");
     }
     if (phoneNumberId !== undefined) b.whatsappPhoneNumberId = phoneNumberId || null;
-    if (phoneNumberId && accessToken) b.shopNumberStatus = "meta_connected";
+    if (phoneNumberId && accessToken && !b.metaVerified) b.shopNumberStatus = "meta_connected";
     if (verifyToken !== undefined) b.whatsappVerifyToken = verifyToken;
     if (wabaId !== undefined) b.whatsappWabaId = wabaId || null;
     if (displayName !== undefined) b.whatsappDisplayName = displayName || null;
@@ -884,6 +890,19 @@ function hasExplicitPublicShopVisibility(business) {
 
 function isPublicShopDiscoverable(business) {
   if (!business || business.suspended === true || business.deletedAt) return false;
+  // New signups are public only after the exact Duka number was confirmed by
+  // Meta. Older records have no metaVerified marker and retain legacy rules.
+  if (business.metaVerified === true) {
+    return Boolean(
+      business.pesaAiNumber &&
+      normalizePhone(business.metaPhoneNumber) === normalizePhone(business.pesaAiNumber) &&
+      normalizePhone(business.whatsappNumber) === normalizePhone(business.pesaAiNumber) &&
+      business.whatsappPhoneNumberId &&
+      business.whatsappWabaId &&
+      business.whatsappConnectionStatus === "live" &&
+      business.whatsappAccessTokenEnc
+    );
+  }
   const visibilityFields = ["publicShopPublished", "shopPublished", "published", "discoverable"];
   if (hasExplicitPublicShopVisibility(business)) {
     return visibilityFields.some((field) => business[field] === true);
@@ -1109,7 +1128,7 @@ function createPendingSignup(state, { businessName, personalPhone, pesaAiNumber,
     }
     return existing;
   }
-  const pending = { id: id(), businessName: normalizedName, merchantType: normalizedMerchantType, personalPhone: normalizedPersonalPhone, pesaAiNumber: normalizedShopNumber, personalVerified: false, shopVerified: false, status: "pending_verification", createdAt: now(), expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
+  const pending = { id: id(), businessName: normalizedName, merchantType: normalizedMerchantType, personalPhone: normalizedPersonalPhone, pesaAiNumber: normalizedShopNumber, personalVerified: false, shopVerified: false, metaVerified: false, metaPhoneNumberId: null, metaWabaId: null, status: "pending_verification", createdAt: now(), expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() };
   if (!Array.isArray(state.pendingSignups)) state.pendingSignups = [];
   state.pendingSignups.push(pending);
   return pending;
@@ -1137,22 +1156,79 @@ function markPendingSignupChannelVerified(pendingId, channel) {
   });
 }
 
-function finalizePendingSignup(pendingId, { draftToken = null } = {}) {
+function finalizePendingSignup(pendingId, { draftToken = null, accessToken = null } = {}) {
   return mutate((state) => {
     const pending = (state.pendingSignups || []).find((item) => item.id === pendingId);
-    if (!pending || !pending.personalVerified || !pending.shopVerified) throw httpError(400, "Both phone numbers must be verified first");
-    if (pending.finalizedAt) throw httpError(409, "This signup has already been completed");
+    if (!pending || !pending.personalVerified || !pending.metaVerified ||
+        !pending.metaPhoneNumberId || !pending.metaWabaId ||
+        normalizePhone(pending.metaPhoneNumber) !== normalizePhone(pending.pesaAiNumber)) {
+      throw httpError(400, "Both phone numbers must be verified: personal WhatsApp and the exact Meta-confirmed Duka number");
+    }
+    if (pending.finalizedAt) {
+      const existingBusiness = state.businesses.find((item) => item.id === pending.businessId);
+      const existingAccount = state.accounts.find((item) => item.id === pending.accountId);
+      if (existingBusiness && existingAccount) return { business: existingBusiness, account: existingAccount };
+      throw httpError(409, "This signup has already been completed");
+    }
+    if (!accessToken) throw httpError(503, "Platform WhatsApp credentials are not configured");
     const business = createBusiness(state, { name: pending.businessName, category: null, merchantType: pending.merchantType, phone: pending.personalPhone, personalPhone: pending.personalPhone, pesaAiNumber: pending.pesaAiNumber, plan: "free_trial" });
     business.personalPhoneVerified = true;
     business.pesaAiNumberVerified = true;
-    business.shopNumberStatus = "sms_verified";
+    business.shopNumberStatus = "meta_verified";
     business.shopNumberVerificationStatus = "verified";
+    business.metaVerified = true;
+    business.whatsappPhoneNumberId = pending.metaPhoneNumberId;
+    business.whatsappWabaId = pending.metaWabaId;
+    business.metaPhoneNumber = pending.metaPhoneNumber;
+    business.whatsappNumber = pending.metaPhoneNumber;
+    business.whatsappRequestedPhone = pending.metaPhoneNumber;
+    business.whatsappDisplayName = pending.businessName;
+    business.whatsappAccessTokenEnc = fieldCrypto.encrypt(accessToken);
+    business.whatsappConnectionStatus = "live";
+    business.whatsappConnectionError = null;
+    business.welcomeMessage = generateWelcomeMessage(business);
     const account = createAccount(state, { businessId: business.id, personalPhone: pending.personalPhone });
     account.personalPhoneVerified = true;
     if (draftToken) require("./setup-drafts").importForVerifiedSignup(state, draftToken, pending, business);
     pending.finalizedAt = now();
+    pending.businessId = business.id;
+    pending.accountId = account.id;
     pending.status = "verified";
     return { business, account };
+  });
+}
+
+function listPendingSignups() {
+  return (load().pendingSignups || [])
+    .filter((p) => !p.finalizedAt && new Date(p.expiresAt).getTime() > Date.now())
+    .map((p) => ({
+      id: p.id, businessName: p.businessName, merchantType: p.merchantType,
+      personalPhone: maskPhone(p.personalPhone), pesaAiNumber: maskPhone(p.pesaAiNumber),
+      personalVerified: p.personalVerified === true, metaVerified: p.metaVerified === true,
+      status: p.status || "pending_verification", createdAt: p.createdAt, expiresAt: p.expiresAt,
+    }));
+}
+
+function getPendingSignupStatus(pendingId) {
+  const p = getPendingSignup(pendingId);
+  if (!p || new Date(p.expiresAt).getTime() < Date.now()) throw httpError(404, "Signup not found or expired");
+  return { id: p.id, personalVerified: p.personalVerified === true, metaVerified: p.metaVerified === true, status: p.status || "pending_verification" };
+}
+
+function markPendingSignupMetaVerified(pendingId, { phoneNumberId, wabaId, phoneNumber }) {
+  return mutate((state) => {
+    const p = (state.pendingSignups || []).find((item) => item.id === pendingId);
+    if (!p || new Date(p.expiresAt).getTime() < Date.now()) throw httpError(404, "Signup not found or expired");
+    if (!phoneNumberId || !wabaId || normalizePhone(phoneNumber) !== normalizePhone(p.pesaAiNumber)) {
+      throw httpError(400, "Meta verification must match the exact Duka number and include its Meta IDs");
+    }
+    p.metaVerified = true;
+    p.shopVerified = true; // legacy field retained for old pending records and clients
+    p.metaPhoneNumberId = String(phoneNumberId);
+    p.metaWabaId = String(wabaId);
+    p.metaPhoneNumber = normalizePhone(phoneNumber);
+    p.status = "meta_verified";
+    return p;
   });
 }
 
@@ -2426,6 +2502,9 @@ module.exports = {
   cancelPendingSignup,
   markPendingSignupChannelVerified,
   finalizePendingSignup,
+  listPendingSignups,
+  getPendingSignupStatus,
+  markPendingSignupMetaVerified,
   getAccountById,
   resetAccountPasswordByBusinessId,
   createSession,

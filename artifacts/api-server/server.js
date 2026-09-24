@@ -108,6 +108,8 @@ function startDailyReportScheduler() {
 router.post("/api/auth/signup", authRoutes.signup);
 router.post("/api/auth/verify-signup-otp", authRoutes.verifySignupOtp);
 router.post("/api/auth/resend-signup-otp", authRoutes.resendSignupOtp);
+router.get("/api/auth/pending-signups/:pendingSignupId", authRoutes.pendingSignupStatus);
+router.post("/api/auth/complete-signup", authRoutes.completeSignup);
 router.post("/api/auth/request-otp", authRoutes.requestLoginOtp);
 router.post("/api/auth/verify-otp", authRoutes.verifyOtp);
 router.post("/api/auth/login", authRoutes.login);
@@ -123,6 +125,8 @@ router.delete("/api/setup/products/:id", setupRoutes.removeProduct);
 
 router.post("/api/admin/login", adminRoutes.login);
 router.get("/api/admin/businesses", adminRoutes.listBusinesses);
+router.get("/api/admin/pending-signups", adminRoutes.listPendingSignups);
+router.post("/api/admin/pending-signups/:pendingSignupId/meta-check", adminRoutes.verifyPendingSignupMeta);
 router.post("/api/admin/businesses/:businessId/subscription/charge", adminRoutes.chargeSubscription);
 router.delete("/api/admin/businesses/:businessId", adminRoutes.deleteBusiness);
 router.post("/api/admin/businesses/:businessId/suspend", adminRoutes.suspendBusiness);

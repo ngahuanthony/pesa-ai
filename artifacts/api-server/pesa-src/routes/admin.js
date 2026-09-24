@@ -50,6 +50,46 @@ function listBusinesses({ session }) {
   return db.listBusinessesWithSubscriptions();
 }
 
+function listPendingSignups({ session }) {
+  auth.requireAdmin(session);
+  return db.listPendingSignups();
+}
+
+async function verifyPendingSignupMeta({ params, session }) {
+  auth.requireAdmin(session);
+  const pending = db.getPendingSignup(params.pendingSignupId);
+  if (!pending || new Date(pending.expiresAt).getTime() < Date.now()) throw db.httpError(404, "Signup not found or expired");
+  const wabaId = process.env.WHATSAPP_PLATFORM_WABA_ID || process.env.WHATSAPP_WABA_ID;
+  const token = process.env.WHATSAPP_PLATFORM_TOKEN || process.env.WHATSAPP_TOKEN;
+  if (!wabaId || !token) throw db.httpError(503, "Platform WhatsApp WABA credentials are not configured");
+  const response = await fetch(`https://graph.facebook.com/${whatsapp.GRAPH_API_VERSION}/${encodeURIComponent(wabaId)}/phone_numbers?fields=id,display_phone_number,status&limit=200`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw db.httpError(502, `Meta phone-number lookup failed (${response.status})`);
+  const payload = await response.json();
+  if (!Array.isArray(payload?.data)) throw db.httpError(502, "Meta returned an invalid phone-number list");
+  const expected = db.normalizePhone(pending.pesaAiNumber);
+  const match = (payload.data || []).find((item) =>
+    item.id &&
+    db.normalizePhone(item.display_phone_number) === expected &&
+    String(item.status || "").toUpperCase() === "CONNECTED"
+  );
+  if (!match) {
+    return { verified: false, status: "pending_meta_verification", message: "Meta has not connected this exact Duka number." };
+  }
+  if (db.getBusinessByWhatsappPhoneNumberId(match.id)) {
+    throw db.httpError(409, "This Meta phone number is already assigned to another Pesa SI shop");
+  }
+  db.markPendingSignupMetaVerified(pending.id, { phoneNumberId: match.id, wabaId, phoneNumber: match.display_phone_number });
+  return {
+    verified: true,
+    finalized: false,
+    message: pending.personalVerified
+      ? "Meta confirmed the Duka SIM. The merchant can finish signup in their browser."
+      : "Meta confirmed the Duka SIM. The merchant still needs to verify their personal WhatsApp.",
+  };
+}
+
 async function chargeSubscription({ params, body, session }) {
   auth.requireAdmin(session);
   const business = db.getBusiness(params.businessId);
@@ -270,6 +310,7 @@ module.exports = {
   importDb,
   login, listBusinesses, chargeSubscription, deleteBusiness, suspendBusiness, unsuspendBusiness,
   getStats, getGrowthSummary, getPlatformDefaults, setWhatsAppCredentials, getWhatsAppStatus,
+  listPendingSignups, verifyPendingSignupMeta,
   getPlatformDaraja, setPlatformDaraja, setMpesaCredentials, verifyMpesa, getMpesaStatus, disconnectMpesa, resetPassword,
   regenerateWelcomeMessage,
 };

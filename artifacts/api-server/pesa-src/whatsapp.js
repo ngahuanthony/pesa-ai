@@ -401,6 +401,7 @@ async function subscribeWaba(wabaId, accessToken) {
 }
 
 module.exports = {
+  GRAPH_API_VERSION,
   verifyWebhook,
   handleIncomingWebhook,
   sendMessage,

@@ -41,12 +41,44 @@ const getInitialSignupForm = () => {
 
 export default function SignupPage() {
   const { me } = useAuthRedirect(); const [, setLocation] = useLocation();
-  const [step, setStep] = useState<"details" | "personal" | "shop" | "complete">("details"); const [busy, setBusy] = useState(false); const [resending, setResending] = useState<"personal" | "shop" | null>(null); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [otp, setOtp] = useState(""); const [pendingId, setPendingId] = useState(""); const [personalPhone, setPersonalPhone] = useState(""); const [shopPhone, setShopPhone] = useState(""); const [smsPending, setSmsPending] = useState(false); const [numberHelpOpen, setNumberHelpOpen] = useState(false); const [signupComplete, setSignupComplete] = useState(false); const [createdShop, setCreatedShop] = useState<{ name: string; phone: string; slug: string } | null>(null); const [form, setForm] = useState(getInitialSignupForm);
+  const [step, setStep] = useState<"details" | "personal" | "shop" | "complete">("details"); const [busy, setBusy] = useState(false); const [resending, setResending] = useState<"personal" | null>(null); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [otp, setOtp] = useState(""); const [pendingId, setPendingId] = useState(""); const [personalPhone, setPersonalPhone] = useState(""); const [shopPhone, setShopPhone] = useState(""); const [numberHelpOpen, setNumberHelpOpen] = useState(false); const [signupComplete, setSignupComplete] = useState(false); const [createdShop, setCreatedShop] = useState<{ name: string; phone: string; slug: string } | null>(null); const [form, setForm] = useState(getInitialSignupForm);
   useEffect(() => { if (signupComplete) return; if (me?.authenticated && !me?.isAdmin) setLocation("/dashboard"); if (me?.isAdmin) setLocation("/admin"); }, [me, setLocation, signupComplete]);
-  const update = (key: keyof typeof form) => (event: any) => setForm({ ...form, [key]: event.target.value }); const updatePhone = (key: "pesaAiNumber" | "personalPhone") => (event: any) => setForm({ ...form, [key]: formatPhoneInput(event.target.value) });
   const post = async (url: string, payload: any) => { const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, credentials: "include", body: JSON.stringify(payload) }); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || "Something went wrong"); return body; };
-  const createShop = async (event: any) => { event.preventDefault(); setError(""); setNotice(""); if (normalizePhoneForCompare(form.pesaAiNumber) === normalizePhoneForCompare(form.personalPhone) && normalizePhoneForCompare(form.pesaAiNumber)) { setError("Use two different numbers: one public Duka number and one private number for alerts."); return; } setBusy(true); try { const body = await post("/api/auth/signup", form); setPendingId(body.pendingSignupId); setPersonalPhone(form.personalPhone); setShopPhone(form.pesaAiNumber); setSmsPending(Boolean(body.smsPending)); setStep(body.next === "shop" ? "shop" : "personal"); } catch (err: any) { setError(err.message); } finally { setBusy(false); } };
-  const resend = async (channel: "personal" | "shop") => { setError(""); setNotice(""); setResending(channel); try { const body = await post("/api/auth/resend-signup-otp", { pendingSignupId: pendingId, channel }); setNotice(body.message || "A new code has been sent."); } catch (err: any) { setError(err.message); } finally { setResending(null); } };
+  const showCompletion = (body: any) => {
+    const business = body.business;
+    const name = business.name || form.businessName;
+    const slug = business.publicShopSlug || business.shopSlug || getShopSlug(name, business.id);
+    setError("");
+    setNotice("");
+    setCreatedShop({ name, phone: business.pesaAiNumber || form.pesaAiNumber, slug });
+    setSignupComplete(true);
+    setStep("complete");
+  };
+  useEffect(() => {
+    if (step !== "shop" || !pendingId) return;
+    let active = true;
+    let completing = false;
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/auth/pending-signups/${pendingId}`);
+        if (!response.ok) return;
+        const status = await response.json();
+        if (!status.personalVerified || !status.metaVerified || completing) return;
+        completing = true;
+        const body = await post("/api/auth/complete-signup", { pendingSignupId: pendingId });
+        if (active) showCompletion(body);
+      } catch (err: any) {
+        completing = false;
+        if (active) setError(err.message || "We could not check or finish creating your shop.");
+      }
+    };
+    poll();
+    const timer = window.setInterval(poll, 10000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [step, pendingId]);
+  const update = (key: keyof typeof form) => (event: any) => setForm({ ...form, [key]: event.target.value }); const updatePhone = (key: "pesaAiNumber" | "personalPhone") => (event: any) => setForm({ ...form, [key]: formatPhoneInput(event.target.value) });
+  const createShop = async (event: any) => { event.preventDefault(); setError(""); setNotice(""); if (normalizePhoneForCompare(form.pesaAiNumber) === normalizePhoneForCompare(form.personalPhone) && normalizePhoneForCompare(form.pesaAiNumber)) { setError("Use two different numbers: one public Duka number and one private number for alerts."); return; } setBusy(true); try { const body = await post("/api/auth/signup", form); setPendingId(body.pendingSignupId); setPersonalPhone(form.personalPhone); setShopPhone(form.pesaAiNumber); setStep(body.next === "shop" ? "shop" : "personal"); } catch (err: any) { setError(err.message); } finally { setBusy(false); } };
+  const resend = async (channel: "personal" | "shop") => { if (channel === "shop") return; setError(""); setNotice(""); setResending(channel); try { const body = await post("/api/auth/resend-signup-otp", { pendingSignupId: pendingId, channel }); setNotice(body.message || "A new code has been sent."); } catch (err: any) { setError(err.message); } finally { setResending(null); } };
   const verify = async (channel: "personal" | "shop", event: any) => {
     event.preventDefault();
     setError("");
@@ -55,12 +87,7 @@ export default function SignupPage() {
       const body = await post("/api/auth/verify-signup-otp", { pendingSignupId: pendingId, channel, code: otp });
       setOtp("");
       if (body.business) {
-        const business = body.business;
-        const name = business.name || form.businessName;
-        const slug = business.publicShopSlug || business.shopSlug || getShopSlug(name, business.id);
-        setCreatedShop({ name, phone: business.pesaAiNumber || form.pesaAiNumber, slug });
-        setSignupComplete(true);
-        setStep("complete");
+        showCompletion(body);
       } else {
         setStep(body.next === "shop" ? "shop" : "personal");
       }
@@ -76,15 +103,16 @@ export default function SignupPage() {
         <div className="w-full max-w-xl rounded-3xl border bg-white p-6 shadow-sm md:p-9">
           <div className="mb-6 rounded-2xl bg-[#f7faf8] p-4">
             <div className="flex items-center justify-between text-xs font-bold text-slate-500">
-              <span className={step === "details" ? "text-[#0a4a3a]" : "text-[#25a85a]"}>1. Shop details</span>
-              <span className={step === "personal" ? "text-[#0a4a3a]" : step === "details" ? "text-slate-400" : "text-[#25a85a]"}>2. Verify WhatsApp</span>
-              <span className={step === "shop" ? "text-[#0a4a3a]" : step === "complete" ? "text-[#25a85a]" : "text-slate-400"}>3. Open shop</span>
+              <span className={`w-1/4 text-center text-[10px] sm:text-xs ${step === "details" ? "text-[#0a4a3a]" : "text-[#25a85a]"}`}>1. Details</span>
+              <span className={`w-1/4 text-center text-[10px] sm:text-xs ${step === "personal" ? "text-[#0a4a3a]" : ["shop", "complete"].includes(step) ? "text-[#25a85a]" : "text-slate-400"}`}>2. Personal</span>
+              <span className={`w-1/4 text-center text-[10px] sm:text-xs ${step === "shop" ? "text-[#0a4a3a]" : step === "complete" ? "text-[#25a85a]" : "text-slate-400"}`}>3. Duka SIM</span>
+              <span className={`w-1/4 text-center text-[10px] sm:text-xs ${step === "complete" ? "text-[#0a4a3a]" : "text-slate-400"}`}>4. Open shop</span>
             </div>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white">
-              <div className="h-full rounded-full bg-[#25D366] transition-all" style={{ width: step === "details" ? "33%" : step === "personal" ? "66%" : "100%" }} />
+              <div className="h-full rounded-full bg-[#25D366] transition-all" style={{ width: step === "details" ? "25%" : step === "personal" ? "50%" : step === "shop" ? "75%" : "100%" }} />
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              {step === "details" ? "About 1 minute · We will send two verification codes." : step === "personal" ? "First, confirm your personal WhatsApp." : step === "shop" ? "One last code to open your shop." : "Your shop is ready to share."}
+              {step === "details" ? "Verify your personal WhatsApp and confirm the Duka SIM through Meta." : step === "personal" ? "First, confirm your personal WhatsApp." : step === "shop" ? "Waiting for Meta to confirm the Duka SIM." : "Your shop is ready to share."}
             </p>
           </div>
 
@@ -95,8 +123,8 @@ export default function SignupPage() {
                   <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-xl text-white">✓</div>
                   <span className="text-xl font-bold text-foreground">WhatsApp Shop</span>
                 </div>
-                <h1 className="text-3xl font-extrabold leading-tight text-foreground">Create your WhatsApp Shop in 15 seconds</h1>
-                <p className="mt-2 text-sm text-muted-foreground">Three details now. Add products after your shop is open.</p>
+              <h1 className="text-3xl font-extrabold leading-tight text-foreground">Start your WhatsApp Shop setup</h1>
+                <p className="mt-2 text-sm text-muted-foreground">Three details now. Your shop opens after both phone checks; add products after.</p>
               </div>
               <form onSubmit={createShop} className="space-y-5">
                 <div>
@@ -134,7 +162,7 @@ export default function SignupPage() {
           {step === "personal" && (
             <form onSubmit={(event) => verify("personal", event)} className="space-y-5 py-8 text-center">
               <h1 className="text-2xl font-extrabold text-foreground">Confirm your personal WhatsApp</h1>
-              <p className="text-sm text-slate-600">We sent a code to {maskPhone(personalPhone)}. Enter it to prove you own the order-alert number.</p>
+              <p className="text-sm text-slate-600">For {form.businessName || "your new shop"}, we sent a code to your personal WhatsApp at {maskPhone(personalPhone)}. It confirms your private order-alert number only; Meta confirms the Duka SIM separately.</p>
               <input inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" className="mx-auto block w-full max-w-xs rounded-xl border px-4 py-3.5 text-center text-2xl tracking-[0.5em]" required />
               <div className="flex items-center justify-between gap-3 text-xs text-slate-500"><span>Didn’t receive it?</span><button type="button" onClick={() => resend("personal")} disabled={resending !== null} className="font-bold text-[#168447] underline underline-offset-4 disabled:opacity-50">{resending === "personal" ? "Sending…" : "Resend code"}</button></div>
               {notice && <p role="status" className="rounded-lg bg-[#f0fff4] p-2 text-left text-xs text-[#168447]">{notice}</p>}
@@ -145,16 +173,14 @@ export default function SignupPage() {
           )}
 
           {step === "shop" && (
-            <form onSubmit={(event) => verify("shop", event)} className="space-y-5 py-8 text-center">
-              <h1 className="text-2xl font-extrabold text-foreground">Confirm your new shop number</h1>
-              <p className="text-sm text-slate-600">Enter the SMS code sent to {maskPhone(shopPhone)} to reserve it for {form.businessName}.</p>
-              {smsPending && <div className="rounded-xl bg-amber-100 p-3 text-left text-sm text-amber-950">The shop-number SMS is still pending. Once it arrives, enter the six-digit code here.</div>}
-              <input inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" className="mx-auto block w-full max-w-xs rounded-xl border px-4 py-3.5 text-center text-2xl tracking-[0.5em]" required />
-              <div className="flex items-center justify-between gap-3 text-xs text-slate-500"><span>SMS not here yet?</span><button type="button" onClick={() => resend("shop")} disabled={resending !== null} className="font-bold text-[#168447] underline underline-offset-4 disabled:opacity-50">{resending === "shop" ? "Sending…" : "Resend SMS"}</button></div>
+            <div className="space-y-5 py-8 text-center">
+              <h1 className="text-2xl font-extrabold text-foreground">Waiting for Meta to confirm your Duka SIM</h1>
+              <p className="text-sm text-slate-600">Your personal WhatsApp confirms your private number. The Duka SIM does not need WhatsApp: an admin adds it to the platform WhatsApp Business Account, and Meta sends its registration SMS directly to {maskPhone(shopPhone)}.</p>
+              <div className="rounded-xl bg-amber-100 p-3 text-left text-sm text-amber-950">Do not look for a WhatsApp message or a Pesa SI SMS on the Duka number. Meta’s registration SMS is separate. Your shop opens only after Meta shows this exact number as CONNECTED.</div>
               {notice && <p role="status" className="rounded-lg bg-[#f0fff4] p-2 text-left text-xs text-[#168447]">{notice}</p>}
               {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-              <button type="submit" disabled={busy || otp.length !== 6} className="w-full rounded-xl bg-[#08b968] py-4 text-base font-extrabold text-white disabled:opacity-60">{busy ? "Creating your shop…" : "Verify and open my shop"}</button>
-            </form>
+              <p className="text-xs text-muted-foreground">This page checks for confirmation automatically. You can safely close it and return later.</p>
+            </div>
           )}
 
           {step === "complete" && createdShop && (

@@ -5,6 +5,7 @@ const os = require("os");
 const path = require("path");
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "pesa-si-setup-"));
+process.env.ENCRYPTION_KEY = "b".repeat(64);
 const db = require("../db");
 const drafts = require("../setup-drafts");
 const routes = require("./setup");
@@ -39,8 +40,8 @@ test("setup access is private and does not create a live merchant or products", 
   assert.throws(() => db.finalizePendingSignup(pending.id, { draftToken: token }), /Both phone numbers must be verified/);
   db.markPendingSignupChannelVerified(pending.id, "personal");
   assert.throws(() => db.finalizePendingSignup(pending.id, { draftToken: token }), /Both phone numbers must be verified/);
-  db.markPendingSignupChannelVerified(pending.id, "shop");
-  const { business } = db.finalizePendingSignup(pending.id, { draftToken: token });
+  db.markPendingSignupMetaVerified(pending.id, { phoneNumberId: "meta-phone-1", wabaId: "meta-waba-1", phoneNumber: details.pesaAiNumber });
+  const { business } = db.finalizePendingSignup(pending.id, { draftToken: token, accessToken: "test-platform-token" });
   assert.equal(business.location, "Nairobi");
   const imported = db.listProducts(business.id);
   assert.equal(imported.length, 1);
@@ -58,8 +59,8 @@ test("a different shop cannot import someone else's draft", () => {
     personalPhone: "254700100021", pesaAiNumber: "254700100022",
   }));
   db.markPendingSignupChannelVerified(pending.id, "personal");
-  db.markPendingSignupChannelVerified(pending.id, "shop");
-  const { business } = db.finalizePendingSignup(pending.id, { draftToken: token });
+  db.markPendingSignupMetaVerified(pending.id, { phoneNumberId: "meta-phone-2", wabaId: "meta-waba-1", phoneNumber: pending.pesaAiNumber });
+  const { business } = db.finalizePendingSignup(pending.id, { draftToken: token, accessToken: "test-platform-token" });
   assert.equal(db.listProducts(business.id).length, 0);
   assert.equal(drafts.get(token).products.length, 1);
 });
@@ -70,15 +71,22 @@ test("verified signup imports only the matching browser draft through the normal
   drafts.addProduct(token, { name: "Adapter", price: 650, stockQty: 4 });
   const pending = db.mutate((state) => db.createPendingSignup(state, info));
   const personal = db.createOtpChallenge(info.personalPhone, "signup_personal", { pendingSignupId: pending.id });
-  const shop = db.createOtpChallenge(info.pesaAiNumber, "signup_shop", { pendingSignupId: pending.id });
   const req = { headers: { cookie: `pesa_setup=${token}` } };
-  const first = await authRoutes.verifySignupOtp({ body: { pendingSignupId: pending.id, channel: "personal", code: personal.code }, req });
-  assert.equal(first.data.next, "shop");
-  assert.equal(db.load().businesses.some((item) => item.name === info.businessName), false);
-  const final = await authRoutes.verifySignupOtp({ body: { pendingSignupId: pending.id, channel: "shop", code: shop.code }, req });
-  assert.match(final.cookie, /^pesaai_session=/);
-  assert.equal(final.data.business.name, info.businessName);
-  assert.equal(db.listProducts(final.data.business.id, { activeOnly: true })[0].name, "Adapter");
+  const tokenBefore = process.env.WHATSAPP_TOKEN;
+  process.env.WHATSAPP_TOKEN = "test-platform-token";
+  try {
+    const first = await authRoutes.verifySignupOtp({ body: { pendingSignupId: pending.id, channel: "personal", code: personal.code }, req });
+    assert.equal(first.data.next, "shop");
+    assert.equal(db.load().businesses.some((item) => item.name === info.businessName), false);
+    db.markPendingSignupMetaVerified(pending.id, { phoneNumberId: "meta-phone-3", wabaId: "meta-waba-1", phoneNumber: info.pesaAiNumber });
+    const final = authRoutes.completeSignup({ body: { pendingSignupId: pending.id }, req });
+    assert.match(final.cookie, /^pesaai_session=/);
+    assert.equal(final.data.business.name, info.businessName);
+    assert.equal(db.listProducts(final.data.business.id, { activeOnly: true })[0].name, "Adapter");
+  } finally {
+    if (tokenBefore === undefined) delete process.env.WHATSAPP_TOKEN;
+    else process.env.WHATSAPP_TOKEN = tokenBefore;
+  }
 });
 
 test("draft throttling separates clients behind one proxy and ignores spoofed forwarded hops", () => {

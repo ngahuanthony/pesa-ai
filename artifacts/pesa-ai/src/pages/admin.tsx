@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useGetMe, useLogout, useAdminLogin, useAdminGetStats } from "@workspace/api-client-react";
 import { LogOut, ShieldCheck, Users, MessageSquare, BarChart3, AlertTriangle } from "lucide-react";
 import { AdminBusinessesTab } from "@/components/admin/businesses-tab";
@@ -83,6 +83,31 @@ function AdminShell() {
   const logout = useLogout();
   const { data: stats } = useAdminGetStats();
   const queryClient = useQueryClient();
+  const [pendingSignups, setPendingSignups] = useState<any[]>([]);
+  const [pendingBusy, setPendingBusy] = useState("");
+  const [pendingMessage, setPendingMessage] = useState("");
+  const loadPending = async () => {
+    const response = await fetch("/api/admin/pending-signups", { credentials: "include" });
+    if (response.ok) setPendingSignups(await response.json());
+  };
+  const checkMeta = async (id: string) => {
+    setPendingBusy(id);
+    setPendingMessage("");
+    try {
+      const response = await fetch(`/api/admin/pending-signups/${id}/meta-check`, { method: "POST", credentials: "include" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Meta could not be checked.");
+      setPendingMessage(body.message || (body.verified ? "Meta confirmed the Duka SIM." : "Meta has not confirmed the Duka SIM yet."));
+      await loadPending();
+    } catch (error: any) {
+      setPendingMessage(error.message || "Meta could not be checked.");
+    } finally { setPendingBusy(""); }
+  };
+  useEffect(() => {
+    loadPending();
+    const timer = window.setInterval(loadPending, 15000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const handleLogout = () => {
     logout.mutate(undefined, {
@@ -143,6 +168,18 @@ function AdminShell() {
         {section === "overview" && (
           <div className="p-8 max-w-6xl">
             <AdminOverviewTab />
+            <div className="mt-8 rounded-xl border p-5">
+              <h2 className="font-bold">Pending Duka signups</h2>
+              <p className="mt-1 text-sm text-gray-500">Add each new Duka SIM to the platform WhatsApp Business Account in Meta and finish Meta’s SMS verification on that SIM. Enter the registration code only in Meta—never in this panel or a Pesa SI chat. Then check that Meta reports the exact number as CONNECTED. This check only reads Meta status; it does not send an SMS or WhatsApp message.</p>
+              <div className="mt-4 space-y-3">
+                {pendingSignups.map((item) => <div key={item.id} className="flex items-center justify-between gap-4 rounded-lg bg-gray-50 p-3 text-sm">
+                  <span><b>{item.businessName}</b><br /><span className="text-gray-500">{item.pesaAiNumber} · personal {item.personalVerified ? "verified" : "pending"} · Meta {item.metaVerified ? "verified" : "pending"}</span></span>
+                  <button onClick={() => checkMeta(item.id)} disabled={pendingBusy === item.id || item.metaVerified} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{pendingBusy === item.id ? "Checking…" : item.metaVerified ? "Meta verified" : "Check Meta"}</button>
+                </div>)}
+                {!pendingSignups.length && <p className="text-sm text-gray-500">No pending signups.</p>}
+              </div>
+              {pendingMessage && <p role="status" className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{pendingMessage}</p>}
+            </div>
           </div>
         )}
 
