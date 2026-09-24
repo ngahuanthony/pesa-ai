@@ -463,7 +463,7 @@ function createBusiness(
     throw httpError(409, "A business with this phone number already exists");
   }
   if (normalizedShopNumber && state.businesses.some((b) => normalizePhone(b.pesaAiNumber) === normalizedShopNumber)) {
-    throw httpError(409, "This number is already on WhatsApp or is already registered as a shop number");
+    throw httpError(409, "This public shop number is already registered to a Pesa SI shop");
   }
 
   const business = {
@@ -1079,8 +1079,9 @@ function createPendingSignup(state, { businessName, personalPhone, pesaAiNumber,
   const normalizedPersonalPhone = normalizePhone(personalPhone);
   const normalizedShopNumber = normalizePhone(pesaAiNumber);
   if (normalizedPersonalPhone && normalizedPersonalPhone === normalizedShopNumber) throw httpError(400, "Use two different numbers: one public Duka number and one private number for alerts.");
-  if ((state.businesses || []).some((b) => normalizePhone(b.pesaAiNumber) === normalizedShopNumber)) throw httpError(409, "This number is already on WhatsApp or is already registered as a shop number");
-  if ((state.pendingSignups || []).some((p) => p.pesaAiNumber === normalizedShopNumber && !p.finalizedAt)) throw httpError(409, "This number is already being verified");
+  if ((state.businesses || []).some((b) => normalizePhone(b.pesaAiNumber) === normalizedShopNumber)) throw httpError(409, "This public shop number is already registered to a Pesa SI shop");
+  const currentTime = Date.now();
+  if ((state.pendingSignups || []).some((p) => p.pesaAiNumber === normalizedShopNumber && !p.finalizedAt && new Date(p.expiresAt).getTime() > currentTime)) throw httpError(409, "This number is already being verified");
   const pending = { id: id(), businessName: String(businessName).trim(), merchantType: normalizeMerchantType(merchantType), personalPhone: normalizedPersonalPhone, pesaAiNumber: normalizedShopNumber, personalVerified: false, shopVerified: false, status: "pending_verification", createdAt: now(), expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
   if (!Array.isArray(state.pendingSignups)) state.pendingSignups = [];
   state.pendingSignups.push(pending);
@@ -1089,6 +1090,14 @@ function createPendingSignup(state, { businessName, personalPhone, pesaAiNumber,
 
 function getPendingSignup(pendingId) {
   return (load().pendingSignups || []).find((item) => item.id === pendingId);
+}
+
+function cancelPendingSignup(pendingId) {
+  return mutate((state) => {
+    state.pendingSignups = (state.pendingSignups || []).filter((item) => item.id !== pendingId);
+    state.otpChallenges = (state.otpChallenges || []).filter((item) => item.context?.pendingSignupId !== pendingId);
+    return true;
+  });
 }
 
 function markPendingSignupChannelVerified(pendingId, channel) {
@@ -2386,6 +2395,7 @@ module.exports = {
   markPersonalPhoneVerified,
   createPendingSignup,
   getPendingSignup,
+  cancelPendingSignup,
   markPendingSignupChannelVerified,
   finalizePendingSignup,
   getAccountById,

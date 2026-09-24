@@ -37,6 +37,7 @@ async function signup({ body }) {
     await whatsapp.sendPlatformOtp(personalChallenge.phone, personalChallenge.code, { shopName: pending.businessName });
   } catch (error) {
     console.error("[auth] WhatsApp OTP failed:", error.message);
+    db.cancelPendingSignup(pending.id);
     throw db.httpError(503, "WhatsApp OTP delivery is not configured yet. Please try again shortly.");
   }
   let smsPending = false;

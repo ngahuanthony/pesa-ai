@@ -25,6 +25,40 @@ test("signup groups legacy hotel and hospitality into one merchant type", () => 
   }
 });
 
+test("signup reports a saved shop-number conflict without claiming WhatsApp checked it", () => {
+  db.mutate((state) => db.createBusiness(state, {
+    name: "Existing Shop",
+    phone: "254700000021",
+    pesaAiNumber: "254700000022",
+  }));
+
+  assert.throws(
+    () => db.mutate((state) => db.createPendingSignup(state, {
+      businessName: "New Shop",
+      personalPhone: "254700000023",
+      pesaAiNumber: "0700000022",
+    })),
+    /public shop number is already registered to a Pesa SI shop/
+  );
+});
+
+test("an expired signup reservation does not permanently block a new line", () => {
+  const state = {
+    businesses: [],
+    pendingSignups: [{
+      id: "expired",
+      pesaAiNumber: "254700000032",
+      expiresAt: "2020-01-01T00:00:00.000Z",
+    }],
+  };
+  const pending = db.createPendingSignup(state, {
+    businessName: "Retry Shop",
+    personalPhone: "254700000033",
+    pesaAiNumber: "0700000032",
+  });
+  assert.equal(pending.pesaAiNumber, "254700000032");
+});
+
 test("existing hotel accounts display as hospitality and save the unified type", () => {
   const business = db.mutate((state) => db.createBusiness(state, {
     name: "Existing Hotel", phone: "254700000011", merchantType: "hospitality",
