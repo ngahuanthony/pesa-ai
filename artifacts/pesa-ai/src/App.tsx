@@ -21,6 +21,7 @@ import AdminPage from '@/pages/admin';
 import PrivacyPage from '@/pages/privacy';
 import PublicShopPage from '@/pages/public-shop';
 import PublicLocationPage from '@/pages/public-location';
+import SetupPage from '@/pages/setup';
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ function Router() {
         <Route path="/l/:token" component={PublicLocationPage} />
         <Route path="/login" component={LoginPage} />
         <Route path="/signup" component={SignupPage} />
+        <Route path="/setup" component={SetupPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/settings/mpesa" component={DashboardPage} />
         <Route path="/dashboard" component={DashboardPage} />

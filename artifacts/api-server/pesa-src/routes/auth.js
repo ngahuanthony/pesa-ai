@@ -29,32 +29,60 @@ async function sendShopSmsOtp(phone, challenge) {
   return true;
 }
 
+const signupRequests = new Map();
+
 async function signup({ body }) {
   requireShopFields(body);
-  const pending = db.mutate((state) => db.createPendingSignup(state, body));
-  const personalChallenge = db.createOtpChallenge(pending.personalPhone, "signup_personal", { pendingSignupId: pending.id, shopName: pending.businessName });
-  try {
-    await whatsapp.sendPlatformOtp(personalChallenge.phone, personalChallenge.code, { shopName: pending.businessName });
-  } catch (error) {
-    console.error("[auth] WhatsApp OTP failed:", error.message);
-    db.cancelPendingSignup(pending.id);
-    throw db.httpError(503, "WhatsApp OTP delivery is not configured yet. Please try again shortly.");
-  }
-  let smsPending = false;
-  const shopChallenge = db.createOtpChallenge(pending.pesaAiNumber, "signup_shop", { pendingSignupId: pending.id });
-  try { await sendShopSmsOtp(pending.pesaAiNumber, shopChallenge); } catch (error) { smsPending = true; console.warn("[auth] Shop SMS OTP pending:", error.message); }
-  return { status: 202, data: { verificationRequired: true, pendingSignupId: pending.id, personalPhone: db.maskPhone(pending.personalPhone), shopPhone: db.maskPhone(pending.pesaAiNumber), smsPending, message: smsPending ? "Personal WhatsApp verified request sent. Shop-number SMS verification is pending." : "Enter both verification codes to create your shop." } };
+  const key = [db.normalizePhone(body.pesaAiNumber), db.normalizePhone(body.personalPhone), String(body.businessName).trim().toLowerCase(), db.normalizeMerchantType(body.merchantType)].join(":");
+  if (signupRequests.has(key)) return signupRequests.get(key);
+  const request = startSignup(body);
+  signupRequests.set(key, request);
+  try { return await request; } finally { signupRequests.delete(key); }
 }
 
-async function verifySignupOtp({ body }) {
+async function startSignup(body) {
+  const pending = db.mutate((state) => db.createPendingSignup(state, body));
+  if (pending.personalVerified && pending.shopVerified) throw db.httpError(409, "Verification is complete but this shop could not be opened. Please contact support.");
+  if (!pending.personalVerified) {
+    let personalChallenge;
+    try {
+      personalChallenge = db.createOtpChallenge(pending.personalPhone, "signup_personal", { pendingSignupId: pending.id, shopName: pending.businessName });
+    } catch (error) {
+      if (!pending.shopVerified) db.cancelPendingSignup(pending.id);
+      throw error;
+    }
+    try {
+      await whatsapp.sendPlatformOtp(personalChallenge.phone, personalChallenge.code, { shopName: pending.businessName });
+    } catch (error) {
+      console.error("[auth] WhatsApp OTP failed:", error.message);
+      if (!pending.shopVerified) db.cancelPendingSignup(pending.id);
+      throw db.httpError(503, "We couldn't send the WhatsApp code. Please try again shortly.");
+    }
+  }
+  let smsPending = false;
+  if (!pending.shopVerified) {
+    let shopChallenge;
+    try {
+      shopChallenge = db.createOtpChallenge(pending.pesaAiNumber, "signup_shop", { pendingSignupId: pending.id });
+    } catch (error) {
+      if (!pending.personalVerified) db.cancelPendingSignup(pending.id);
+      throw error;
+    }
+    try { await sendShopSmsOtp(pending.pesaAiNumber, shopChallenge); } catch (error) { smsPending = true; console.warn("[auth] Shop SMS OTP pending:", error.message); }
+  }
+  return { status: 202, data: { verificationRequired: true, pendingSignupId: pending.id, personalPhone: db.maskPhone(pending.personalPhone), shopPhone: db.maskPhone(pending.pesaAiNumber), smsPending, next: pending.personalVerified ? "shop" : "personal", message: smsPending ? "Shop-number SMS verification is pending." : "Enter the verification code to continue." } };
+}
+
+async function verifySignupOtp({ body, req }) {
   const channel = body?.channel === "shop" ? "shop" : "personal";
   const purpose = channel === "shop" ? "signup_shop" : "signup_personal";
   const pending = db.getPendingSignup(body?.pendingSignupId);
-  if (!pending) throw db.httpError(404, "Signup not found or expired");
-  db.verifyOtpChallenge(channel === "shop" ? pending.pesaAiNumber : pending.personalPhone, body.code, purpose);
+  if (!pending || new Date(pending.expiresAt).getTime() < Date.now()) throw db.httpError(404, "Signup not found or expired");
+  db.verifyOtpChallenge(channel === "shop" ? pending.pesaAiNumber : pending.personalPhone, body.code, purpose, pending.id);
   const updated = db.markPendingSignupChannelVerified(pending.id, channel);
   if (!updated.personalVerified || !updated.shopVerified) return { data: { verificationRequired: true, next: updated.personalVerified ? "shop" : "personal", pendingSignupId: updated.id } };
-  const { business, account } = db.finalizePendingSignup(updated.id);
+  const draftToken = require("../setup-drafts").tokenFromRequest(req);
+  const { business, account } = db.finalizePendingSignup(updated.id, { draftToken });
   const session = db.createSession({ accountId: account.id, businessId: business.id });
   return { cookie: auth.sessionCookieHeader(session.token), data: { business: db.sanitizeBusiness(business), account: accountView(account), subscription: db.getSubscription(business.id) } };
 }

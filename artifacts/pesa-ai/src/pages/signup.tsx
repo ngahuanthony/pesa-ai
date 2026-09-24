@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { useEffect, useState } from "react";
 import { ShopQRCard } from "@/components/dashboard/shop-qr-card";
-import { MERCHANT_TYPES } from "@/constants/merchant-types";
+import { MERCHANT_TYPES, displayMerchantType } from "@/constants/merchant-types";
 
 const formatPhoneInput = (value: string) => {
   const digits = value.replace(/\D/g, "");
@@ -20,15 +20,56 @@ const normalizePhoneForCompare = (value: string) => {
 const maskPhone = (value: string) => { const digits = value.replace(/\D/g, ""); return digits.length >= 4 ? digits.slice(0, 4) + " XX XX XX" : "07XX XX XX XX"; };
 const slugifyShopName = (value: string) => value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "shop";
 const getShopSlug = (name: string, businessId?: string) => { const base = slugifyShopName(name); const suffix = String(businessId || "").replace(/[^a-z0-9]/gi, "").slice(0, 8).toLowerCase(); return `${base}${suffix ? `-${suffix}` : ""}`; };
+const getInitialSignupForm = () => {
+  const initial = { businessName: "", merchantType: "retail", pesaAiNumber: "", personalPhone: "" };
+  try {
+    const saved = sessionStorage.getItem("pesa_setup_prefill");
+    sessionStorage.removeItem("pesa_setup_prefill");
+    if (!saved) return initial;
+    const prefill = JSON.parse(saved);
+    return {
+      businessName: typeof prefill.businessName === "string" ? prefill.businessName : initial.businessName,
+      merchantType: displayMerchantType(prefill.merchantType),
+      pesaAiNumber: typeof prefill.pesaAiNumber === "string" ? formatPhoneInput(prefill.pesaAiNumber) : initial.pesaAiNumber,
+      personalPhone: typeof prefill.personalPhone === "string" ? formatPhoneInput(prefill.personalPhone) : initial.personalPhone,
+    };
+  } catch {
+    sessionStorage.removeItem("pesa_setup_prefill");
+    return initial;
+  }
+};
 
 export default function SignupPage() {
   const { me } = useAuthRedirect(); const [, setLocation] = useLocation();
-  const [step, setStep] = useState<"details" | "personal" | "shop" | "complete">("details"); const [busy, setBusy] = useState(false); const [resending, setResending] = useState<"personal" | "shop" | null>(null); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [otp, setOtp] = useState(""); const [pendingId, setPendingId] = useState(""); const [personalPhone, setPersonalPhone] = useState(""); const [shopPhone, setShopPhone] = useState(""); const [smsPending, setSmsPending] = useState(false); const [numberHelpOpen, setNumberHelpOpen] = useState(false); const [signupComplete, setSignupComplete] = useState(false); const [createdShop, setCreatedShop] = useState<{ name: string; phone: string; slug: string } | null>(null); const [form, setForm] = useState({ businessName: "", merchantType: "retail", pesaAiNumber: "", personalPhone: "" });
+  const [step, setStep] = useState<"details" | "personal" | "shop" | "complete">("details"); const [busy, setBusy] = useState(false); const [resending, setResending] = useState<"personal" | "shop" | null>(null); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [otp, setOtp] = useState(""); const [pendingId, setPendingId] = useState(""); const [personalPhone, setPersonalPhone] = useState(""); const [shopPhone, setShopPhone] = useState(""); const [smsPending, setSmsPending] = useState(false); const [numberHelpOpen, setNumberHelpOpen] = useState(false); const [signupComplete, setSignupComplete] = useState(false); const [createdShop, setCreatedShop] = useState<{ name: string; phone: string; slug: string } | null>(null); const [form, setForm] = useState(getInitialSignupForm);
   useEffect(() => { if (signupComplete) return; if (me?.authenticated && !me?.isAdmin) setLocation("/dashboard"); if (me?.isAdmin) setLocation("/admin"); }, [me, setLocation, signupComplete]);
   const update = (key: keyof typeof form) => (event: any) => setForm({ ...form, [key]: event.target.value }); const updatePhone = (key: "pesaAiNumber" | "personalPhone") => (event: any) => setForm({ ...form, [key]: formatPhoneInput(event.target.value) });
   const post = async (url: string, payload: any) => { const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, credentials: "include", body: JSON.stringify(payload) }); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || "Something went wrong"); return body; };
-  const createShop = async (event: any) => { event.preventDefault(); setError(""); setNotice(""); if (normalizePhoneForCompare(form.pesaAiNumber) === normalizePhoneForCompare(form.personalPhone) && normalizePhoneForCompare(form.pesaAiNumber)) { setError("Use two different numbers: one public Duka number and one private number for alerts."); return; } setBusy(true); try { const body = await post("/api/auth/signup", form); setPendingId(body.pendingSignupId); setPersonalPhone(form.personalPhone); setShopPhone(form.pesaAiNumber); setSmsPending(Boolean(body.smsPending)); setStep("personal"); } catch (err: any) { setError(err.message); } finally { setBusy(false); } };
-  const resend = async (channel: "personal" | "shop") => { setError(""); setNotice(""); setResending(channel); try { const body = await post("/api/auth/resend-signup-otp", { pendingSignupId: pendingId, channel }); setNotice(body.data?.message || "A new code has been sent."); } catch (err: any) { setError(err.message); } finally { setResending(null); } }; const verify = async (channel: "personal" | "shop", event: any) => { event.preventDefault(); setError(""); setBusy(true); try { const body = await post("/api/auth/verify-signup-otp", { pendingSignupId: pendingId, channel, code: otp }); setOtp(""); if (channel === "shop") { const business = body.data?.business; const name = business?.name || form.businessName; const slug = business?.publicShopSlug || business?.shopSlug || getShopSlug(name, business?.id); setCreatedShop({ name, phone: business?.pesaAiNumber || form.pesaAiNumber, slug }); setSignupComplete(true); setStep("complete"); } else if (body.cookie) setLocation("/dashboard"); else setStep("shop"); } catch (err: any) { setError(err.message); } finally { setBusy(false); } };
+  const createShop = async (event: any) => { event.preventDefault(); setError(""); setNotice(""); if (normalizePhoneForCompare(form.pesaAiNumber) === normalizePhoneForCompare(form.personalPhone) && normalizePhoneForCompare(form.pesaAiNumber)) { setError("Use two different numbers: one public Duka number and one private number for alerts."); return; } setBusy(true); try { const body = await post("/api/auth/signup", form); setPendingId(body.pendingSignupId); setPersonalPhone(form.personalPhone); setShopPhone(form.pesaAiNumber); setSmsPending(Boolean(body.smsPending)); setStep(body.next === "shop" ? "shop" : "personal"); } catch (err: any) { setError(err.message); } finally { setBusy(false); } };
+  const resend = async (channel: "personal" | "shop") => { setError(""); setNotice(""); setResending(channel); try { const body = await post("/api/auth/resend-signup-otp", { pendingSignupId: pendingId, channel }); setNotice(body.message || "A new code has been sent."); } catch (err: any) { setError(err.message); } finally { setResending(null); } };
+  const verify = async (channel: "personal" | "shop", event: any) => {
+    event.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      const body = await post("/api/auth/verify-signup-otp", { pendingSignupId: pendingId, channel, code: otp });
+      setOtp("");
+      if (body.business) {
+        const business = body.business;
+        const name = business.name || form.businessName;
+        const slug = business.publicShopSlug || business.shopSlug || getShopSlug(name, business.id);
+        setCreatedShop({ name, phone: business.pesaAiNumber || form.pesaAiNumber, slug });
+        setSignupComplete(true);
+        setStep("complete");
+      } else {
+        setStep(body.next === "shop" ? "shop" : "personal");
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <PublicLayout>
       <div className="flex flex-1 items-center justify-center bg-[#f7faf8] px-4 py-10">
@@ -86,6 +127,7 @@ export default function SignupPage() {
                 {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
                 <button type="submit" disabled={busy} className="w-full rounded-xl bg-[#08b968] py-4 text-base font-extrabold text-white disabled:opacity-60">{busy ? "Creating your shop…" : "Create my WhatsApp Shop — Free for 5 days"}</button>
               </form>
+              <p className="mt-5 text-center text-sm text-slate-600">Not ready to verify yet? <Link href="/setup" className="font-bold text-[#168447] underline underline-offset-4">Use setup-only draft</Link></p>
             </>
           )}
 

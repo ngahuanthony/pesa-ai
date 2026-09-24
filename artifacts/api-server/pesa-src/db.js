@@ -31,6 +31,7 @@ function emptyState() {
     sessions: [],
     otpChallenges: [],
     pendingSignups: [],
+    shopDrafts: [],
     subscriptions: [],
     products: [],
     customers: [],
@@ -1060,29 +1061,55 @@ function createOtpChallenge(phone, purpose = "login", metadata = {}, channel = n
   });
 }
 
-function verifyOtpChallenge(phone, code, purpose = "login") {
-  return mutate((state) => {
+function verifyOtpChallenge(phone, code, purpose = "login", pendingSignupId = null) {
+  const result = mutate((state) => {
     const normalizedPhone = normalizePhone(phone);
     const channel = otpChannelForPurpose(purpose);
-    const challenge = (state.otpChallenges || []).slice().reverse().find((item) => item.phone === normalizedPhone && item.purpose === purpose && item.channel === channel && item.used !== true);
-    if (!challenge || new Date(challenge.expiresAt).getTime() < Date.now()) throw httpError(400, "This code has expired. Request a new one.");
+    if (purpose.startsWith("signup_") && !pendingSignupId) throw httpError(400, "Signup verification requires a pending signup.");
+    const challenge = (state.otpChallenges || []).slice().reverse().find((item) =>
+      item.phone === normalizedPhone && item.purpose === purpose && item.channel === channel &&
+      (!pendingSignupId || item.metadata?.pendingSignupId === pendingSignupId)
+    );
+    if (!challenge || challenge.used || new Date(challenge.expiresAt).getTime() < Date.now()) throw httpError(400, "This code has expired. Request a new one.");
     if (challenge.attempts >= 5) throw httpError(429, "Too many attempts. Request a new code.");
     const candidateHash = crypto.createHash("sha256").update(String(code || "")).digest("hex");
-    if (candidateHash !== challenge.codeHash) { challenge.attempts += 1; throw httpError(400, "That code is not correct."); }
+    if (candidateHash !== challenge.codeHash) {
+      challenge.attempts += 1;
+      return { error: httpError(challenge.attempts >= 5 ? 429 : 400, challenge.attempts >= 5 ? "Too many attempts. Request a new code." : "That code is not correct.") };
+    }
     challenge.used = true;
     challenge.usedAt = now();
-    return true;
+    return { verified: true };
   });
+  if (result.error) throw result.error;
+  return true;
+}
+
+function invalidateSignupChallenges(state, pendingId) {
+  for (const challenge of state.otpChallenges || []) {
+    if (challenge.metadata?.pendingSignupId === pendingId && !challenge.used) {
+      challenge.used = true;
+      challenge.usedAt = now();
+    }
+  }
 }
 
 function createPendingSignup(state, { businessName, personalPhone, pesaAiNumber, merchantType }) {
   const normalizedPersonalPhone = normalizePhone(personalPhone);
   const normalizedShopNumber = normalizePhone(pesaAiNumber);
+  const normalizedName = String(businessName).trim();
+  const normalizedMerchantType = normalizeMerchantType(merchantType);
   if (normalizedPersonalPhone && normalizedPersonalPhone === normalizedShopNumber) throw httpError(400, "Use two different numbers: one public Duka number and one private number for alerts.");
   if ((state.businesses || []).some((b) => normalizePhone(b.pesaAiNumber) === normalizedShopNumber)) throw httpError(409, "This public shop number is already registered to a Pesa SI shop");
   const currentTime = Date.now();
-  if ((state.pendingSignups || []).some((p) => p.pesaAiNumber === normalizedShopNumber && !p.finalizedAt && new Date(p.expiresAt).getTime() > currentTime)) throw httpError(409, "This number is already being verified");
-  const pending = { id: id(), businessName: String(businessName).trim(), merchantType: normalizeMerchantType(merchantType), personalPhone: normalizedPersonalPhone, pesaAiNumber: normalizedShopNumber, personalVerified: false, shopVerified: false, status: "pending_verification", createdAt: now(), expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
+  const existing = (state.pendingSignups || []).find((p) => p.pesaAiNumber === normalizedShopNumber && !p.finalizedAt && new Date(p.expiresAt).getTime() > currentTime);
+  if (existing) {
+    if (existing.personalPhone !== normalizedPersonalPhone || existing.businessName.toLowerCase() !== normalizedName.toLowerCase() || existing.merchantType !== normalizedMerchantType) {
+      throw httpError(409, "This number is already being verified with different signup details. Use the original details or wait for verification to expire.");
+    }
+    return existing;
+  }
+  const pending = { id: id(), businessName: normalizedName, merchantType: normalizedMerchantType, personalPhone: normalizedPersonalPhone, pesaAiNumber: normalizedShopNumber, personalVerified: false, shopVerified: false, status: "pending_verification", createdAt: now(), expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
   if (!Array.isArray(state.pendingSignups)) state.pendingSignups = [];
   state.pendingSignups.push(pending);
   return pending;
@@ -1095,7 +1122,7 @@ function getPendingSignup(pendingId) {
 function cancelPendingSignup(pendingId) {
   return mutate((state) => {
     state.pendingSignups = (state.pendingSignups || []).filter((item) => item.id !== pendingId);
-    state.otpChallenges = (state.otpChallenges || []).filter((item) => item.context?.pendingSignupId !== pendingId);
+    invalidateSignupChallenges(state, pendingId);
     return true;
   });
 }
@@ -1110,7 +1137,7 @@ function markPendingSignupChannelVerified(pendingId, channel) {
   });
 }
 
-function finalizePendingSignup(pendingId) {
+function finalizePendingSignup(pendingId, { draftToken = null } = {}) {
   return mutate((state) => {
     const pending = (state.pendingSignups || []).find((item) => item.id === pendingId);
     if (!pending || !pending.personalVerified || !pending.shopVerified) throw httpError(400, "Both phone numbers must be verified first");
@@ -1122,6 +1149,7 @@ function finalizePendingSignup(pendingId) {
     business.shopNumberVerificationStatus = "verified";
     const account = createAccount(state, { businessId: business.id, personalPhone: pending.personalPhone });
     account.personalPhoneVerified = true;
+    if (draftToken) require("./setup-drafts").importForVerifiedSignup(state, draftToken, pending, business);
     pending.finalizedAt = now();
     pending.status = "verified";
     return { business, account };
