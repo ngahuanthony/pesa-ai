@@ -178,6 +178,7 @@ router.patch("/api/businesses/:businessId/knowledge/:entryId", merchantIntellige
 router.delete("/api/businesses/:businessId/knowledge/:entryId", merchantIntelligenceRoutes.knowledge.remove);
 router.get("/api/businesses/:businessId/service-locations", merchantIntelligenceRoutes.locations.list);
 router.post("/api/businesses/:businessId/service-locations", merchantIntelligenceRoutes.locations.create);
+  router.post("/api/businesses/:businessId/service-locations/tables", merchantIntelligenceRoutes.locations.createDefaultTables);
 router.patch("/api/businesses/:businessId/service-locations/:locationId", merchantIntelligenceRoutes.locations.update);
 router.delete("/api/businesses/:businessId/service-locations/:locationId", merchantIntelligenceRoutes.locations.remove);
 router.get("/api/public/service-locations/:token", merchantIntelligenceRoutes.locations.resolve);

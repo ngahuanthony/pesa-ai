@@ -12,6 +12,7 @@
 const db = require("./db");
 const fieldCrypto = require("./crypto");
 const { handleCustomerMessage } = require("./core");
+const { buildWhatsAppListPayload, getConciergePrompt } = require("./concierge");
 const mpesa = require("./mpesa");
 
 const GRAPH_API_VERSION = "v21.0";
@@ -60,6 +61,22 @@ async function sendButtonsMessage(phoneNumberId, to, body, buttons, accessToken)
   if (!res.ok) console.error("[whatsapp] Interactive message failed (" + res.status + "): " + await res.text().catch(() => ""));
 }
 
+async function sendListMessage(phoneNumberId, to, list, accessToken) {
+  if (!accessToken || !list || !Array.isArray(list.rows) || !list.rows.length) return;
+  const res = await fetch(
+    "https://graph.facebook.com/" + GRAPH_API_VERSION + "/" + phoneNumberId + "/messages",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer " + accessToken,
+      },
+      body: JSON.stringify(buildWhatsAppListPayload(to, list)),
+    }
+  );
+  if (!res.ok) console.error("[whatsapp] Interactive list message failed (" + res.status + "): " + await res.text().catch(() => ""));
+}
+
 function normalizeIncomingPhone(phone) { return String(phone || "").replace(/\D/g, ""); }
 
 async function handleButtonAction({ business, phoneNumberId, from, buttonId, accessToken }) {
@@ -105,11 +122,14 @@ async function handleIncomingWebhook(body) {
 
   const from        = message.from; // customer's phone number (MSISDN)
   const buttonId = message.interactive?.button_reply?.id || null;
-  const text        = message.text?.body || message.interactive?.button_reply?.title || message.button?.text || null;
-  if (!text && !buttonId) {
+  const listReplyId = message.interactive?.list_reply?.id || null;
+  let text = message.text?.body || message.interactive?.list_reply?.title || message.interactive?.button_reply?.title || message.button?.text || null;
+  if (!text && !buttonId && !listReplyId) {
     if (message.type === "audio") console.warn("[whatsapp] Audio message received but no transcription adapter is configured");
     return;
   }
+  const conciergePrompt = listReplyId ? getConciergePrompt(listReplyId) : null;
+  if (conciergePrompt) text = conciergePrompt;
 
   const contactName = value.contacts?.[0]?.profile?.name;
   const accessToken = resolveAccessToken(business);
@@ -161,7 +181,7 @@ async function handleIncomingWebhook(body) {
     return;
   }
 
-  const { replyText, extraReplies, interactiveButtons, mediaReplies } = await handleCustomerMessage({
+  const { replyText, welcomeText, assistantReplyText, extraReplies, interactiveButtons, interactiveList, mediaReplies } = await handleCustomerMessage({
     business,
     customerPhone: from,
     customerName:  contactName,
@@ -172,8 +192,15 @@ async function handleIncomingWebhook(body) {
 
   // Resolve the access token for THIS business (per-business, decrypted)
 
-  // replyText is null when AI is paused (human handover active) — skip sending
-  if (replyText) await sendMessage(phoneNumberId, from, replyText, accessToken);
+  // Table QR flow sends its welcome, concierge choices, and menu response in order.
+  if (interactiveList) {
+    if (welcomeText) await sendMessage(phoneNumberId, from, welcomeText, accessToken);
+    await sendListMessage(phoneNumberId, from, interactiveList, accessToken);
+    if (assistantReplyText) await sendMessage(phoneNumberId, from, assistantReplyText, accessToken);
+  } else if (replyText) {
+    // replyText is null when AI is paused (human handover active) — skip sending.
+    await sendMessage(phoneNumberId, from, replyText, accessToken);
+  }
 
   // Shop-link entry: send the catalog message immediately after the welcome
   if (extraReplies && extraReplies.length) { for (const extra of extraReplies) if (extra) await sendMessage(phoneNumberId, from, extra, accessToken); }

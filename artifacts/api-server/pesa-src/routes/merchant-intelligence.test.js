@@ -6,11 +6,13 @@ const path = require("path");
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "pesa-si-intelligence-"));
 process.env.DATA_DIR = dataDir;
+process.env.ANTHROPIC_API_KEY = "";
 const db = require("../db");
 const merchantIntelligence = require("./merchant-intelligence");
-const { handleCustomerMessage } = require("../core");
+const { handleCustomerMessage, extractTableNumber } = require("../core");
 const mpesa = require("../mpesa");
 const { buildKnowledgeContext } = require("../ai");
+const { buildConciergeList, buildWhatsAppListPayload, getConciergePrompt } = require("../concierge");
 
 function business(name) {
   return db.mutate((state) => db.createBusiness(state, {
@@ -29,6 +31,41 @@ test("knowledge and service locations are tenant scoped", () => {
   assert.equal(db.listServiceLocations(b.id).length, 0);
   assert.equal(db.resolveServiceLocation(location.publicToken).business.id, a.id);
   assert.throws(() => db.updateKnowledgeEntry(b.id, entry.id, { text: "leak" }), /not found/i);
+});
+
+test("Table 1–35 provisioning is tenant-scoped and idempotent", () => {
+  const a = business("Hotel Default Tables A");
+  const b = business("Hotel Default Tables B");
+  const first = merchantIntelligence.locations.createDefaultTables({
+    params: { businessId: a.id },
+    session: { businessId: a.id },
+  });
+
+  assert.equal(first.status, 201);
+  assert.equal(first.data.created, 35);
+  assert.equal(first.data.existing, 0);
+  assert.equal(first.data.locations.length, 35);
+  assert.equal(first.data.locations[0].label, "Table 1");
+  assert.equal(first.data.locations[11].label, "Table 12");
+  assert.equal(first.data.locations[34].label, "Table 35");
+  assert.ok(first.data.locations.every((location) => location.kind === "TABLE" && location.active && location.publicToken));
+  assert.equal(db.listServiceLocations(b.id).length, 0);
+
+  const second = merchantIntelligence.locations.createDefaultTables({
+    params: { businessId: a.id },
+    session: { businessId: a.id },
+  });
+  assert.equal(second.data.created, 0);
+  assert.equal(second.data.existing, 35);
+  assert.equal(db.listServiceLocations(a.id).length, 35);
+});
+
+test("table-number parsing accepts explicit and prompted numeric replies only", () => {
+  assert.equal(extractTableNumber("I'm at Table #12", ""), 12);
+  assert.equal(extractTableNumber("12", "What table number are you at?"), 12);
+  assert.equal(extractTableNumber("12", "How many would you like?"), null);
+  assert.equal(extractTableNumber("Table 36", ""), 36);
+  assert.equal(extractTableNumber("Table 1 to 35", ""), null);
 });
 
 test("location remains attached to a new order and payment is independent", () => {
@@ -164,6 +201,77 @@ test("location persists across WhatsApp-style turns and order tool use", async (
   });
   assert.equal(result.order.serviceLocationId, location.id);
   assert.equal(result.order.serviceLocationSnapshot.label, "Table 12");
+});
+
+test("table QR entry sends the hotel concierge list and later orders retain the table", async () => {
+  const a = business("SKYVIEW OPAL HOTEL");
+  a.welcomeMessage = "WELCOME TO SKYVIEW OPAL HOTEL";
+  const location = db.createServiceLocation(a.id, { kind: "TABLE", label: "Table 12" });
+  db.createProduct(a.id, { name: "Tea", price: 150, stockQty: 5 });
+
+  const greeting = await handleCustomerMessage({
+    business: a,
+    customerPhone: "254799000012",
+    customerName: "Guest",
+    channel: "whatsapp",
+    text: `Hi, I'm at ${location.label} (location=${location.publicToken}) and I would like to order.`,
+    serviceLocationToken: location.publicToken,
+  });
+
+  assert.match(greeting.replyText, /WELCOME TO SKYVIEW OPAL HOTEL/);
+  assert.match(greeting.replyText, /table number printed beside you/);
+  assert.equal(greeting.interactiveList.rows.length, 6);
+  assert.deepEqual(greeting.interactiveList.rows.map((row) => row.title), [
+    "Order Food", "Rooms", "Swimming Pool", "Conferences", "Events", "Hotel Information",
+  ]);
+  assert.equal(greeting.conversation.serviceLocationId, location.id);
+  assert.match(getConciergePrompt("concierge:food"), /complete current food and drinks menu/i);
+  const listPayload = buildWhatsAppListPayload("254799000012", buildConciergeList(a.name));
+  assert.equal(listPayload.type, "interactive");
+  assert.equal(listPayload.interactive.type, "list");
+  assert.equal(listPayload.interactive.action.sections[0].rows.length, 6);
+
+  const order = await handleCustomerMessage({
+    business: a,
+    customerPhone: "254799000012",
+    customerName: "Guest",
+    channel: "whatsapp",
+    text: "order: Tea x1",
+  });
+  assert.equal(order.order.serviceLocationId, location.id);
+  assert.equal(order.order.serviceLocationSnapshot.label, "Table 12");
+});
+
+test("guests can confirm a table by typing it after scanning or in an existing chat", async () => {
+  const a = business("SKYVIEW OPAL HOTEL Table Confirmation");
+  const location = db.createServiceLocation(a.id, { kind: "TABLE", label: "Table 12" });
+
+  const typedTable = await handleCustomerMessage({
+    business: a,
+    customerPhone: "254799000013",
+    channel: "whatsapp",
+    text: "I'm seated at table 12.",
+  });
+  assert.equal(typedTable.conversation.serviceLocationId, location.id);
+  assert.match(typedTable.welcomeText, /table number printed beside you/);
+
+  const phone = "254799000014";
+  const existingChat = await handleCustomerMessage({
+    business: a,
+    customerPhone: phone,
+    channel: "whatsapp",
+    text: "Hello",
+  });
+  db.mutate((state) => {
+    db.addMessage(state, existingChat.conversation.id, "assistant", "Just in case, please tell me the table number printed beside you.");
+  });
+  const numericTable = await handleCustomerMessage({
+    business: a,
+    customerPhone: phone,
+    channel: "whatsapp",
+    text: "12",
+  });
+  assert.equal(numericTable.conversation.serviceLocationId, location.id);
 });
 
 test("unauthenticated C2B cannot auto-settle a location-bound order", async () => {

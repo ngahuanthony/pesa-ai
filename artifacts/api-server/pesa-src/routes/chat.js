@@ -21,7 +21,12 @@ async function send({ params, body, session }) {
     channel: "simulator",
     serviceLocationToken: serviceLocationToken || null,
   });
-  return { replyText: result.replyText, order: result.order || null };
+  return {
+    replyText: result.replyText,
+    order: result.order || null,
+    interactiveButtons: result.interactiveButtons || null,
+    interactiveList: result.interactiveList || null,
+  };
 }
 
 function history({ params, session }) {

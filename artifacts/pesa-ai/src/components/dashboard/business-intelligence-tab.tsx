@@ -12,6 +12,7 @@ import {
   useExtractKnowledge,
   useGetServiceLocations,
   useCreateServiceLocation,
+  useCreateDefaultTables,
   useUpdateServiceLocation,
   useDeleteServiceLocation,
   KnowledgeItem,
@@ -246,6 +247,7 @@ export function BusinessIntelligenceTab() {
   // Service Locations
   const { data: locations, isLoading: locationsLoading } = useGetServiceLocations(businessId);
   const createLocation = useCreateServiceLocation();
+  const createDefaultTables = useCreateDefaultTables();
   const updateLocation = useUpdateServiceLocation();
   const deleteLocation = useDeleteServiceLocation();
   
@@ -289,6 +291,22 @@ export function BusinessIntelligenceTab() {
           setLocationDialogOpen(false);
         }
       });
+    }
+  };
+
+  const handleCreateDefaultTables = async () => {
+    if (!window.confirm("Create service locations for Table 1 through Table 35? Existing tables will be kept.")) return;
+    try {
+      const result = await createDefaultTables.mutateAsync({ businessId });
+      const inactiveNote = result.inactive
+        ? ` ${result.inactive} existing table${result.inactive === 1 ? " is" : "s are"} inactive; reactivate them individually if needed.`
+        : "";
+      toast({
+        title: "Tables 1–35 are ready",
+        description: `${result.created} created; ${result.existing} already existed.${inactiveNote}`,
+      });
+    } catch (err: any) {
+      toast({ title: "Could not create tables", description: err.message, variant: "destructive" });
     }
   };
 
@@ -375,12 +393,21 @@ export function BusinessIntelligenceTab() {
         <TabsContent value="locations" className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">Manage QR locations like tables or rooms for direct ordering.</p>
-            <button 
-              onClick={() => { resetLocationForm(); setLocationDialogOpen(true); }}
-              className="inline-flex h-9 w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white hover:bg-primary/90"
-            >
-              <Plus className="h-4 w-4" /> Add Location
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={handleCreateDefaultTables}
+                disabled={createDefaultTables.isPending}
+                className="inline-flex h-9 w-full sm:w-auto items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
+              >
+                {createDefaultTables.isPending ? "Creating tables..." : "Create Tables 1–35"}
+              </button>
+              <button 
+                onClick={() => { resetLocationForm(); setLocationDialogOpen(true); }}
+                className="inline-flex h-9 w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" /> Add Location
+              </button>
+            </div>
           </div>
 
           <div className="border border-border rounded-xl overflow-hidden bg-white">

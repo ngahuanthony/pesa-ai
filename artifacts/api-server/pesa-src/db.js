@@ -2557,6 +2557,7 @@ module.exports = {
   updateKnowledgeEntry,
   deleteKnowledgeEntry,
   createServiceLocation,
+  ensureDefaultTableLocations,
   listServiceLocations,
   updateServiceLocation,
   deleteServiceLocation,
@@ -2622,6 +2623,52 @@ function createServiceLocation(businessId, { kind = "TABLE", label, active = tru
     return location;
   });
 }
+
+function ensureDefaultTableLocations(businessId) {
+  const labels = Array.from({ length: 35 }, (_, index) => `Table ${index + 1}`);
+  return mutate((state) => {
+    if (!state.businesses.some((business) => business.id === businessId)) throw httpError(404, "Business not found");
+    if (!Array.isArray(state.serviceLocations)) state.serviceLocations = [];
+
+    const forBusiness = state.serviceLocations.filter((item) => item.businessId === businessId);
+    const findLabel = (label) => forBusiness.find((item) =>
+      String(item.label || "").trim().toLowerCase() === label.toLowerCase()
+    );
+    for (const label of labels) {
+      const existing = findLabel(label);
+      if (existing && String(existing.kind).toUpperCase() !== "TABLE") {
+        throw httpError(409, `${label} already exists as a different service location type`);
+      }
+    }
+
+    const created = [];
+    for (const label of labels) {
+      if (findLabel(label)) continue;
+      const location = {
+        id: id(),
+        businessId,
+        kind: "TABLE",
+        label,
+        active: true,
+        publicToken: crypto.randomBytes(24).toString("base64url"),
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      state.serviceLocations.push(location);
+      forBusiness.push(location);
+      created.push(location);
+    }
+
+    const locations = labels.map(findLabel);
+    return {
+      locations,
+      created: created.length,
+      existing: labels.length - created.length,
+      inactive: locations.filter((location) => !location.active).length,
+    };
+  });
+}
+
 
 function listServiceLocations(businessId) {
   return (load().serviceLocations || []).filter((item) => item.businessId === businessId);

@@ -16,6 +16,13 @@ export interface ServiceLocation {
   publicToken?: string;
 }
 
+export interface DefaultTableProvisioningResult {
+  locations: ServiceLocation[];
+  created: number;
+  existing: number;
+  inactive: number;
+}
+
 const fetcher = async (url: string, options?: RequestInit) => {
   const res = await fetch(url, {
     ...options,
@@ -108,6 +115,20 @@ export function useCreateServiceLocation() {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    onSuccess: (_, { businessId }) => {
+      queryClient.invalidateQueries({ queryKey: ["service-locations", businessId] });
+    },
+  });
+}
+
+export function useCreateDefaultTables() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ businessId }: { businessId: string }) =>
+      fetcher(`/api/businesses/${businessId}/service-locations/tables`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }) as Promise<DefaultTableProvisioningResult>,
     onSuccess: (_, { businessId }) => {
       queryClient.invalidateQueries({ queryKey: ["service-locations", businessId] });
     },

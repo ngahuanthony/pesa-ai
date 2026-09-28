@@ -111,6 +111,7 @@ const knowledge = {
 const locations = {
   list({ params, session }) { own(session, params.businessId); return db.listServiceLocations(params.businessId); },
   create({ params, body, session }) { own(session, params.businessId); return { status: 201, data: db.createServiceLocation(params.businessId, body || {}) }; },
+  createDefaultTables({ params, session }) { own(session, params.businessId); return { status: 201, data: db.ensureDefaultTableLocations(params.businessId) }; },
   update({ params, body, session }) { own(session, params.businessId); return db.updateServiceLocation(params.businessId, params.locationId, body || {}); },
   remove({ params, session }) { own(session, params.businessId); return db.deleteServiceLocation(params.businessId, params.locationId); },
   resolve({ params }) {

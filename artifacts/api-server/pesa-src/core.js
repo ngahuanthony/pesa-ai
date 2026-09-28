@@ -4,6 +4,7 @@
 
 const db = require("./db");
 const { getAssistantReply, getProductImageReplies } = require("./ai");
+const { buildConciergeList } = require("./concierge");
 
 // The pre-filled text baked into the shop QR / wa.me link.
 // When a customer taps the link, WhatsApp sends exactly this message.
@@ -38,10 +39,44 @@ function isHandoverRequest(text) {
   return HANDOVER_TRIGGERS.some((t) => lower.includes(t));
 }
 
+function extractTableNumber(text, previousAssistantText = "") {
+  const message = String(text || "");
+  const explicit = message.match(/\btable(?:\s+(?:number|no\.?))?[\s:#-]*(\d{1,3})\b/i);
+  if (explicit) {
+    const remainder = message.slice(explicit.index + explicit[0].length);
+    if (/^\s*(?:to|through|[-–—])\s*\d/i.test(remainder)) return null;
+    return Number(explicit[1]);
+  }
+  const numericReply = message.trim().match(/^(\d{1,3})$/);
+  const assistantRequestedTable = /\btable numbers?\b|\bwhich table\b|\bwhat table\b|\b(?:tell|send|share|confirm).{0,40}\btable\b/i.test(previousAssistantText);
+  if (numericReply && assistantRequestedTable) return Number(numericReply[1]);
+  return null;
+}
+
 async function handleCustomerMessage({ business, customerPhone, customerName, text, channel, serviceLocationToken = null, serviceLocationId = null }) {
   let resolvedLocationId = serviceLocationId;
   let locationChanged = false;
   let locationContext = null;
+  if (!serviceLocationToken && !resolvedLocationId) {
+    const { messages: previousMessages = [] } = db.getConversationHistory(business.id, customerPhone, 20);
+    const previousAssistantText = [...previousMessages].reverse().find((message) => message.role === "assistant")?.content || "";
+    const tableNumber = extractTableNumber(text, previousAssistantText);
+    if (tableNumber !== null) {
+      if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 35) {
+        return { replyText: "Our table numbers run from 1 to 35. Please check the number at your table and send it again.", order: null };
+      }
+      const tableLocation = db.listServiceLocations(business.id).find((location) =>
+        location.active &&
+        String(location.kind).toUpperCase() === "TABLE" &&
+        String(location.label).trim().toLowerCase() === "table " + tableNumber
+      );
+      if (!tableLocation) {
+        return { replyText: "I can't match Table " + tableNumber + " to an active table right now. Please check the number or ask a staff member for help.", order: null };
+      }
+      resolvedLocationId = tableLocation.id;
+      locationContext = tableLocation;
+    }
+  }
   if (serviceLocationToken) {
     const resolved = db.resolveServiceLocation(serviceLocationToken);
     if (!resolved || resolved.business.id !== business.id) {
@@ -56,7 +91,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     const customer      = db.findOrCreateCustomer(state, business.id, customerPhone, customerName);
     const existing = state.conversations.find((item) => item.businessId === business.id && item.customerId === customer.id);
     if (!resolvedLocationId && existing && existing.serviceLocationId) resolvedLocationId = existing.serviceLocationId;
-    locationChanged = Boolean(existing && resolvedLocationId && existing.serviceLocationId && existing.serviceLocationId !== resolvedLocationId);
+    locationChanged = Boolean(existing && resolvedLocationId && existing.serviceLocationId !== resolvedLocationId);
     const conversation  = db.findOrCreateConversation(state, business.id, customer.id, channel, resolvedLocationId);
     db.addMessage(state, conversation.id, "customer", text);
     return { customer, conversation };
@@ -91,6 +126,49 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
 
   // First-ever message from this customer
   const isFirstMessage = priorHistory.length === 0;
+  const isTableQrEntry = Boolean(
+    serviceLocationToken &&
+    locationContext &&
+    String(locationContext.kind).toUpperCase() === "TABLE"
+  );
+  const isTableLocation = Boolean(
+    locationContext &&
+    String(locationContext.kind).toUpperCase() === "TABLE"
+  );
+  if (isTableLocation) {
+    const { replyText: tableReply, mediaReplies, order } = await getAssistantReply(
+      business,
+      customer.id,
+      priorHistory,
+      text,
+      { shopEntry: isTableQrEntry, serviceLocationId: resolvedLocationId }
+    );
+    const prepared = orderActions(tableReply, order);
+    const configuredWelcome = String(business.welcomeMessage || "").trim();
+    const welcome = configuredWelcome || ("Welcome to " + business.name + "! I can help with dining, rooms, the pool, conferences, and events.");
+    const locationGreeting = locationContext
+      ? "📍 You're connected to " + locationContext.label + ". Just in case, please also tell me the table number printed beside you on the table."
+      : null;
+    const contextGreeting = isFirstMessage
+      ? [welcome, locationGreeting].filter(Boolean).join("\n\n")
+      : locationChanged
+        ? locationGreeting
+        : null;
+    const finalReplyText = [contextGreeting, prepared.replyText].filter(Boolean).join("\n\n");
+    db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", finalReplyText); });
+    return {
+      replyText: finalReplyText,
+      welcomeText: contextGreeting,
+      assistantReplyText: prepared.replyText,
+      mediaReplies,
+      interactiveButtons: prepared.interactiveButtons,
+      interactiveList: isTableQrEntry ? buildConciergeList(business.name) : null,
+      order,
+      customer,
+      conversation,
+    };
+  }
+
   const isShopLinkEntry = text.trim().toLowerCase() === SHOP_LINK_TRIGGER;
 
    if (isFirstMessage || locationChanged) {
@@ -139,4 +217,4 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
   return { replyText: prepared.replyText, mediaReplies, interactiveButtons: prepared.interactiveButtons, order, customer, conversation };
 }
 
-module.exports = { handleCustomerMessage };
+module.exports = { handleCustomerMessage, extractTableNumber, SHOP_LINK_TRIGGER };
