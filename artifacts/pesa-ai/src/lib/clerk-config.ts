@@ -3,11 +3,16 @@ import { shadcn } from "@clerk/themes";
 
 export const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-// Resolve the publishable key by hostname so the same bundle works on the
-// development domain and the production custom domain.
+// Development builds keep the configured test instance. Production builds
+// derive the live publishable key from their hostname instead of embedding a
+// potentially stale development key.
+const fallbackPublishableKey = import.meta.env.PROD
+  ? undefined
+  : import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
 export const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+  fallbackPublishableKey,
 );
 
 // Empty in development by design; the production environment supplies this.
