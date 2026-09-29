@@ -1,19 +1,10 @@
-import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 
 export const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-// Development builds keep the configured test instance. Production builds
-// derive the live publishable key from their hostname instead of embedding a
-// potentially stale development key.
-const fallbackPublishableKey = import.meta.env.PROD
-  ? undefined
-  : import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-
-export const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  fallbackPublishableKey,
-);
+// Use the key issued for this Clerk instance. Deriving one from the hostname
+// only works when Clerk has explicitly configured that hostname as its API domain.
+export const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 // Empty in development by design; the production environment supplies this.
 export const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
