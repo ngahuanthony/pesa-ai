@@ -119,6 +119,10 @@ async function handleIncomingWebhook(body) {
     console.warn(`[whatsapp] No business matched phone_number_id=${phoneNumberId}`);
     return;
   }
+  if (!db.isCustomerMessagingActive(business)) {
+    console.warn(`[whatsapp] Customer message ignored while owner/Meta activation checks are incomplete for business=${business.id}`);
+    return;
+  }
 
   const from        = message.from; // customer's phone number (MSISDN)
   const buttonId = message.interactive?.button_reply?.id || null;

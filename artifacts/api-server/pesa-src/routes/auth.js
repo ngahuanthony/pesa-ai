@@ -1,15 +1,14 @@
 const db = require("../db");
 const auth = require("../auth");
 const whatsapp = require("../whatsapp");
+const fieldCrypto = require("../crypto");
+const ownerSecurity = require("../owner-security");
+const clerkIdentity = require("../clerk-identity");
 
 function accountView(account) {
   const business = db.getBusiness(account.businessId);
   const rawPersonalPhone = account.personalPhone || business.personalPhone;
   return { id: account.id, email: account.email || null, recoveryEmail: db.maskEmail(account.recoveryEmail), personalPhone: db.maskPhone(rawPersonalPhone), personalPhoneVerified: Boolean(account.personalPhoneVerified), authMethod: account.authMethod || (account.passwordHash ? "legacy_email_password" : "phone_otp") };
-}
-
-function requireShopFields(body) {
-  if (!body?.businessName || !body?.personalPhone || !body?.pesaAiNumber) throw db.httpError(400, "Shop name, new shop number, and personal WhatsApp are required");
 }
 
 async function sendPersonalOtp(phone, purpose, shopName) {
@@ -18,36 +17,8 @@ async function sendPersonalOtp(phone, purpose, shopName) {
   return challenge;
 }
 
-const signupRequests = new Map();
-
-async function signup({ body }) {
-  requireShopFields(body);
-  const key = [db.normalizePhone(body.pesaAiNumber), db.normalizePhone(body.personalPhone), String(body.businessName).trim().toLowerCase(), db.normalizeMerchantType(body.merchantType)].join(":");
-  if (signupRequests.has(key)) return signupRequests.get(key);
-  const request = startSignup(body);
-  signupRequests.set(key, request);
-  try { return await request; } finally { signupRequests.delete(key); }
-}
-
-async function startSignup(body) {
-  const pending = db.mutate((state) => db.createPendingSignup(state, body));
-  if (!pending.personalVerified) {
-    let personalChallenge;
-    try {
-      personalChallenge = db.createOtpChallenge(pending.personalPhone, "signup_personal", { pendingSignupId: pending.id, shopName: pending.businessName });
-    } catch (error) {
-      if (!pending.shopVerified) db.cancelPendingSignup(pending.id);
-      throw error;
-    }
-    try {
-      await whatsapp.sendPlatformOtp(personalChallenge.phone, personalChallenge.code, { shopName: pending.businessName });
-    } catch (error) {
-      console.error("[auth] WhatsApp OTP failed:", error.message);
-      if (!pending.shopVerified) db.cancelPendingSignup(pending.id);
-      throw db.httpError(503, "We couldn't send the WhatsApp code. Please try again shortly.");
-    }
-  }
-  return { status: 202, data: { verificationRequired: true, pendingSignupId: pending.id, personalPhone: db.maskPhone(pending.personalPhone), shopPhone: db.maskPhone(pending.pesaAiNumber), next: pending.personalVerified ? "shop" : "personal", message: "Confirm your personal WhatsApp. An admin will confirm your Duka SIM through Meta." } };
+function signup() {
+  throw db.httpError(410, "New Pesa SI shops must use owner sign-up with a verified email and authenticator.");
 }
 
 async function verifySignupOtp({ body, req }) {
@@ -151,6 +122,112 @@ function login({ body }) {
   return { cookie: auth.sessionCookieHeader(session.token), data: { business: db.sanitizeBusiness(business), account: accountView(account), subscription: db.getSubscription(business.id) } };
 }
 
+async function ownerSignupStart({ body, req }) {
+  const identity = await clerkIdentity.requireVerifiedOwner(req);
+  if (db.getAccountByClerkUserId(identity.clerkUserId)) {
+    throw db.httpError(409, "This owner identity already has a shop. Use owner sign-in instead.");
+  }
+  if (db.getAccountByEmail(identity.email)) {
+    throw db.httpError(409, "This email belongs to an existing Pesa SI account. Use its existing sign-in method.");
+  }
+  if (!process.env.ENCRYPTION_KEY) throw db.httpError(503, "Secure owner-auth storage is not configured on this server.");
+
+  let encryptedSecret;
+  try {
+    encryptedSecret = fieldCrypto.encrypt(ownerSecurity.generateTotpSecret());
+  } catch {
+    throw db.httpError(503, "Secure owner-auth storage is not configured on this server.");
+  }
+  const pending = db.mutate((state) => db.createOwnerPendingSignup(state, {
+    businessName: body?.businessName,
+    merchantType: body?.merchantType,
+    pesaAiNumber: body?.pesaAiNumber,
+    ownerEmail: identity.email,
+    clerkUserId: identity.clerkUserId,
+    totpSecretEnc: encryptedSecret,
+  }));
+  let secret;
+  try {
+    secret = fieldCrypto.decrypt(pending.totpSecretEnc);
+  } catch {
+    throw db.httpError(503, "Authenticator setup could not be loaded. Check server encryption configuration.");
+  }
+  return {
+    data: {
+      pendingSignupId: pending.id,
+      email: identity.email,
+      provisioningUri: ownerSecurity.provisioningUri({ secret, email: identity.email }),
+      step: "authenticator",
+      metaVerified: pending.metaVerified === true,
+    },
+  };
+}
+
+async function ownerSignupVerify({ body, req }) {
+  const identity = await clerkIdentity.requireVerifiedOwner(req);
+  const pending = db.getPendingSignup(body?.pendingSignupId);
+  const whatsappToken = process.env.WHATSAPP_PLATFORM_TOKEN || process.env.WHATSAPP_TOKEN || null;
+  if (pending?.metaVerified && !whatsappToken) throw db.httpError(503, "Platform WhatsApp credentials are not configured");
+  if (pending?.metaVerified && !process.env.ENCRYPTION_KEY) throw db.httpError(503, "Server credential encryption is not configured");
+  const codes = ownerSecurity.createRecoveryCodes();
+  const { business, account } = db.finalizeOwnerSignup(body?.pendingSignupId, {
+    clerkUserId: identity.clerkUserId,
+    code: body?.code,
+    recoveryCodeHashes: codes.hashes,
+    accessToken: whatsappToken,
+  });
+  const session = db.createSession({ accountId: account.id, businessId: business.id });
+  return {
+    cookie: auth.sessionCookieHeader(session.token),
+    data: {
+      business: db.sanitizeBusiness(business),
+      account: accountView(account),
+      subscription: db.getSubscription(business.id),
+      recoveryCodes: codes.codes,
+      activation: db.isCustomerMessagingActive(business) ? "active" : "waiting_for_meta",
+    },
+  };
+}
+
+async function ownerLoginStart({ req }) {
+  const identity = await clerkIdentity.requireVerifiedOwner(req);
+  const account = db.getAccountByClerkUserId(identity.clerkUserId);
+  if (!account) return { data: { needsSignup: true, email: identity.email } };
+  if (account.authMethod !== "clerk_totp" || !account.ownerSecurityVerified) {
+    throw db.httpError(409, "This owner identity is not enrolled in the authenticator flow. Use its existing sign-in method.");
+  }
+  const challenge = db.createOwnerAuthChallenge(identity.clerkUserId);
+  return {
+    data: {
+      requiresTotp: true,
+      challengeId: challenge.id,
+      email: db.maskEmail(account.email),
+      expiresAt: challenge.expiresAt,
+    },
+  };
+}
+
+async function ownerLoginVerify({ body, req }) {
+  const identity = await clerkIdentity.requireVerifiedOwner(req);
+  const verified = db.verifyOwnerAuthChallenge({
+    challengeId: body?.challengeId,
+    clerkUserId: identity.clerkUserId,
+    code: body?.code,
+  });
+  const account = db.getAccountById(verified.accountId);
+  const business = db.getBusiness(verified.businessId);
+  const session = db.createSession({ accountId: account.id, businessId: business.id });
+  return {
+    cookie: auth.sessionCookieHeader(session.token),
+    data: {
+      business: db.sanitizeBusiness(business),
+      account: accountView(account),
+      subscription: db.getSubscription(business.id),
+      activation: db.isCustomerMessagingActive(business) ? "active" : "waiting_for_meta",
+    },
+  };
+}
+
 async function updateRecoveryEmail({ body, session }) {
   if (!session || session.isAdmin) throw db.httpError(401, "Authentication required");
   const recoveryEmail = String(body?.recoveryEmail || "").trim().toLowerCase();
@@ -169,4 +246,20 @@ function me({ session }) {
   const business = db.getBusiness(session.businessId);
   return { authenticated: true, isAdmin: false, account: accountView(account), business: db.sanitizeBusiness(business), subscription: db.getSubscription(business.id) };
 }
-module.exports = { signup, verifySignupOtp, resendSignupOtp, pendingSignupStatus, completeSignup, requestLoginOtp, verifyOtp, login, updateRecoveryEmail, logout, me };
+module.exports = {
+  signup,
+  verifySignupOtp,
+  resendSignupOtp,
+  pendingSignupStatus,
+  completeSignup,
+  requestLoginOtp,
+  verifyOtp,
+  login,
+  ownerSignupStart,
+  ownerSignupVerify,
+  ownerLoginStart,
+  ownerLoginVerify,
+  updateRecoveryEmail,
+  logout,
+  me,
+};

@@ -77,16 +77,24 @@ async function verifyPendingSignupMeta({ params, session }) {
   if (!match) {
     return { verified: false, status: "pending_meta_verification", message: "Meta has not connected this exact Duka number." };
   }
-  if (db.getBusinessByWhatsappPhoneNumberId(match.id)) {
+  const assignedBusiness = db.getBusinessByWhatsappPhoneNumberId(match.id);
+  if (assignedBusiness && assignedBusiness.id !== pending.businessId) {
     throw db.httpError(409, "This Meta phone number is already assigned to another Pesa SI shop");
   }
-  db.markPendingSignupMetaVerified(pending.id, { phoneNumberId: match.id, wabaId, phoneNumber: match.display_phone_number });
+  db.markPendingSignupMetaVerified(pending.id, {
+    phoneNumberId: match.id,
+    wabaId,
+    phoneNumber: match.display_phone_number,
+    accessToken: token,
+  });
   return {
     verified: true,
-    finalized: false,
-    message: pending.personalVerified
-      ? "Meta confirmed the Duka SIM. The merchant can finish signup in their browser."
-      : "Meta confirmed the Duka SIM. The merchant still needs to verify their personal WhatsApp.",
+    finalized: Boolean(pending.ownerSecurityVerified),
+    message: pending.ownerAuthProvider === "clerk"
+      ? "Meta confirmed this exact Duka number. Customer chat and menus are enabled only if owner authenticator setup is complete."
+      : pending.personalVerified
+        ? "Meta confirmed the Duka SIM. The merchant can finish signup in their browser."
+        : "Meta confirmed the Duka SIM. The merchant still needs to verify their personal WhatsApp.",
   };
 }
 

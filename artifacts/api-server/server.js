@@ -88,6 +88,7 @@ const whatsapp = require("./pesa-src/whatsapp");
 const mpesa = require("./pesa-src/mpesa");
 const mpesaApiRoutes = require("./pesa-src/routes/mpesa");
 const dailyReports = require("./cron/dailyReport");
+const clerkProxy = require("./pesa-src/clerk-proxy");
 
 const PORT = Number(process.env.PORT) || 8080;
 
@@ -113,6 +114,10 @@ router.post("/api/auth/complete-signup", authRoutes.completeSignup);
 router.post("/api/auth/request-otp", authRoutes.requestLoginOtp);
 router.post("/api/auth/verify-otp", authRoutes.verifyOtp);
 router.post("/api/auth/login", authRoutes.login);
+router.post("/api/auth/owner-signup/start", authRoutes.ownerSignupStart);
+router.post("/api/auth/owner-signup/verify", authRoutes.ownerSignupVerify);
+router.post("/api/auth/owner-login/start", authRoutes.ownerLoginStart);
+router.post("/api/auth/owner-login/verify", authRoutes.ownerLoginVerify);
 router.post("/api/auth/logout", authRoutes.logout);
 router.get("/api/auth/me", authRoutes.me);
 router.patch("/api/auth/recovery-email", authRoutes.updateRecoveryEmail);
@@ -349,6 +354,8 @@ function parseQuery(queryString) {
 const server = http.createServer(async (req, res) => {
   const parsed   = url.parse(req.url);
   const pathname = parsed.pathname;
+
+  if (clerkProxy.handleClerkProxy(req, res)) return;
 
   // ── Voice stock audio transcription ──────────────────────────────────
   // Audio is processed in memory and is never written to disk or storage.
