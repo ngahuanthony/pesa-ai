@@ -30,8 +30,36 @@ if (!basePath) {
   );
 }
 
-export default defineConfig({
+export default defineConfig(async ({ command, mode }) => {
+  const isProductionBuild = command === 'build' && mode === 'production';
+  const configuredClerkKey =
+    process.env.CLERK_PUBLISHABLE_KEY ||
+    process.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+  if (isProductionBuild) {
+    if (!configuredClerkKey) {
+      throw new Error(
+        'A Clerk publishable key is required for production frontend builds.',
+      );
+    }
+    if (
+      !configuredClerkKey.startsWith('pk_live_') &&
+      !configuredClerkKey.startsWith('live_')
+    ) {
+      throw new Error(
+        'Production frontend builds require a live-mode Clerk publishable key.',
+      );
+    }
+  }
+
+  return {
   base: basePath,
+  define: isProductionBuild
+    ? {
+        'import.meta.env.VITE_CLERK_PUBLISHABLE_KEY':
+          JSON.stringify(configuredClerkKey),
+      }
+    : undefined,
   plugins: [
     react(),
     tailwindcss(),
@@ -81,4 +109,5 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: true,
   },
+  };
 });
