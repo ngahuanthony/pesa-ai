@@ -16,7 +16,6 @@ const crypto = require("crypto");
 const fieldCrypto = require("./crypto");
 const productImages = require("./product-images");
 const { normalizeTranscript } = require("./transcriptNormalizer");
-const ownerSecurity = require("./owner-security");
 
 // Override with a DATA_DIR env var to point this at a mounted persistent
 // disk on hosts like Render/Railway (their filesystem is otherwise wiped
@@ -855,10 +854,6 @@ function createAccount(state, {
   consentedAt = null,
   clerkUserId = null,
   authMethod = null,
-  totpSecretEnc = null,
-  totpEnrolledAt = null,
-  totpRecoveryCodeHashes = [],
-  totpLastCounter = null,
   ownerSecurityVerified = false,
 }) {
   const normalizedEmail = email ? email.trim().toLowerCase() : null;
@@ -875,10 +870,6 @@ function createAccount(state, {
     personalPhoneVerified: false,
     authMethod: authMethod || (normalizedPersonalPhone ? "phone_otp" : "legacy_email_password"),
     clerkUserId,
-    totpSecretEnc,
-    totpEnrolledAt,
-    totpRecoveryCodeHashes: Array.isArray(totpRecoveryCodeHashes) ? [...totpRecoveryCodeHashes] : [],
-    totpLastCounter,
     ownerSecurityVerified: ownerSecurityVerified === true,
     passwordHash,
     passwordSalt,
@@ -1183,7 +1174,6 @@ function createOwnerPendingSignup(state, {
   pesaAiNumber,
   ownerEmail,
   clerkUserId,
-  totpSecretEnc,
 }) {
   const normalizedShopNumber = normalizePhone(pesaAiNumber);
   const normalizedName = String(businessName || "").trim();
@@ -1216,12 +1206,6 @@ function createOwnerPendingSignup(state, {
     if (activeNumberSignup.ownerClerkUserId === clerkUserId &&
         activeNumberSignup.businessName.toLowerCase() === normalizedName.toLowerCase() &&
         activeNumberSignup.merchantType === normalizedMerchantType) {
-      if (!activeNumberSignup.finalizedAt && (activeNumberSignup.totpEnrollmentAttempts || 0) >= 5) {
-        activeNumberSignup.totpSecretEnc = totpSecretEnc || activeNumberSignup.totpSecretEnc;
-        activeNumberSignup.totpEnrollmentAttempts = 0;
-        activeNumberSignup.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-        activeNumberSignup.status = "owner_identity_verified";
-      }
       return activeNumberSignup;
     }
     throw httpError(409, "This Duka number is already in another signup. Contact support if you own it.");
@@ -1256,8 +1240,6 @@ function createOwnerPendingSignup(state, {
     ownerClerkUserId: clerkUserId,
     ownerEmail: normalizedEmail,
     ownerSecurityVerified: false,
-    totpSecretEnc: totpSecretEnc || null,
-    totpEnrollmentAttempts: 0,
     status: "owner_identity_verified",
     createdAt: now(),
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -1364,42 +1346,69 @@ function activateOwnerBusinessFromMeta(business, pending, accessToken) {
   business.welcomeMessage = generateWelcomeMessage(business);
 }
 
-function finalizeOwnerSignup(pendingId, { clerkUserId, code, recoveryCodeHashes = [], accessToken = null } = {}) {
+function migrateClerkAuthenticatorRemoval() {
+  return mutate((state) => {
+    let accountsConverted = 0;
+    let pendingSecretsCleared = 0;
+
+    for (const account of state.accounts || []) {
+      if (account.authMethod !== "clerk_totp") continue;
+      account.authMethod = "clerk_email";
+      account.ownerSecurityVerified = true;
+      delete account.totpSecretEnc;
+      delete account.totpEnrolledAt;
+      delete account.totpRecoveryCodeHashes;
+      delete account.totpLastCounter;
+      const business = (state.businesses || []).find((item) => item.id === account.businessId);
+      if (business) business.ownerSecurityVerified = true;
+      accountsConverted += 1;
+    }
+
+    for (const pending of state.pendingSignups || []) {
+      if (pending.ownerAuthProvider !== "clerk") continue;
+      if (pending.totpSecretEnc || pending.totpEnrollmentAttempts ||
+          pending.totpRecoveryCodeHashes?.length) {
+        pendingSecretsCleared += 1;
+      }
+      delete pending.totpSecretEnc;
+      delete pending.totpEnrollmentAttempts;
+      delete pending.totpRecoveryCodeHashes;
+    }
+
+    state.ownerAuthChallenges = [];
+    return { accountsConverted, pendingSecretsCleared };
+  });
+}
+
+function finalizeOwnerSignupEmailOnly(pendingId, { clerkUserId, accessToken = null } = {}) {
   const result = mutate((state) => {
     const pending = (state.pendingSignups || []).find((item) => item.id === pendingId);
     if (!pending || pending.ownerAuthProvider !== "clerk" ||
         (!pending.finalizedAt && new Date(pending.expiresAt).getTime() < Date.now())) {
       return { error: httpError(404, "Signup not found or expired") };
     }
-    if (pending.ownerClerkUserId !== clerkUserId) return { error: httpError(403, "This signup belongs to a different owner identity") };
-    if (pending.finalizedAt) return { error: httpError(409, "This signup is already complete. Sign in to continue.") };
-    if (pending.totpEnrollmentAttempts >= 5) return { error: httpError(429, "Too many authenticator attempts. Restart signup to try again.") };
-    if (!pending.totpSecretEnc) return { error: httpError(409, "Start authenticator setup before verifying a code") };
-
-    let counter;
-    try {
-      const secret = fieldCrypto.decrypt(pending.totpSecretEnc);
-      counter = ownerSecurity.verifyTotp(secret, code, { lastCounter: -1 });
-    } catch {
-      return { error: httpError(503, "Authenticator setup could not be loaded. Check server encryption configuration.") };
+    if (pending.ownerClerkUserId !== clerkUserId) {
+      return { error: httpError(403, "This signup belongs to a different owner identity") };
     }
-    if (counter === null) {
-      pending.totpEnrollmentAttempts = (pending.totpEnrollmentAttempts || 0) + 1;
-      return { error: httpError(pending.totpEnrollmentAttempts >= 5 ? 429 : 400,
-        pending.totpEnrollmentAttempts >= 5 ? "Too many authenticator attempts. Restart signup to try again." : "That authenticator code is not correct.") };
-    }
-    if (!Array.isArray(recoveryCodeHashes) || recoveryCodeHashes.length < 8 ||
-        recoveryCodeHashes.some((hash) => !/^[a-f0-9]{64}$/i.test(String(hash)))) {
-      return { error: httpError(400, "Recovery codes could not be created. Please try again.") };
+    if (pending.finalizedAt) {
+      const existingBusiness = (state.businesses || []).find((item) => item.id === pending.businessId);
+      const existingAccount = (state.accounts || []).find((item) => item.id === pending.accountId);
+      if (existingBusiness && existingAccount && existingAccount.clerkUserId === clerkUserId) {
+        return { business: existingBusiness, account: existingAccount };
+      }
+      return { error: httpError(409, "This signup is already complete. Sign in to continue.") };
     }
 
     const existingEmail = (state.accounts || []).find((account) => account.email === pending.ownerEmail);
     const existingIdentity = (state.accounts || []).find((account) => account.clerkUserId === clerkUserId);
-    if (existingEmail || existingIdentity) return { error: httpError(409, "This identity already has an account. Sign in using its existing method.") };
-
+    if (existingEmail || existingIdentity) {
+      return { error: httpError(409, "This identity already has an account. Sign in using its existing method.") };
+    }
     if ((state.businesses || []).some((business) =>
       normalizePhone(business.pesaAiNumber) === normalizePhone(pending.pesaAiNumber)
-    )) return { error: httpError(409, "This public shop number is already registered to a Pesa SI shop") };
+    )) {
+      return { error: httpError(409, "This public shop number is already registered to a Pesa SI shop") };
+    }
 
     const business = createBusiness(state, {
       name: pending.businessName,
@@ -1429,14 +1438,13 @@ function finalizeOwnerSignup(pendingId, { clerkUserId, code, recoveryCodeHashes 
       businessId: business.id,
       email: pending.ownerEmail,
       recoveryEmail: pending.ownerEmail,
-      authMethod: "clerk_totp",
+      authMethod: "clerk_email",
       clerkUserId,
-      totpSecretEnc: pending.totpSecretEnc,
-      totpEnrolledAt: now(),
-      totpRecoveryCodeHashes: recoveryCodeHashes,
-      totpLastCounter: counter,
       ownerSecurityVerified: true,
     });
+    delete pending.totpSecretEnc;
+    delete pending.totpEnrollmentAttempts;
+    delete pending.totpRecoveryCodeHashes;
     pending.ownerSecurityVerified = true;
     pending.ownerSecurityVerifiedAt = now();
     pending.finalizedAt = now();
@@ -1445,70 +1453,6 @@ function finalizeOwnerSignup(pendingId, { clerkUserId, code, recoveryCodeHashes 
     pending.status = pending.metaVerified ? "verified" : "owner_verified_pending_meta";
     activateOwnerBusinessFromMeta(business, pending, accessToken);
     return { business, account };
-  });
-  if (result.error) throw result.error;
-  return result;
-}
-
-function createOwnerAuthChallenge(clerkUserId) {
-  return mutate((state) => {
-    const account = (state.accounts || []).find((item) => item.clerkUserId === clerkUserId);
-    if (!account || account.authMethod !== "clerk_totp" ||
-        !account.ownerSecurityVerified || !account.totpSecretEnc || !account.totpEnrolledAt) {
-      throw httpError(404, "No Pesa SI owner account is linked to this identity");
-    }
-    if (!Array.isArray(state.ownerAuthChallenges)) state.ownerAuthChallenges = [];
-    for (const challenge of state.ownerAuthChallenges) {
-      if (challenge.clerkUserId === clerkUserId && !challenge.usedAt) challenge.usedAt = now();
-    }
-    const challenge = {
-      id: id(),
-      clerkUserId,
-      createdAt: now(),
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-      attempts: 0,
-      usedAt: null,
-    };
-    state.ownerAuthChallenges.push(challenge);
-    return challenge;
-  });
-}
-
-function verifyOwnerAuthChallenge({ challengeId, clerkUserId, code }) {
-  const result = mutate((state) => {
-    const challenge = (state.ownerAuthChallenges || []).find((item) => item.id === challengeId);
-    if (!challenge || challenge.clerkUserId !== clerkUserId || challenge.usedAt ||
-        new Date(challenge.expiresAt).getTime() < Date.now()) {
-      return { error: httpError(400, "This authenticator request has expired. Sign in again.") };
-    }
-    if (challenge.attempts >= 5) return { error: httpError(429, "Too many attempts. Sign in again to retry.") };
-    const account = (state.accounts || []).find((item) => item.clerkUserId === clerkUserId);
-    if (!account || !account.ownerSecurityVerified || !account.totpSecretEnc) {
-      return { error: httpError(401, "Owner authenticator setup is not complete") };
-    }
-
-    let matchedCounter = null;
-    let recoveryIndex = -1;
-    try {
-      matchedCounter = ownerSecurity.verifyTotp(fieldCrypto.decrypt(account.totpSecretEnc), code, {
-        lastCounter: Number.isInteger(account.totpLastCounter) ? account.totpLastCounter : -1,
-      });
-    } catch {
-      return { error: httpError(503, "Owner authenticator could not be checked. Check server encryption configuration.") };
-    }
-    if (matchedCounter === null) {
-      recoveryIndex = ownerSecurity.recoveryCodeIndex(account.totpRecoveryCodeHashes, code);
-    }
-    if (matchedCounter === null && recoveryIndex < 0) {
-      challenge.attempts += 1;
-      return { error: httpError(challenge.attempts >= 5 ? 429 : 401,
-        challenge.attempts >= 5 ? "Too many attempts. Sign in again to retry." : "That authenticator or recovery code is not correct.") };
-    }
-
-    if (matchedCounter !== null) account.totpLastCounter = matchedCounter;
-    else account.totpRecoveryCodeHashes.splice(recoveryIndex, 1);
-    challenge.usedAt = now();
-    return { accountId: account.id, businessId: account.businessId };
   });
   if (result.error) throw result.error;
   return result;
@@ -1558,7 +1502,7 @@ function markPendingSignupMetaVerified(pendingId, { phoneNumberId, wabaId, phone
       const business = (state.businesses || []).find((item) => item.id === p.businessId);
       const account = (state.accounts || []).find((item) => item.id === p.accountId);
       if (business && account && account.ownerSecurityVerified === true &&
-          account.totpEnrolledAt && account.authMethod === "clerk_totp") {
+          account.authMethod === "clerk_email") {
         activateOwnerBusinessFromMeta(business, p, accessToken);
         p.status = "verified";
       }
@@ -1595,6 +1539,16 @@ function resetAccountPasswordByBusinessId(businessId, passwordHash, passwordSalt
     if (idx === -1) throw httpError(404, "No account found for this business");
     state.accounts[idx].passwordHash = passwordHash;
     state.accounts[idx].passwordSalt = passwordSalt;
+    return { ok: true };
+  });
+}
+
+function updateAccountPasswordById(accountId, passwordHash, passwordSalt) {
+  return mutate((state) => {
+    const account = (state.accounts || []).find((item) => item.id === accountId);
+    if (!account) throw httpError(404, "Account not found");
+    account.passwordHash = passwordHash;
+    account.passwordSalt = passwordSalt;
     return { ok: true };
   });
 }
@@ -2846,15 +2800,15 @@ module.exports = {
   markPendingSignupChannelVerified,
   finalizePendingSignup,
   createOwnerPendingSignup,
-  finalizeOwnerSignup,
-  createOwnerAuthChallenge,
-  verifyOwnerAuthChallenge,
+  finalizeOwnerSignupEmailOnly,
+  migrateClerkAuthenticatorRemoval,
   listPendingSignups,
   getPendingSignupStatus,
   markPendingSignupMetaVerified,
   isCustomerMessagingActive,
   getAccountById,
   resetAccountPasswordByBusinessId,
+  updateAccountPasswordById,
   createSession,
   getSession,
   deleteSession,

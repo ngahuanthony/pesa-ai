@@ -62,37 +62,26 @@ function mockMetaNumbers(numbers) {
   };
 }
 
-test("signup needs no SMS provider for the Duka SIM", async () => {
+test("legacy public signup is closed so new shops use verified owner sign-up", async () => {
   const originalSend = whatsapp.sendPlatformOtp;
-  const smsUrl = process.env.SMS_PROVIDER_URL;
-  const smsToken = process.env.SMS_PROVIDER_TOKEN;
-  delete process.env.SMS_PROVIDER_URL;
-  delete process.env.SMS_PROVIDER_TOKEN;
-  const sentTo = [];
-  whatsapp.sendPlatformOtp = async (phone) => { sentTo.push(phone); };
+  let sends = 0;
+  whatsapp.sendPlatformOtp = async () => { sends += 1; };
   try {
-    const response = await authRoutes.signup({
-      body: {
-        businessName: "No SMS Duka",
-        merchantType: "retail",
-        personalPhone: "254700111011",
-        pesaAiNumber: "254700111012",
-      },
-    });
-    const pending = db.getPendingSignup(response.data.pendingSignupId);
-    assert.equal(response.status, 202);
-    assert.equal(response.data.next, "personal");
-    assert.equal(response.data.smsPending, undefined);
-    assert.equal(pending.shopVerified, false);
-    assert.equal(pending.metaVerified, false);
-    assert.equal(db.load().otpChallenges.some((item) => item.purpose === "signup_shop"), false);
-    assert.deepEqual(sentTo, ["254700111011"]);
+    assert.throws(
+      () => authRoutes.signup({
+        body: {
+          businessName: "No SMS Duka",
+          merchantType: "retail",
+          personalPhone: "254700111011",
+          pesaAiNumber: "254700111012",
+        },
+      }),
+      (error) => error.statusCode === 410 && /verified email/.test(error.message),
+    );
+    assert.equal(db.load().pendingSignups.length, 0);
+    assert.equal(sends, 0);
   } finally {
     whatsapp.sendPlatformOtp = originalSend;
-    if (smsUrl === undefined) delete process.env.SMS_PROVIDER_URL;
-    else process.env.SMS_PROVIDER_URL = smsUrl;
-    if (smsToken === undefined) delete process.env.SMS_PROVIDER_TOKEN;
-    else process.env.SMS_PROVIDER_TOKEN = smsToken;
   }
 });
 
@@ -235,4 +224,33 @@ test("the live account is created only after both proofs and stores the confirme
     ...business,
     whatsappConnectionStatus: "failed",
   }), false);
+});
+
+test("final signup rejects a Meta phone_number_id already assigned to another Duka", () => {
+  const first = createPendingSignup();
+  db.markPendingSignupChannelVerified(first.id, "personal");
+  db.markPendingSignupMetaVerified(first.id, {
+    phoneNumberId: "shared-meta-phone",
+    wabaId: "test-waba",
+    phoneNumber: first.pesaAiNumber,
+  });
+  db.finalizePendingSignup(first.id, { accessToken: "unit-test-token" });
+
+  const second = createPendingSignup({
+    businessName: "Second Duka",
+    personalPhone: "254700111003",
+    pesaAiNumber: "254700111004",
+  });
+  db.markPendingSignupChannelVerified(second.id, "personal");
+  db.markPendingSignupMetaVerified(second.id, {
+    phoneNumberId: "shared-meta-phone",
+    wabaId: "test-waba",
+    phoneNumber: second.pesaAiNumber,
+  });
+
+  assert.throws(
+    () => db.finalizePendingSignup(second.id, { accessToken: "unit-test-token" }),
+    /already assigned/i,
+  );
+  assert.equal(db.load().businesses.length, 1);
 });

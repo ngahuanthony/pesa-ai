@@ -9,6 +9,9 @@ const { handleCustomerMessage } = require("../core");
 async function send({ params, body, session }) {
   auth.requireOwnBusiness(session, params.businessId);
   const business = db.getBusiness(params.businessId);
+  if (!db.isCustomerMessagingActive(business)) {
+    throw db.httpError(409, "Customer chat will turn on after owner security and Meta confirm this exact Duka number.");
+  }
   const { customerPhone, customerName, message, serviceLocationToken } = body || {};
   if (!customerPhone || !message) {
     throw db.httpError(400, "customerPhone and message are required");
@@ -31,7 +34,10 @@ async function send({ params, body, session }) {
 
 function history({ params, session }) {
   auth.requireOwnBusiness(session, params.businessId);
-  db.getBusiness(params.businessId);
+  const business = db.getBusiness(params.businessId);
+  if (!db.isCustomerMessagingActive(business)) {
+    throw db.httpError(409, "Customer chat history is unavailable until owner security and Meta checks are complete.");
+  }
   const customerPhone = params.customerPhone;
   if (!customerPhone) throw db.httpError(400, "customerPhone path param is required");
   const { messages } = db.getConversationHistory(params.businessId, customerPhone, 100);

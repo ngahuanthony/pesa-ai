@@ -90,6 +90,13 @@ const mpesaApiRoutes = require("./pesa-src/routes/mpesa");
 const dailyReports = require("./cron/dailyReport");
 const clerkProxy = require("./pesa-src/clerk-proxy");
 
+const ownerAuthMigration = db.migrateClerkAuthenticatorRemoval();
+if (ownerAuthMigration.accountsConverted || ownerAuthMigration.pendingSecretsCleared) {
+  console.info(
+    `[auth] Removed authenticator data for ${ownerAuthMigration.accountsConverted} owner account(s) and ${ownerAuthMigration.pendingSecretsCleared} pending signup(s).`
+  );
+}
+
 const PORT = Number(process.env.PORT) || 8080;
 
 function startDailyReportScheduler() {
@@ -115,9 +122,8 @@ router.post("/api/auth/request-otp", authRoutes.requestLoginOtp);
 router.post("/api/auth/verify-otp", authRoutes.verifyOtp);
 router.post("/api/auth/login", authRoutes.login);
 router.post("/api/auth/owner-signup/start", authRoutes.ownerSignupStart);
-router.post("/api/auth/owner-signup/verify", authRoutes.ownerSignupVerify);
 router.post("/api/auth/owner-login/start", authRoutes.ownerLoginStart);
-router.post("/api/auth/owner-login/verify", authRoutes.ownerLoginVerify);
+router.post("/api/auth/change-password", authRoutes.changePassword);
 router.post("/api/auth/logout", authRoutes.logout);
 router.get("/api/auth/me", authRoutes.me);
 router.patch("/api/auth/recovery-email", authRoutes.updateRecoveryEmail);

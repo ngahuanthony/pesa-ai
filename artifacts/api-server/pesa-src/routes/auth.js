@@ -1,8 +1,6 @@
 const db = require("../db");
 const auth = require("../auth");
 const whatsapp = require("../whatsapp");
-const fieldCrypto = require("../crypto");
-const ownerSecurity = require("../owner-security");
 const clerkIdentity = require("../clerk-identity");
 
 function accountView(account) {
@@ -18,7 +16,7 @@ async function sendPersonalOtp(phone, purpose, shopName) {
 }
 
 function signup() {
-  throw db.httpError(410, "New Pesa SI shops must use owner sign-up with a verified email and authenticator.");
+  throw db.httpError(410, "New Pesa SI shops must use owner sign-up with a verified email.");
 }
 
 async function verifySignupOtp({ body, req }) {
@@ -124,19 +122,28 @@ function login({ body }) {
 
 async function ownerSignupStart({ body, req }) {
   const identity = await clerkIdentity.requireVerifiedOwner(req);
-  if (db.getAccountByClerkUserId(identity.clerkUserId)) {
-    throw db.httpError(409, "This owner identity already has a shop. Use owner sign-in instead.");
+  let account = db.getAccountByClerkUserId(identity.clerkUserId);
+  if (account) {
+    if (account.authMethod === "clerk_totp") db.migrateClerkAuthenticatorRemoval();
+    account = db.getAccountByClerkUserId(identity.clerkUserId);
+    if (account.authMethod !== "clerk_email") {
+      throw db.httpError(409, "This owner identity already has a shop. Use its existing sign-in method.");
+    }
+    const business = db.getBusiness(account.businessId);
+    const session = db.createSession({ accountId: account.id, businessId: business.id });
+    return {
+      status: 200,
+      cookie: auth.sessionCookieHeader(session.token),
+      data: {
+        business: db.sanitizeBusiness(business),
+        account: accountView(account),
+        subscription: db.getSubscription(business.id),
+        activation: db.isCustomerMessagingActive(business) ? "active" : "waiting_for_meta",
+      },
+    };
   }
   if (db.getAccountByEmail(identity.email)) {
     throw db.httpError(409, "This email belongs to an existing Pesa SI account. Use its existing sign-in method.");
-  }
-  if (!process.env.ENCRYPTION_KEY) throw db.httpError(503, "Secure owner-auth storage is not configured on this server.");
-
-  let encryptedSecret;
-  try {
-    encryptedSecret = fieldCrypto.encrypt(ownerSecurity.generateTotpSecret());
-  } catch {
-    throw db.httpError(503, "Secure owner-auth storage is not configured on this server.");
   }
   const pending = db.mutate((state) => db.createOwnerPendingSignup(state, {
     businessName: body?.businessName,
@@ -144,47 +151,22 @@ async function ownerSignupStart({ body, req }) {
     pesaAiNumber: body?.pesaAiNumber,
     ownerEmail: identity.email,
     clerkUserId: identity.clerkUserId,
-    totpSecretEnc: encryptedSecret,
   }));
-  let secret;
-  try {
-    secret = fieldCrypto.decrypt(pending.totpSecretEnc);
-  } catch {
-    throw db.httpError(503, "Authenticator setup could not be loaded. Check server encryption configuration.");
-  }
-  return {
-    status: 200,
-    data: {
-      pendingSignupId: pending.id,
-      email: identity.email,
-      provisioningUri: ownerSecurity.provisioningUri({ secret, email: identity.email }),
-      step: "authenticator",
-      metaVerified: pending.metaVerified === true,
-    },
-  };
-}
-
-async function ownerSignupVerify({ body, req }) {
-  const identity = await clerkIdentity.requireVerifiedOwner(req);
-  const pending = db.getPendingSignup(body?.pendingSignupId);
   const whatsappToken = process.env.WHATSAPP_PLATFORM_TOKEN || process.env.WHATSAPP_TOKEN || null;
   if (pending?.metaVerified && !whatsappToken) throw db.httpError(503, "Platform WhatsApp credentials are not configured");
   if (pending?.metaVerified && !process.env.ENCRYPTION_KEY) throw db.httpError(503, "Server credential encryption is not configured");
-  const codes = ownerSecurity.createRecoveryCodes();
-  const { business, account } = db.finalizeOwnerSignup(body?.pendingSignupId, {
+  const { business, account: createdAccount } = db.finalizeOwnerSignupEmailOnly(pending.id, {
     clerkUserId: identity.clerkUserId,
-    code: body?.code,
-    recoveryCodeHashes: codes.hashes,
     accessToken: whatsappToken,
   });
-  const session = db.createSession({ accountId: account.id, businessId: business.id });
+  const session = db.createSession({ accountId: createdAccount.id, businessId: business.id });
   return {
+    status: 200,
     cookie: auth.sessionCookieHeader(session.token),
     data: {
       business: db.sanitizeBusiness(business),
-      account: accountView(account),
+      account: accountView(createdAccount),
       subscription: db.getSubscription(business.id),
-      recoveryCodes: codes.codes,
       activation: db.isCustomerMessagingActive(business) ? "active" : "waiting_for_meta",
     },
   };
@@ -192,33 +174,19 @@ async function ownerSignupVerify({ body, req }) {
 
 async function ownerLoginStart({ req }) {
   const identity = await clerkIdentity.requireVerifiedOwner(req);
-  const account = db.getAccountByClerkUserId(identity.clerkUserId);
-  if (!account) return { data: { needsSignup: true, email: identity.email } };
-  if (account.authMethod !== "clerk_totp" || !account.ownerSecurityVerified) {
-    throw db.httpError(409, "This owner identity is not enrolled in the authenticator flow. Use its existing sign-in method.");
+  let account = db.getAccountByClerkUserId(identity.clerkUserId);
+  if (!account) return { status: 200, data: { needsSignup: true, email: identity.email } };
+  if (account.authMethod === "clerk_totp") {
+    db.migrateClerkAuthenticatorRemoval();
+    account = db.getAccountByClerkUserId(identity.clerkUserId);
   }
-  const challenge = db.createOwnerAuthChallenge(identity.clerkUserId);
-  return {
-    data: {
-      requiresTotp: true,
-      challengeId: challenge.id,
-      email: db.maskEmail(account.email),
-      expiresAt: challenge.expiresAt,
-    },
-  };
-}
-
-async function ownerLoginVerify({ body, req }) {
-  const identity = await clerkIdentity.requireVerifiedOwner(req);
-  const verified = db.verifyOwnerAuthChallenge({
-    challengeId: body?.challengeId,
-    clerkUserId: identity.clerkUserId,
-    code: body?.code,
-  });
-  const account = db.getAccountById(verified.accountId);
-  const business = db.getBusiness(verified.businessId);
+  if (account.authMethod !== "clerk_email") {
+    throw db.httpError(409, "This owner identity uses a different sign-in method. Use its existing login.");
+  }
+  const business = db.getBusiness(account.businessId);
   const session = db.createSession({ accountId: account.id, businessId: business.id });
   return {
+    status: 200,
     cookie: auth.sessionCookieHeader(session.token),
     data: {
       business: db.sanitizeBusiness(business),
@@ -239,6 +207,38 @@ async function updateRecoveryEmail({ body, session }) {
   return { data: { recoveryEmail: db.maskEmail(account.recoveryEmail) } };
 }
 
+function changePassword({ body, session }) {
+  if (!session || session.isAdmin) throw db.httpError(401, "Authentication required");
+  const account = db.getAccountById(session.accountId);
+  if (!account || account.businessId !== session.businessId) {
+    throw db.httpError(401, "Authentication required");
+  }
+
+  const authMethod = account.authMethod || (account.passwordHash ? "legacy_email_password" : "phone_otp");
+  if (authMethod !== "legacy_email_password") {
+    throw db.httpError(409, "This account's password is managed by its sign-in method.");
+  }
+
+  const currentPassword = body?.currentPassword;
+  const newPassword = body?.newPassword;
+  if (typeof currentPassword !== "string" || currentPassword.length < 1 || currentPassword.length > 256) {
+    throw db.httpError(400, "Enter your current password.");
+  }
+  if (typeof newPassword !== "string" || newPassword.length < 8 || newPassword.length > 256) {
+    throw db.httpError(400, "Your new password must be between 8 and 256 characters.");
+  }
+  if (!auth.verifyPassword(currentPassword, account.passwordHash, account.passwordSalt)) {
+    throw db.httpError(401, "Current password is incorrect.");
+  }
+  if (auth.verifyPassword(newPassword, account.passwordHash, account.passwordSalt)) {
+    throw db.httpError(400, "Choose a new password that is different from your current password.");
+  }
+
+  const { passwordHash, passwordSalt } = auth.hashPassword(newPassword);
+  db.updateAccountPasswordById(account.id, passwordHash, passwordSalt);
+  return { data: { ok: true } };
+}
+
 function logout({ session }) { if (session) db.deleteSession(session.token); return { cookie: auth.sessionCookieHeader(null, { clear: true }), data: { ok: true } }; }
 function me({ session }) {
   if (!session) return { authenticated: false };
@@ -257,10 +257,9 @@ module.exports = {
   verifyOtp,
   login,
   ownerSignupStart,
-  ownerSignupVerify,
   ownerLoginStart,
-  ownerLoginVerify,
   updateRecoveryEmail,
+  changePassword,
   logout,
   me,
 };

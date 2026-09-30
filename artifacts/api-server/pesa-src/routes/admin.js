@@ -91,7 +91,7 @@ async function verifyPendingSignupMeta({ params, session }) {
     verified: true,
     finalized: Boolean(pending.ownerSecurityVerified),
     message: pending.ownerAuthProvider === "clerk"
-      ? "Meta confirmed this exact Duka number. Customer chat and menus are enabled only if owner authenticator setup is complete."
+      ? "Meta confirmed this exact Duka number. Customer chat and menus are enabled after the verified owner account is ready."
       : pending.personalVerified
         ? "Meta confirmed the Duka SIM. The merchant can finish signup in their browser."
         : "Meta confirmed the Duka SIM. The merchant still needs to verify their personal WhatsApp.",

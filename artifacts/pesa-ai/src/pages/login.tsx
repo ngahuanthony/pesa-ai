@@ -107,9 +107,15 @@ export default function LoginPage() {
             {mode === "password" ? "Use your existing account email and password." : "Receive a one-time code on your personal WhatsApp."}
           </p>
 
+          <div className="mt-5 rounded-xl border border-[#cfe8d8] bg-[#f4fff7] p-4">
+            <p className="text-sm font-bold text-[#0a4a3a]">Owner sign-in</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-600">Use your verified Google or email account. No separate authenticator is needed.</p>
+            <Link href="/sign-in" className="mt-3 inline-block text-sm font-semibold text-[#168447] underline underline-offset-4">Continue to owner sign-in</Link>
+          </div>
+
           <div className="mt-6 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
-            <button type="button" onClick={() => switchMode("password")} className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === "password" ? "bg-white text-[#0a4a3a] shadow-sm" : "text-slate-500"}`}>Email & password</button>
             <button type="button" onClick={() => switchMode("whatsapp")} className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === "whatsapp" ? "bg-white text-[#0a4a3a] shadow-sm" : "text-slate-500"}`}>WhatsApp code</button>
+            <button type="button" onClick={() => switchMode("password")} className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === "password" ? "bg-white text-[#0a4a3a] shadow-sm" : "text-slate-500"}`}>Email & password</button>
           </div>
 
           {mode === "password" ? (
@@ -153,7 +159,7 @@ export default function LoginPage() {
             </form>
           )}
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">New here? <Link href="/signup" className="font-semibold text-primary underline">Create your shop</Link></p>
+          <p className="mt-6 text-center text-sm text-muted-foreground">New here? <Link href="/signup" className="font-semibold text-primary underline">Create a shop with your verified email</Link></p>
         </div>
       </div>
     </PublicLayout>

@@ -1,9 +1,10 @@
 import { useGetMe, useUpdateBusiness, getGetMeQueryKey } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Store, Bot, CreditCard, CheckCircle2, Headphones, MapPin, Mail } from "lucide-react";
+import { Store, Bot, CreditCard, CheckCircle2, Headphones, MapPin, Mail, KeyRound } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BRAND_NAME } from "@/constants/brand";
 import { MERCHANT_TYPES, displayMerchantType } from "@/constants/merchant-types";
@@ -74,8 +75,20 @@ function SaveButton({ onClick, isPending, label = "Save Changes" }: { onClick: (
   );
 }
 
+function passwordErrorMessage(error: unknown) {
+  const details = error as {
+    errors?: Array<{ longMessage?: string; message?: string }>;
+    message?: string;
+  };
+  return details?.errors?.find((item) => item.longMessage || item.message)?.longMessage
+    || details?.errors?.find((item) => item.message)?.message
+    || details?.message
+    || "Could not change the password. Please check your current password and try again.";
+}
+
 export function SettingsTab() {
-  const { data: me } = useGetMe();
+  const { data: me, isLoading: isLoadingMe } = useGetMe();
+  const { user: clerkUser, isLoaded: isClerkLoaded } = useUser();
   const business   = (me as any)?.business;
   const businessId = business?.id || "";
 
@@ -83,6 +96,7 @@ export function SettingsTab() {
 
   const account = (me as any)?.account;
   const maskedRecoveryEmail = account?.recoveryEmail || null;
+  const authMethod = account?.authMethod || "";
 
   async function saveRecoveryEmail() {
     setRecoveryEmailSaving(true);
@@ -117,6 +131,12 @@ export function SettingsTab() {
   const [recoveryEmailInput, setRecoveryEmailInput] = useState("");
   const [editingRecoveryEmail, setEditingRecoveryEmail] = useState(false);
   const [recoveryEmailSaving, setRecoveryEmailSaving] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
 
   const [personaName,         setPersonaName]         = useState("");
   const [personaInstructions, setPersonaInstructions] = useState("");
@@ -160,6 +180,52 @@ export function SettingsTab() {
   }, [business]);
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+
+  async function changePassword(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("The new password and confirmation do not match.");
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError("Choose a new password that is different from your current password.");
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      if (authMethod === "clerk_email") {
+        if (!clerkUser?.passwordEnabled) {
+          throw new Error("This account does not have a Pesa SI password to change.");
+        }
+        await clerkUser.updatePassword({ currentPassword, newPassword });
+      } else if (authMethod === "legacy_email_password") {
+        const response = await fetch("/api/auth/change-password", {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || "Could not change the password.");
+      } else {
+        throw new Error("This sign-in method does not use a Pesa SI password.");
+      }
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordSuccess("Your password has been changed.");
+      toast({ title: "Password changed", description: "Your current password was verified before the change." });
+    } catch (error) {
+      setPasswordError(passwordErrorMessage(error));
+    } finally {
+      setPasswordSaving(false);
+    }
+  }
 
   const saveProfile = () =>
     updateBiz.mutate({ id: businessId, data: { name: bizName, ownerName, category, merchantType } as any }, {
@@ -276,6 +342,78 @@ export function SettingsTab() {
               </button>
             </div>
           </div>
+        )}
+      </Section>
+
+      <Section icon={KeyRound} title="Change password" sub="Verify your current password before saving a new one.">
+        {!account && isLoadingMe ? (
+          <p className="text-sm text-muted-foreground">Loading account security…</p>
+        ) : authMethod === "clerk_email" && !isClerkLoaded ? (
+          <p className="text-sm text-muted-foreground">Checking your sign-in method…</p>
+        ) : authMethod === "clerk_email" && !clerkUser?.passwordEnabled ? (
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            This account signs in through an external provider and has no Pesa SI password to change. Manage that password with your sign-in provider.
+          </p>
+        ) : authMethod === "legacy_email_password" || authMethod === "clerk_email" ? (
+          <form className="space-y-4" onSubmit={changePassword}>
+            <div className="space-y-2">
+              <label htmlFor="current-owner-password" className="text-sm font-medium text-foreground">Current password</label>
+              <Input
+                id="current-owner-password"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(event) => { setCurrentPassword(event.target.value); setPasswordError(""); setPasswordSuccess(""); }}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="new-owner-password" className="text-sm font-medium text-foreground">New password</label>
+              <Input
+                id="new-owner-password"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                maxLength={256}
+                value={newPassword}
+                onChange={(event) => { setNewPassword(event.target.value); setPasswordError(""); setPasswordSuccess(""); }}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="confirm-owner-password" className="text-sm font-medium text-foreground">Confirm new password</label>
+              <Input
+                id="confirm-owner-password"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                maxLength={256}
+                value={confirmPassword}
+                onChange={(event) => { setConfirmPassword(event.target.value); setPasswordError(""); setPasswordSuccess(""); }}
+                required
+              />
+            </div>
+            {passwordError && <p role="alert" className="text-sm text-destructive">{passwordError}</p>}
+            {passwordSuccess && <p role="status" className="text-sm text-emerald-700">{passwordSuccess}</p>}
+            <button
+              type="submit"
+              disabled={passwordSaving || !currentPassword || !newPassword || !confirmPassword}
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white transition-colors hover:bg-primary/90 disabled:opacity-60"
+            >
+              {passwordSaving ? "Changing password…" : "Change password"}
+            </button>
+            <p className="text-xs text-muted-foreground">
+              Your password is checked by your sign-in provider and is never saved in Pesa SI in readable form.
+            </p>
+          </form>
+        ) : authMethod === "phone_otp" ? (
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            This account signs in with a WhatsApp verification code and has no password to change. Continue using the verified owner number to sign in.
+          </p>
+        ) : (
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Password changes are not available for this sign-in method.
+          </p>
         )}
       </Section>
 
