@@ -42,7 +42,11 @@ function ClerkSignInPage() {
 
 function ClerkSignUpPage() {
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7faf8] px-4 py-10">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#f7faf8] px-4 py-6">
+      <p className="mb-3 w-full max-w-[440px] px-2 text-center text-xs leading-relaxed text-[#5f716a]">
+        <span className="font-semibold text-[#0a4a3a]">Required for email sign-up:</span>{" "}
+        email address and password.
+      </p>
       <SignUp
         routing="path"
         path={`${basePath}/sign-up`}
