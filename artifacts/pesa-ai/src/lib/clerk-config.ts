@@ -1,10 +1,16 @@
 import { shadcn } from "@clerk/themes";
+import { publishableKeyFromHost } from "@clerk/react/internal";
 
 export const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // Use the key issued for this Clerk instance. Deriving one from the hostname
 // only works when Clerk has explicitly configured that hostname as its API domain.
-export const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+// Production uses the verified Clerk Frontend API at clerk.<app-domain>.
+// Keep development keys as-is; derive the correct production key for this host.
+export const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
 
 // Empty in development by design; the production environment supplies this.
 export const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
