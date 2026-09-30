@@ -73,6 +73,7 @@ async function verifySignup(pending) {
 
 test("owner signup requires authenticator enrollment before creating a gated shop", async () => {
   const { response, pending } = await startSignup();
+  assert.equal(response.status, 200);
   assert.equal(response.data.email, currentIdentity.email);
   assert.match(response.data.provisioningUri, /^otpauth:\/\/totp\//);
   assert.equal(pending.personalPhone, null);

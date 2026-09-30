@@ -153,6 +153,7 @@ async function ownerSignupStart({ body, req }) {
     throw db.httpError(503, "Authenticator setup could not be loaded. Check server encryption configuration.");
   }
   return {
+    status: 200,
     data: {
       pendingSignupId: pending.id,
       email: identity.email,
