@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="210" height="56" viewBox="0 0 210 56" fill="none">
+  <rect x="2" y="4" width="48" height="48" rx="15" fill="#0A4A3A"/>
+  <path d="M14 25.5 26 15l12 10.5V39a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2V25.5Z" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M20 41v-9h12v9M18 25h16" stroke="#25D366" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="61" y="37" fill="#0A4A3A" font-family="DM Sans, Arial, sans-serif" font-size="27" font-weight="700" letter-spacing="-1.2">Pesa SI</text>
+</svg>
