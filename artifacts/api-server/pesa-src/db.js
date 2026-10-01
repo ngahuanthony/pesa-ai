@@ -2747,6 +2747,60 @@ function runOneTimeWhatsAppRoutingCorrection({ businessName, phoneNumberId, waba
   });
 }
 
+function runOneTimeExactWhatsAppPhoneNumberIdCorrection({ businessName, requestedPhone, phoneNumberId, migrationId }) {
+  return mutate((state) => {
+    const migrations = state.migrations && typeof state.migrations === "object" ? state.migrations : {};
+    if (migrations[migrationId]) {
+      return { applied: false, reason: "already-applied", businessId: migrations[migrationId].businessId };
+    }
+
+    const hasBusinessName = businessName !== undefined && businessName !== null;
+    const hasRequestedPhone = requestedPhone !== undefined && requestedPhone !== null;
+    const normalizedRequestedPhone = hasRequestedPhone ? normalizePhone(requestedPhone) : "";
+    const targetPhoneNumberId = String(phoneNumberId ?? "");
+    if (
+      (!hasBusinessName && !hasRequestedPhone) ||
+      (hasBusinessName && (typeof businessName !== "string" || businessName.length === 0)) ||
+      (hasRequestedPhone && !/^254\d{9}$/.test(normalizedRequestedPhone)) ||
+      targetPhoneNumberId.length === 0 ||
+      targetPhoneNumberId.trim() !== targetPhoneNumberId ||
+      typeof migrationId !== "string" ||
+      migrationId.length === 0
+    ) {
+      return { applied: false, reason: "invalid-correction-input" };
+    }
+
+    const matches = (state.businesses || []).filter((business) =>
+      (!hasBusinessName || business.name === businessName) &&
+      (!hasRequestedPhone || normalizePhone(business.whatsappRequestedPhone) === normalizedRequestedPhone)
+    );
+    if (matches.length !== 1) {
+      return { applied: false, reason: "business-match-count", matchCount: matches.length };
+    }
+
+    const business = matches[0];
+    const conflictingBusiness = (state.businesses || []).find((candidate) =>
+      candidate !== business && String(candidate.whatsappPhoneNumberId ?? "") === targetPhoneNumberId
+    );
+    if (conflictingBusiness) {
+      return {
+        applied: false,
+        reason: "phone-number-id-already-assigned",
+        conflictingBusinessId: conflictingBusiness.id,
+      };
+    }
+
+    state.migrations = migrations;
+    business.whatsappPhoneNumberId = targetPhoneNumberId;
+    state.migrations[migrationId] = {
+      appliedAt: now(),
+      businessId: business.id,
+      fields: ["whatsappPhoneNumberId"],
+    };
+    return { applied: true, businessId: business.id };
+  });
+}
+
 function runOneTimeWelcomeMessageUpdate({ businessName, welcomeMessage, migrationId }) {
   return mutate((state) => {
     state.migrations = state.migrations && typeof state.migrations === "object" ? state.migrations : {};
@@ -2827,6 +2881,7 @@ module.exports = {
   runOneTimeSafeReset,
   runOneTimePhoneCorrection,
   runOneTimeWhatsAppRoutingCorrection,
+  runOneTimeExactWhatsAppPhoneNumberIdCorrection,
   runOneTimeWelcomeMessageUpdate,
   runOneTimeWhatsAppNumberCorrection,
   restoreDeletedBusinessForSingleOrphanedAccount,

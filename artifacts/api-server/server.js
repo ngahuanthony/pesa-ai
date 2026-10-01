@@ -608,6 +608,34 @@ persistence.init(db.DATA_FILE).then(() => {
       migrationId: "skyview-opal-hotel-whatsapp-number-format-2026-10-01",
     });
     console.log("[migration] Skyview Opal Hotel WhatsApp number format:", skyviewWhatsAppNumber);
+    const skyviewPhoneNumberId = db.runOneTimeExactWhatsAppPhoneNumberIdCorrection({
+      businessName: "Skyview Opal Hotel",
+      requestedPhone: "254182667245",
+      phoneNumberId: "1391881137336168",
+      migrationId: "skyview-opal-hotel-meta-phone-number-id-2026-10-01",
+    });
+    const productionBusinesses = db.load().businesses || [];
+    const skyviewBusinesses = productionBusinesses.filter((business) =>
+      business.name === "Skyview Opal Hotel" &&
+      db.normalizePhone(business.whatsappRequestedPhone) === "254182667245"
+    );
+    const phoneNumberIdOwners = productionBusinesses.filter((business) =>
+      String(business.whatsappPhoneNumberId || "") === "1391881137336168"
+    );
+    const routingReady =
+      skyviewBusinesses.length === 1 &&
+      String(skyviewBusinesses[0]?.whatsappPhoneNumberId || "") === "1391881137336168" &&
+      phoneNumberIdOwners.length === 1 &&
+      phoneNumberIdOwners[0]?.id === skyviewBusinesses[0]?.id;
+    if (!routingReady) {
+      console.warn("[migration] Skyview Meta phone-number ID correction not applied; API will continue without changing routing:", {
+        reason: skyviewPhoneNumberId.reason || "postcondition check failed",
+        requestedPhoneMatchCount: skyviewBusinesses.length,
+        phoneNumberIdOwnerCount: phoneNumberIdOwners.length,
+      });
+    } else {
+      console.log("[migration] Skyview Opal Hotel Meta phone-number ID:", skyviewPhoneNumberId);
+    }
   }
   startDailyReportScheduler();
   server.listen(PORT, "0.0.0.0", () => {
