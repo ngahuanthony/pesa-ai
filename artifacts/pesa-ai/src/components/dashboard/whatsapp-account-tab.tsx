@@ -4,6 +4,7 @@ import { Wifi, CheckCircle2, Clock, AlertCircle, Phone, RefreshCw, Copy, Check, 
 import { Input } from "@/components/ui/input";
 import { ShopQRCard } from "@/components/dashboard/shop-qr-card";
 import { BRAND_NAME } from "@/constants/brand";
+import { formatKenyanWhatsAppNumber, getShopEntryPrompt, normalizeKenyanWhatsAppNumber } from "@/lib/shop-entry-prompt";
 
 export function WhatsAppAccountTab() {
   const { data: me } = useGetMe();
@@ -140,11 +141,11 @@ export function WhatsAppAccountTab() {
               </p>
               {status.requestedPhone && (
                 <a
-                  href={`tel:${status.requestedPhone.replace(/\s/g, "")}`}
+                  href={`tel:${normalizeKenyanWhatsAppNumber(status.requestedPhone)}`}
                   className="text-sm text-primary hover:underline mt-0.5 flex items-center gap-1"
                 >
                   <Phone className="h-3.5 w-3.5" />
-                  {status.requestedPhone}
+                  {formatKenyanWhatsAppNumber(status.requestedPhone)}
                 </a>
               )}
               <p className="text-xs text-muted-foreground mt-0.5">WhatsApp Business</p>
@@ -159,29 +160,31 @@ export function WhatsAppAccountTab() {
 
         {/* ── Share your shop ── */}
         {status.requestedPhone && (() => {
-          const digits = status.requestedPhone.replace(/[\s\-\(\)]/g, "").replace(/^\+/, "").replace(/^0/, "254");
-          const shopUrl = `https://wa.me/${digits}?text=Hi%2C%20I%27d%20like%20to%20shop`;
+          const digits = normalizeKenyanWhatsAppNumber(status.requestedPhone);
           const businessName = (me as any)?.business?.name || "My Shop";
+          const shopUrl = `https://wa.me/${digits}?text=${encodeURIComponent(getShopEntryPrompt(businessName))}`;
+          const isHotel = businessName.trim().toLowerCase() === "skyview opal hotel";
           return (
             <div className="rounded-xl border border-border bg-white overflow-hidden">
               <div className="px-4 py-2.5 bg-gray-50 border-b border-border flex items-center gap-2">
                 <QrCode className="h-3.5 w-3.5 text-muted-foreground" />
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Share Your Shop</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{isHotel ? "Share Skyview Opal Hotel" : "Share Your Shop"}</p>
               </div>
 
               <div className="p-5 flex flex-col sm:flex-row gap-6 items-start">
                 {/* Branded QR card (same as Overview) */}
                 <div className="flex-shrink-0 w-full sm:w-auto flex justify-center">
-                  <ShopQRCard businessName={businessName} phone={status.requestedPhone} />
+                  <ShopQRCard businessName={businessName} phone={status.requestedPhone} whatsappConnected={status.connected === true} />
                 </div>
 
                 {/* Shop link + open button */}
                 <div className="flex-1 min-w-0 space-y-4">
                   <div>
-                    <p className="text-sm font-semibold text-foreground mb-1">Customer shop link</p>
+                    <p className="text-sm font-semibold text-foreground mb-1">{isHotel ? "Customer WhatsApp link" : "Customer shop link"}</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      Share this link anywhere — WhatsApp, Instagram, packaging, receipts.
-                      Customers tap it and start shopping instantly.
+                      {isHotel
+                        ? "Share this link with guests. It opens a chat to ask about dining, rooms, the pool, conferences, and events."
+                        : "Share this link anywhere — WhatsApp, Instagram, packaging, receipts. Customers tap it and start shopping instantly."}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 min-w-0">
@@ -327,7 +330,7 @@ export function WhatsAppAccountTab() {
             <span className="text-sm font-semibold text-amber-700">{status.connectionStatus === "failed" ? "Needs attention" : status.connectionStatus === "connecting" ? "Connecting…" : "Request received"}</span>
           </div>
           <p className="text-sm text-amber-800 leading-relaxed">
-            We received your request for <strong>{status.requestedPhone}</strong>. {status.connectionStatus === "failed"
+            We received your request for <strong>{formatKenyanWhatsAppNumber(status.requestedPhone)}</strong>. {status.connectionStatus === "failed"
               ? "We need to check the WhatsApp connection before it can go live."
               : status.connectionStatus === "connecting"
                 ? "Our team is connecting your WhatsApp Business number now."
@@ -341,6 +344,15 @@ export function WhatsAppAccountTab() {
             </p>
           </div>
         </div>
+
+        {status.requestedPhone && (
+          <div role="status" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-left">
+            <p className="text-sm font-semibold text-slate-800">WhatsApp QR: not ready to download or share yet</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-600">
+              The QR will be available after the account shows Active &amp; Live. This prevents guests from scanning a number that is not connected.
+            </p>
+          </div>
+        )}
 
         <button
           onClick={() => { setStatus((s: any) => ({ ...s, requestedPhone: null })); }}

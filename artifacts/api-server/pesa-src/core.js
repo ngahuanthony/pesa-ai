@@ -10,6 +10,12 @@ const { buildConciergeList } = require("./concierge");
 // When a customer taps the link, WhatsApp sends exactly this message.
 // We detect it to trigger an instant, catalog-aware shop greeting.
 const SHOP_LINK_TRIGGER = "hi, i'd like to shop";
+const HOTEL_SHOP_LINK_TRIGGER = db.generateShopEntryPrompt("Skyview Opal Hotel").toLowerCase();
+
+function isShopLinkTrigger(text) {
+  const normalized = String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
+  return normalized === SHOP_LINK_TRIGGER || normalized === HOTEL_SHOP_LINK_TRIGGER;
+}
 
 // Keywords that signal a customer wants to speak to a human.
 // Covers English, Kiswahili, and common Sheng phrasing.
@@ -169,7 +175,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     };
   }
 
-  const isShopLinkEntry = text.trim().toLowerCase() === SHOP_LINK_TRIGGER;
+  const isShopLinkEntry = isShopLinkTrigger(text);
 
    if (isFirstMessage || locationChanged) {
     if (isShopLinkEntry) {
@@ -217,4 +223,10 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
   return { replyText: prepared.replyText, mediaReplies, interactiveButtons: prepared.interactiveButtons, order, customer, conversation };
 }
 
-module.exports = { handleCustomerMessage, extractTableNumber, SHOP_LINK_TRIGGER };
+module.exports = {
+  handleCustomerMessage,
+  extractTableNumber,
+  SHOP_LINK_TRIGGER,
+  HOTEL_SHOP_LINK_TRIGGER,
+  isShopLinkTrigger,
+};

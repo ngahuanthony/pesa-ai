@@ -597,6 +597,17 @@ persistence.init(db.DATA_FILE).then(() => {
     console.log("[migration] Shop phone correction:", phoneCorrection);
     const whatsappRoutingCorrection = db.runOneTimeWhatsAppRoutingCorrection({ businessName: "Digital Nation Accessories", phoneNumberId: process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || "1414909975031488", wabaId: process.env.WHATSAPP_PLATFORM_WABA_ID || "1051176054371123", whatsappNumber: process.env.WHATSAPP_PLATFORM_DISPLAY_NUMBER || "254792717918", migrationId: "whatsapp-routing-production-number-2026-09-13" });
     console.log("[migration] WhatsApp production routing correction:", whatsappRoutingCorrection);
+    const skyviewWelcome = db.runOneTimeWelcomeMessageUpdate({
+      businessName: "Skyview Opal Hotel",
+      welcomeMessage: db.generateWelcomeMessage({ name: "Skyview Opal Hotel" }),
+      migrationId: "skyview-opal-hotel-welcome-message-v1",
+    });
+    console.log("[migration] Skyview Opal Hotel welcome message:", skyviewWelcome);
+    const skyviewWhatsAppNumber = db.runOneTimeWhatsAppNumberCorrection({
+      businessName: "Skyview Opal Hotel",
+      migrationId: "skyview-opal-hotel-whatsapp-number-format-2026-10-01",
+    });
+    console.log("[migration] Skyview Opal Hotel WhatsApp number format:", skyviewWhatsAppNumber);
   }
   startDailyReportScheduler();
   server.listen(PORT, "0.0.0.0", () => {

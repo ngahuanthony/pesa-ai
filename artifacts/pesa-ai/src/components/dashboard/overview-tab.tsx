@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ShopQRCard } from "@/components/dashboard/shop-qr-card";
+import { getShopEntryPrompt, normalizeKenyanWhatsAppNumber } from "@/lib/shop-entry-prompt";
 
 interface HandoverConvo {
   conversationId: string;
@@ -28,10 +29,11 @@ export function OverviewTab() {
   const { data: me } = useGetMe();
   const businessId   = (me as any)?.business?.id || "";
   const businessName = (me as any)?.business?.name || "your shop";
+  const isHotel = businessName.trim().toLowerCase() === "skyview opal hotel";
   const { toast }    = useToast();
 
   const { data: ordersData }   = useListOrders(businessId,   { query: { enabled: !!businessId, queryKey: getListOrdersQueryKey(businessId) } });
-  const { data: productsData } = useListProducts(businessId, { query: { enabled: !!businessId, queryKey: getListProductsQueryKey(businessId) } });
+  const { data: productsData, isLoading: productsLoading } = useListProducts(businessId, { query: { enabled: !!businessId, queryKey: getListProductsQueryKey(businessId) } });
   const { data: salesData }    = useGetSalesSummary(businessId, { query: { enabled: !!businessId, queryKey: getGetSalesSummaryQueryKey(businessId) } });
 
   const [handoverConvos, setHandoverConvos] = useState<HandoverConvo[]>([]);
@@ -95,16 +97,13 @@ export function OverviewTab() {
   // Build shop link from WhatsApp status
   const shopUrl = (() => {
     if (!waStatus?.requestedPhone) return null;
-    const digits = waStatus.requestedPhone
-      .replace(/[\s\-\(\)]/g, "")
-      .replace(/^\+/, "")
-      .replace(/^0/, "254");
-    return `https://wa.me/${digits}?text=Hi%2C%20I%27d%20like%20to%20shop`;
+    const digits = normalizeKenyanWhatsAppNumber(waStatus.requestedPhone);
+    return `https://wa.me/${digits}?text=${encodeURIComponent(getShopEntryPrompt(businessName))}`;
   })();
 
   // Setup checklist
   const setupSteps = [
-    { label: "Add your first product", done: products.length > 0, href: "/dashboard/products" },
+    { label: isHotel ? "Add your first menu item" : "Add your first product", done: products.length > 0, href: "/dashboard/products" },
   ];
   const stepsDone = setupSteps.filter((s) => s.done).length;
   const shopIsNew = stepsDone < setupSteps.length;
@@ -134,8 +133,12 @@ export function OverviewTab() {
         <h2 className="text-xl font-bold mb-1">Welcome to {businessName} 👋</h2>
         <p className="text-white/70 text-sm mb-5">
           {waConnected
-            ? "Your WhatsApp shop is live. Share your link and the AI handles the rest."
-            : "You're almost set up. Connect WhatsApp to start selling — the AI does the rest."}
+            ? isHotel
+              ? "Your hotel WhatsApp is live. Customers can ask about dining, rooms, the pool, conferences, and events."
+              : "Your WhatsApp shop is live. Share your link and the AI handles the rest."
+            : isHotel
+              ? "Connect WhatsApp to receive customer enquiries about dining, rooms, the pool, conferences, and events."
+              : "You're almost set up. Connect WhatsApp to start selling — the AI does the rest."}
         </p>
 
         <Link
@@ -222,6 +225,18 @@ export function OverviewTab() {
         </div>
       )}
 
+      {isHotel && !productsLoading && products.length === 0 && (
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+          <h3 className="font-semibold text-amber-900 text-sm">Hotel menus are not in the catalogue yet</h3>
+          <p className="mt-1.5 text-sm leading-relaxed text-amber-800">
+            Add the current menu items, prices, and availability in Dashboard → Products. Menu PDFs do not become live catalogue items automatically.
+          </p>
+          <Link href="/dashboard/products" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-amber-900 underline underline-offset-4">
+            Add menu items <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
+
       {/* ── WhatsApp Shop QR Code ── */}
       {waStatus?.requestedPhone && (
         <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
@@ -231,15 +246,15 @@ export function OverviewTab() {
               <QrCode className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h3 className="font-semibold text-foreground text-sm">Your WhatsApp Shop QR Code</h3>
-              <p className="text-xs text-muted-foreground">Auto-generated · Print and stick at your shop</p>
+              <h3 className="font-semibold text-foreground text-sm">{isHotel ? "Skyview Opal Hotel WhatsApp QR Code" : "Your WhatsApp Shop QR Code"}</h3>
+              <p className="text-xs text-muted-foreground">Auto-generated · Download and share when the preview is ready</p>
             </div>
           </div>
 
           <div className="p-5 flex flex-col sm:flex-row gap-6 items-start">
             {/* QR card preview + download */}
             <div className="flex-shrink-0 w-full sm:w-auto flex justify-center">
-              <ShopQRCard businessName={businessName} phone={waStatus.requestedPhone} />
+              <ShopQRCard businessName={businessName} phone={waStatus.requestedPhone} whatsappConnected={waConnected} />
             </div>
 
             {/* Instructions */}
@@ -248,8 +263,10 @@ export function OverviewTab() {
                 📲 Print &amp; Stick
               </div>
               <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
-                Customers scan this code at your shop to open WhatsApp and start browsing.
-                Download the print-ready card and put it wherever your customers will see it.
+                {isHotel
+                  ? "Customers scan this code to ask about dining, accommodation, the pool, conferences, and events."
+                  : "Customers scan this code at your shop to open WhatsApp and start browsing."}
+                {" "}Download the print-ready card when the preview confirms it is ready to share.
               </p>
               <div className="space-y-3">
                 {[

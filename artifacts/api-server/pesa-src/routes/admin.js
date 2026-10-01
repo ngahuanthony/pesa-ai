@@ -231,7 +231,9 @@ async function setWhatsAppCredentials({ params, body, session }) {
     const vendorPhone = setupLive ? (savedBusiness.personalPhone || null) : null;
     const shopDigits = db.normalizePhone(savedBusiness.whatsappNumber || savedBusiness.whatsappRequestedPhone || savedBusiness.pesaAiNumber || savedBusiness.shopPhone || waPhone || "");
     if (vendorPhone) {
-      const shareLink = shopDigits ? " https://wa.me/" + shopDigits + "?text=Hi%2C%20I%27d%20like%20to%20shop" : "";
+      const shareLink = shopDigits
+        ? " https://wa.me/" + shopDigits + "?text=" + encodeURIComponent(db.generateShopEntryPrompt(savedBusiness.name))
+        : "";
       try {
         await whatsapp.sendMessage(phoneNumberId, vendorPhone, "Shop yako " + savedBusiness.name + " iko LIVE!" + shareLink, accessToken);
         vendorAlertSent = true;

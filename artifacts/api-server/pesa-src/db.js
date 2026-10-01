@@ -422,8 +422,25 @@ function getCategoryEmoji(category) {
 }
 
 function generateWelcomeMessage(business) {
-  const emoji = getCategoryEmoji(business.category);
   const name = business.name || "Our Shop";
+  if (String(name).trim().toLowerCase() === "skyview opal hotel") {
+    return (
+      `✨ *WELCOME TO SKYVIEW OPAL HOTEL* ✨\n` +
+      `It’s a pleasure to have you with us! 🏨\n` +
+      `Whether you’re here to *dine, stay, relax, swim, meet or celebrate*, we’re here to make your experience memorable.\n` +
+      `🍽️ *Dining* — Explore our menu and order with ease\n` +
+      `🛏️ *Accommodation* — Discover our comfortable rooms\n` +
+      `🏊 *Swimming Pool* — Relax, refresh and unwind\n` +
+      `💼 *Conferences* — Meetings, conferences & corporate events\n` +
+      `🎉 *Events* — Celebrate your special moments with us\n` +
+      `📲 *Need something? Just ask!*\n` +
+      `Use this chat to view our menu, place an order, enquire about rooms, conferences, events and other hotel services.\n` +
+      `*Skyview Opal Hotel*\n` +
+      `_Your comfort. Your experience. Your moment._ ✨`
+    );
+  }
+
+  const emoji = getCategoryEmoji(business.category);
 
   // Build optional location/delivery lines
   const locationLine = business.location ? `\n📍 ${business.location}` : "";
@@ -444,6 +461,13 @@ function generateWelcomeMessage(business) {
     `\n` +
     `WhatsApp. Shop. Sell. Grow. 🇰🇪💚`
   );
+}
+
+function generateShopEntryPrompt(businessName) {
+  if (String(businessName || "").trim().toLowerCase() === "skyview opal hotel") {
+    return "Hi Skyview Opal Hotel, I'd like to explore dining, rooms, the pool, conferences and events.";
+  }
+  return "Hi, I'd like to shop";
 }
 
 const MERCHANT_TYPES = new Set(["retail", "hospitality", "service", "other"]);
@@ -776,7 +800,9 @@ function getVendorWhatsAppStatus(businessId) {
     connected: b.whatsappConnectionStatus === "live" && Boolean(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc),
     displayName: b.whatsappDisplayName || null,
     welcomeMessage: b.welcomeMessage || null,
-    testShopUrl: digits ? "https://wa.me/" + digits + "?text=Hi%2C%20I%27d%20like%20to%20shop" : null,
+    testShopUrl: digits
+      ? "https://wa.me/" + digits + "?text=" + encodeURIComponent(generateShopEntryPrompt(b.name))
+      : null,
   };
 }
 
@@ -893,6 +919,7 @@ function getAccountByClerkUserId(clerkUserId) {
 
 function normalizePhone(phone) {
   const digits = String(phone || "").replace(/[^0-9]/g, "");
+  if (digits.startsWith("2540")) return "254" + digits.slice(4);
   if (digits.startsWith("254")) return digits;
   if (digits.startsWith("0")) return "254" + digits.slice(1);
   return digits;
@@ -2720,6 +2747,62 @@ function runOneTimeWhatsAppRoutingCorrection({ businessName, phoneNumberId, waba
   });
 }
 
+function runOneTimeWelcomeMessageUpdate({ businessName, welcomeMessage, migrationId }) {
+  return mutate((state) => {
+    state.migrations = state.migrations && typeof state.migrations === "object" ? state.migrations : {};
+    if (state.migrations[migrationId]) {
+      return { applied: false, reason: "already-applied", businessId: state.migrations[migrationId].businessId };
+    }
+    const targetName = String(businessName || "").trim().toLowerCase();
+    const matches = (state.businesses || []).filter((business) =>
+      String(business.name || "").trim().toLowerCase() === targetName
+    );
+    if (matches.length !== 1) {
+      return { applied: false, reason: "business-name-match-count", matchCount: matches.length };
+    }
+    const business = matches[0];
+    business.welcomeMessage = welcomeMessage;
+    state.migrations[migrationId] = {
+      appliedAt: now(),
+      businessId: business.id,
+      fields: ["welcomeMessage"],
+    };
+    return { applied: true, businessId: business.id };
+  });
+}
+
+function runOneTimeWhatsAppNumberCorrection({ businessName, migrationId }) {
+  return mutate((state) => {
+    state.migrations = state.migrations && typeof state.migrations === "object" ? state.migrations : {};
+    if (state.migrations[migrationId]) {
+      return { applied: false, reason: "already-applied", businessId: state.migrations[migrationId].businessId };
+    }
+    const targetName = String(businessName || "").trim().toLowerCase();
+    const matches = (state.businesses || []).filter((business) =>
+      String(business.name || "").trim().toLowerCase() === targetName
+    );
+    if (matches.length !== 1) {
+      return { applied: false, reason: "business-name-match-count", matchCount: matches.length };
+    }
+
+    const business = matches[0];
+    const correctedFields = [];
+    for (const field of ["whatsappNumber", "whatsappRequestedPhone"]) {
+      const digits = String(business[field] || "").replace(/[^0-9]/g, "");
+      if (/^2540[17]\d{8}$/.test(digits)) {
+        business[field] = digits.slice(0, 3) + digits.slice(4);
+        correctedFields.push(field);
+      }
+    }
+    state.migrations[migrationId] = {
+      appliedAt: now(),
+      businessId: business.id,
+      fields: correctedFields,
+    };
+    return { applied: true, businessId: business.id, correctedFields };
+  });
+}
+
 function runOneTimePhoneCorrection({ shopPhone, personalPhone, personalPhoneRaw, shopPhoneRaw, whatsappNumber, whatsappRequestedPhone, migrationId }) {
   return mutate((state) => {
     state.migrations = state.migrations && typeof state.migrations === "object" ? state.migrations : {};
@@ -2744,6 +2827,7 @@ module.exports = {
   runOneTimeSafeReset,
   runOneTimePhoneCorrection,
   runOneTimeWhatsAppRoutingCorrection,
+  runOneTimeWelcomeMessageUpdate,
   restoreDeletedBusinessForSingleOrphanedAccount,
   repairSingleOrphanedAccount,
   id,
@@ -2758,6 +2842,7 @@ module.exports = {
   SESSION_COOKIE_NAME,
   derivePersonaName,
   generateWelcomeMessage,
+  generateShopEntryPrompt,
   createBusiness,
   listBusinesses,
   getBusiness,

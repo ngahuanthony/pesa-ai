@@ -2,20 +2,18 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import QRCode from "qrcode";
 import { Download, QrCode } from "lucide-react";
 import { BRAND_NAME } from "@/constants/brand";
+import { getShopEntryPrompt, normalizeKenyanWhatsAppNumber } from "@/lib/shop-entry-prompt";
 
 interface ShopQRCardProps {
   businessName: string;
   phone: string; // raw phone from waStatus or business profile
   shopSlug?: string;
+  whatsappConnected: boolean;
 }
 
 /** Normalise any Kenyan phone format → digits only with country code, e.g. "254712345678" */
 function normalisePhone(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("254")) return digits;
-  if (digits.startsWith("0"))   return "254" + digits.slice(1);
-  if (digits.startsWith("7") || digits.startsWith("1")) return "254" + digits;
-  return digits;
+  return normalizeKenyanWhatsAppNumber(raw);
 }
 
 function displayPhone(raw: string): string {
@@ -81,19 +79,28 @@ function roundRect(
   ctx.closePath();
 }
 
-export function ShopQRCard({ businessName, phone, shopSlug }: ShopQRCardProps) {
+export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }: ShopQRCardProps) {
   const previewRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
 
   const publicShopPath = `/shop/${encodeURIComponent(shopSlug || slugifyShopName(businessName))}`;
   const shopUrl = `${window.location.origin}${publicShopPath}`;
+  const whatsappPhone = normalisePhone(phone);
+  const hasWhatsappNumber = /^254\d{9}$/.test(whatsappPhone);
+  const isHotel = businessName.trim().toLowerCase() === "skyview opal hotel";
+  const whatsappQrReady = whatsappConnected && hasWhatsappNumber;
+  const whatsappUrl = hasWhatsappNumber
+    ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(getShopEntryPrompt(businessName))}`
+    : shopUrl;
+  const canDownload = hasWhatsappNumber ? whatsappQrReady : true;
 
   /** Compose the full-res print card onto a canvas and return it */
   const buildCanvas = useCallback(async (W: number, H: number): Promise<HTMLCanvasElement> => {
     // 1. Generate QR at high resolution
     const qrSize = Math.round(W * 0.62);
-    const qrDataUrl: string = await QRCode.toDataURL(shopUrl, {
+    const qrDataUrl: string = await QRCode.toDataURL(whatsappUrl, {
       width: qrSize,
       margin: 2,
       color: { dark: "#111111", light: "#ffffff" },
@@ -101,7 +108,10 @@ export function ShopQRCard({ businessName, phone, shopSlug }: ShopQRCardProps) {
 
     const qrImg = new Image();
     qrImg.src = qrDataUrl;
-    await new Promise<void>((res) => { qrImg.onload = () => res(); });
+    await new Promise<void>((resolve, reject) => {
+      qrImg.onload = () => resolve();
+      qrImg.onerror = () => reject(new Error("The QR image could not be loaded."));
+    });
 
     // 2. Build canvas
     const canvas = document.createElement("canvas");
@@ -161,7 +171,13 @@ export function ShopQRCard({ businessName, phone, shopSlug }: ShopQRCardProps) {
     const ctaFontSize = Math.round(W * 0.038);
     ctx.font = `bold ${ctaFontSize}px Arial`;
     ctx.fillStyle = "#111827";
-    ctx.fillText("📱  Scan here to browse & order", W / 2, divY + Math.round(H * 0.055));
+    ctx.fillText(
+      hasWhatsappNumber
+        ? isHotel ? "📱  Scan to explore hotel services" : "📱  Scan to ask about menu & items"
+        : "📱  Scan here to browse & order",
+      W / 2,
+      divY + Math.round(H * 0.055)
+    );
 
     // Phone number
     const phoneFontSize = Math.round(W * 0.03);
@@ -183,23 +199,34 @@ export function ShopQRCard({ businessName, phone, shopSlug }: ShopQRCardProps) {
     ctx.stroke();
 
     return canvas;
-  }, [shopUrl, businessName, phone]);
+  }, [whatsappUrl, businessName, phone, hasWhatsappNumber, isHotel]);
 
   // Render preview into the visible canvas
   useEffect(() => {
-    if (!previewRef.current || !phone || !businessName) return;
+    if (!previewRef.current) return;
     setReady(false);
+    setQrError(null);
+    if (!phone || !businessName || (hasWhatsappNumber && !whatsappConnected)) {
+      const context = previewRef.current.getContext("2d");
+      context?.clearRect(0, 0, previewRef.current.width, previewRef.current.height);
+      return;
+    }
     buildCanvas(480, 680).then((src) => {
       const dst = previewRef.current!;
       dst.width  = src.width;
       dst.height = src.height;
       dst.getContext("2d")!.drawImage(src, 0, 0);
       setReady(true);
+    }).catch((error) => {
+      console.error("Failed to generate shop QR:", error);
+      setQrError("The QR preview could not be generated. Please try again.");
     });
-  }, [buildCanvas, phone, businessName]);
+  }, [buildCanvas, phone, businessName, hasWhatsappNumber, whatsappConnected]);
 
   const handleDownload = async () => {
+    if (!canDownload || !ready) return;
     setDownloading(true);
+    setQrError(null);
     try {
       // Print-ready: ~A5 at 180 DPI
       const canvas = await buildCanvas(1050, 1480);
@@ -207,6 +234,9 @@ export function ShopQRCard({ businessName, phone, shopSlug }: ShopQRCardProps) {
       link.download = `${businessName.replace(/\s+/g, "-")}-WhatsApp-Shop-QR.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
+    } catch (error) {
+      console.error("Failed to download shop QR:", error);
+      setQrError("The print-ready QR could not be generated. Please try again.");
     } finally {
       setDownloading(false);
     }
@@ -240,8 +270,51 @@ export function ShopQRCard({ businessName, phone, shopSlug }: ShopQRCardProps) {
         {downloading ? "Generating…" : "Download Print-Ready PNG"}
       </button>
 
+      <p className="max-w-[280px] text-center text-sm text-muted-foreground">
+        {hasWhatsappNumber && !whatsappConnected
+          ? "The WhatsApp QR is not ready to share yet. WhatsApp must show Active & Live first."
+          : hasWhatsappNumber
+            ? isHotel
+              ? "Customers can ask about dining, rooms, the pool, conferences, and events on WhatsApp."
+              : "Customers can ask on WhatsApp about your menu, items, stock, and prices."
+            : "Connect a verified Duka number to enable WhatsApp chat. The web shop is available below."}
+      </p>
+      {qrError && <p role="alert" className="max-w-[280px] text-center text-xs text-destructive">{qrError}</p>}
+      {hasWhatsappNumber && !whatsappConnected && (
+        <p role="status" className="max-w-[280px] text-center text-xs font-medium text-amber-700">
+          Not ready to download or share as a WhatsApp QR.
+        </p>
+      )}
+      {ready && canDownload && (
+        <p role="status" className="max-w-[280px] text-center text-xs font-medium text-emerald-700">
+          {hasWhatsappNumber ? "WhatsApp QR is ready to download and share." : "Web shop QR is ready to download and share."}
+        </p>
+      )}
+      <div className="flex w-full max-w-[280px] flex-col gap-2">
+        {hasWhatsappNumber && whatsappConnected && (
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center rounded-lg bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#20bd5a] transition-colors"
+          >
+            Open WhatsApp chat
+          </a>
+        )}
+        <a
+          href={shopUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center justify-center rounded-lg border border-primary/20 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/5 transition-colors"
+        >
+          Open public web shop
+        </a>
+      </div>
+
       <p className="text-[11px] text-muted-foreground text-center max-w-[220px]">
-        High-res PNG · Print on A5 or stick on your counter
+        {hasWhatsappNumber
+          ? whatsappConnected ? "WhatsApp QR · Web shop link available as a fallback" : "WhatsApp QR unavailable until connection is live"
+          : "Web shop QR"}
       </p>
     </div>
   );
