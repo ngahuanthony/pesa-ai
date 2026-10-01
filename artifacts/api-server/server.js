@@ -616,7 +616,7 @@ persistence.init(db.DATA_FILE).then(() => {
     });
     const productionBusinesses = db.load().businesses || [];
     const skyviewBusinesses = productionBusinesses.filter((business) =>
-      business.name === "Skyview Opal Hotel" &&
+      String(business.name || "").toLowerCase() === "skyview opal hotel" &&
       db.normalizePhone(business.whatsappRequestedPhone) === "254182667245"
     );
     const phoneNumberIdOwners = productionBusinesses.filter((business) =>

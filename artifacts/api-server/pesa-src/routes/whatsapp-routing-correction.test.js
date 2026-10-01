@@ -29,7 +29,7 @@ test.beforeEach(() => {
 });
 
 test("corrects only the unique Skyview business matching its requested phone", () => {
-  const skyview = createBusiness("Skyview Opal Hotel", "254700000001");
+  const skyview = createBusiness("SKYVIEW OPAL HOTEL", "254700000001");
   const annex = createBusiness("Skyview Opal Hotel Annex", "254700000002");
   const duplicateName = createBusiness("Skyview Opal Hotel", "254700000003");
   db.mutate((state) => {
@@ -43,7 +43,7 @@ test("corrects only the unique Skyview business matching its requested phone", (
   const migrationId = "test-skyview-routing-unique";
   const result = db.runOneTimeExactWhatsAppPhoneNumberIdCorrection({
     businessName: "Skyview Opal Hotel",
-    requestedPhone: "+254 182 667 245",
+    requestedPhone: "+2540182 667 245",
     phoneNumberId: "1391881137336168",
     migrationId,
   });
@@ -61,7 +61,7 @@ test("corrects only the unique Skyview business matching its requested phone", (
 
 test("does not change routing when the requested phone matches multiple Skyview records", () => {
   const first = createBusiness("Skyview Opal Hotel", "254700000004");
-  const second = createBusiness("Skyview Opal Hotel", "254700000005");
+  const second = createBusiness("SKYVIEW OPAL HOTEL", "254700000005");
   db.mutate((state) => {
     state.businesses.find((business) => business.id === first.id).whatsappRequestedPhone = "254182667245";
     state.businesses.find((business) => business.id === second.id).whatsappRequestedPhone = "+254 182 667 245";

@@ -2771,7 +2771,7 @@ function runOneTimeExactWhatsAppPhoneNumberIdCorrection({ businessName, requeste
     }
 
     const matches = (state.businesses || []).filter((business) =>
-      (!hasBusinessName || business.name === businessName) &&
+      (!hasBusinessName || String(business.name || "").toLowerCase() === businessName.toLowerCase()) &&
       (!hasRequestedPhone || normalizePhone(business.whatsappRequestedPhone) === normalizedRequestedPhone)
     );
     if (matches.length !== 1) {
