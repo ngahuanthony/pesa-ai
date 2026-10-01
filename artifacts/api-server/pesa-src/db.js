@@ -2828,6 +2828,7 @@ module.exports = {
   runOneTimePhoneCorrection,
   runOneTimeWhatsAppRoutingCorrection,
   runOneTimeWelcomeMessageUpdate,
+  runOneTimeWhatsAppNumberCorrection,
   restoreDeletedBusinessForSingleOrphanedAccount,
   repairSingleOrphanedAccount,
   id,

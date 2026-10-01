@@ -22,4 +22,5 @@ test("Skyview gets hotel-specific default welcome and scan copy", () => {
 test("normalizes Kenyan international numbers without a duplicate trunk zero", () => {
   assert.equal(db.normalizePhone("+254 0712 345 678"), "254712345678");
   assert.equal(db.normalizePhone("0712 345 678"), "254712345678");
+  assert.equal(typeof db.runOneTimeWhatsAppNumberCorrection, "function");
 });
