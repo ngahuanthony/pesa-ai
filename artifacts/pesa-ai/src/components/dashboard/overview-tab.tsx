@@ -29,8 +29,6 @@ export function OverviewTab() {
   const { data: me } = useGetMe();
   const businessId   = (me as any)?.business?.id || "";
   const businessName = (me as any)?.business?.name || "your shop";
-  const businessCategory = (me as any)?.business?.category || "";
-  const merchantType = (me as any)?.business?.merchantType || "";
   const isHotel = businessName.trim().toLowerCase() === "skyview opal hotel";
   const { toast }    = useToast();
 
@@ -256,7 +254,7 @@ export function OverviewTab() {
           <div className="p-5 flex flex-col sm:flex-row gap-6 items-start">
             {/* QR card preview + download */}
             <div className="flex-shrink-0 w-full sm:w-auto flex justify-center">
-              <ShopQRCard businessName={businessName} phone={waStatus.requestedPhone} whatsappConnected={waConnected} category={businessCategory} merchantType={merchantType} />
+              <ShopQRCard businessName={businessName} phone={waStatus.requestedPhone} whatsappConnected={waConnected} />
             </div>
 
             {/* Instructions */}

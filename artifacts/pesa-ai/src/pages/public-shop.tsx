@@ -15,7 +15,7 @@ type Shop = {
   logoUrl: string | null;
   whatsappUrl: string | null;
   businessId: string;
-  popularProducts: Array<{ id: string; name: string; price: number; stockQty: number; availabilityMode?: "menu" | "quantity"; active?: boolean }>;
+  popularProducts: Array<{ id: string; name: string; price: number; stockQty: number }>;
 };
 
 type ProductVariant = {
@@ -24,18 +24,8 @@ type ProductVariant = {
   variant: string | null;
   price: number;
   stockQty: number;
-  availabilityMode?: "menu" | "quantity";
-  active?: boolean;
   imageUrl: string;
 };
-
-function ProductAvailability({ product }: { product: { stockQty: number; availabilityMode?: "menu" | "quantity"; active?: boolean } }) {
-  if (product.availabilityMode === "menu") {
-    const active = product.active !== false;
-    return <span className={active ? "text-xs font-semibold text-[#168447]" : "text-xs font-semibold text-slate-400"}>{active ? "Available" : "Unavailable"}</span>;
-  }
-  return <span className={product.stockQty > 0 ? "text-xs font-semibold text-[#168447]" : "text-xs font-semibold text-slate-400"}>{product.stockQty > 0 ? `Stock: ${product.stockQty}` : "Out of stock"}</span>;
-}
 
 export default function PublicShopPage() {
   const [, params] = useRoute("/shop/:slug");
@@ -111,8 +101,8 @@ export default function PublicShopPage() {
                   {searchState === "loading" && <div className="mt-6 flex justify-center"><LoaderCircle className="h-6 w-6 animate-spin text-[#25a85a]" /></div>}
                   {searchState === "error" && <p role="alert" className="mt-4 text-sm text-red-700">We could not search this shop. Try again.</p>}
                   {searchState === "empty" && <p className="mt-4 rounded-2xl bg-[#f7faf8] p-4 text-sm text-slate-600">No photographed variant matched that search. Ask the shop on WhatsApp.</p>}
-                  {results.length > 0 && <div className="mt-6 grid gap-4 sm:grid-cols-2">{results.map((result) => <article key={result.id} className="overflow-hidden rounded-2xl border bg-[#f7faf8]"><img src={result.imageUrl} alt={`${result.productName}${result.variant ? ` ${result.variant}` : ""}`} className="h-56 w-full object-cover" loading="lazy" /><div className="p-5"><h3 className="font-bold">{result.productName}{result.variant ? ` · ${result.variant}` : ""}</h3><div className="mt-4 flex items-center justify-between gap-3"><span className="font-extrabold">KSh {Number(result.price || 0).toLocaleString()}</span><ProductAvailability product={result} /></div></div></article>)}</div>}
-                  {results.length === 0 && searchState === "idle" && <div className="mt-7"><div className="flex items-center gap-2"><Package className="h-5 w-5 text-[#25a85a]" /><h3 className="text-lg font-extrabold">Popular products</h3></div>{shop.popularProducts.length === 0 ? <p className="mt-3 text-sm text-slate-600">Ask the merchant what is available today.</p> : <div className="mt-3 grid gap-3 sm:grid-cols-3">{shop.popularProducts.slice(0, 3).map((product) => <div key={product.id} className="rounded-2xl border bg-[#f7faf8] p-4"><p className="font-semibold">{product.name}</p><p className="mt-2 text-sm font-bold">KSh {Number(product.price || 0).toLocaleString()}</p><p className="mt-1"><ProductAvailability product={product} /></p></div>)}</div>}</div>}
+                  {results.length > 0 && <div className="mt-6 grid gap-4 sm:grid-cols-2">{results.map((result) => <article key={result.id} className="overflow-hidden rounded-2xl border bg-[#f7faf8]"><img src={result.imageUrl} alt={`${result.productName}${result.variant ? ` ${result.variant}` : ""}`} className="h-56 w-full object-cover" loading="lazy" /><div className="p-5"><h3 className="font-bold">{result.productName}{result.variant ? ` · ${result.variant}` : ""}</h3><div className="mt-4 flex items-center justify-between gap-3"><span className="font-extrabold">KSh {Number(result.price || 0).toLocaleString()}</span><span className={result.stockQty > 0 ? "text-xs font-semibold text-[#168447]" : "text-xs font-semibold text-slate-400"}>{result.stockQty > 0 ? `Stock: ${result.stockQty}` : "Out of stock"}</span></div></div></article>)}</div>}
+                  {results.length === 0 && searchState === "idle" && <div className="mt-7"><div className="flex items-center gap-2"><Package className="h-5 w-5 text-[#25a85a]" /><h3 className="text-lg font-extrabold">Popular products</h3></div>{shop.popularProducts.length === 0 ? <p className="mt-3 text-sm text-slate-600">Ask the merchant what is available today.</p> : <div className="mt-3 grid gap-3 sm:grid-cols-3">{shop.popularProducts.slice(0, 3).map((product) => <div key={product.id} className="rounded-2xl border bg-[#f7faf8] p-4"><p className="font-semibold">{product.name}</p><p className="mt-2 text-sm font-bold">KSh {Number(product.price || 0).toLocaleString()}</p><p className="mt-1 text-xs text-[#168447]">Stock: {product.stockQty}</p></div>)}</div>}</div>}
                 </div>
               </section>
               {shop.whatsappUrl && <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#d9e8df] bg-white/95 px-5 py-3 shadow-[0_-8px_30px_rgba(10,74,58,0.12)] backdrop-blur"><div className="mx-auto flex max-w-5xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><a href={shop.whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#25D366] px-5 py-3 text-sm font-bold text-white"><ExternalLink className="h-4 w-4" /> Chat on WhatsApp Shop</a><a href={shop.whatsappUrl} target="_blank" rel="noreferrer" className="text-center text-xs font-semibold text-slate-600 underline underline-offset-4">Open directly in WhatsApp</a></div></div>}
