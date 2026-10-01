@@ -153,8 +153,10 @@ async function handleIncomingWebhook(body) {
   if (requestedVariants.length) {
     const variant = requestedVariants[0];
     const label = variant.productName + (variant.variant ? " — " + variant.variant : "");
-    const stock = Number(variant.stockQty) > 0 ? "Stock: " + Number(variant.stockQty) : "Out of stock";
-    const caption = label + "\n" + stock + "\nPrice: KSh " + Number(variant.price || 0).toLocaleString("en-KE");
+    const availability = variant.availabilityMode === "menu"
+      ? "Available while on the menu"
+      : Number(variant.stockQty) > 0 ? "Stock: " + Number(variant.stockQty) : "Out of stock";
+    const caption = label + "\n" + availability + "\nPrice: KSh " + Number(variant.price || 0).toLocaleString("en-KE");
     await sendImageMessage(phoneNumberId, from, variant.imageUrl, caption, accessToken);
     return;
   }

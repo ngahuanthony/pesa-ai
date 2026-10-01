@@ -421,6 +421,15 @@ function getCategoryEmoji(category) {
   return "🛍️";
 }
 
+function isHospitalityBusiness(business) {
+  const merchantType = String(business && business.merchantType || "").trim().toLowerCase();
+  if (merchantType === "hospitality" || merchantType === "hotel") return true;
+  if (merchantType && !["retail", "other"].includes(merchantType)) return false;
+  const category = String(business && business.category || "").trim().toLowerCase();
+  const descriptor = category || String(business && business.name || "").trim().toLowerCase();
+  return /\b(hotel|hospitality|accommodation|resort|lodge|inn|restaurant|cafe)\b|café/.test(descriptor);
+}
+
 function generateWelcomeMessage(business) {
   const name = business.name || "Our Shop";
   if (String(name).trim().toLowerCase() === "skyview opal hotel") {
@@ -437,6 +446,14 @@ function generateWelcomeMessage(business) {
       `Use this chat to view our menu, place an order, enquire about rooms, conferences, events and other hotel services.\n` +
       `*Skyview Opal Hotel*\n` +
       `_Your comfort. Your experience. Your moment._ ✨`
+    );
+  }
+
+  if (isHospitalityBusiness(business)) {
+    return (
+      `🏨 Welcome to ${name}!\n` +
+      `We’re here to help with menu, availability, booking and order enquiries.\n` +
+      `💬 Tell us what you need and we’ll guide you through the next step.`
     );
   }
 
@@ -463,9 +480,16 @@ function generateWelcomeMessage(business) {
   );
 }
 
-function generateShopEntryPrompt(businessName) {
-  if (String(businessName || "").trim().toLowerCase() === "skyview opal hotel") {
+function generateShopEntryPrompt(businessOrName) {
+  const business = typeof businessOrName === "string"
+    ? { name: businessOrName }
+    : (businessOrName && typeof businessOrName === "object" ? businessOrName : {});
+  const name = String(business.name || "Our business").trim();
+  if (name.toLowerCase() === "skyview opal hotel") {
     return "Hi Skyview Opal Hotel, I'd like to explore dining, rooms, the pool, conferences and events.";
+  }
+  if (isHospitalityBusiness(business)) {
+    return `Hi ${name}, I'd like to make an enquiry or place an order.`;
   }
   return "Hi, I'd like to shop";
 }
@@ -985,6 +1009,9 @@ function publicShopPayload(business, { includeProducts = false } = {}) {
   const slug = getPublicShopSlug(business);
   const publicNumber = business.publicPhone || business.whatsappNumber ||
     business.whatsappRequestedPhone || business.pesaAiNumber || business.shopPhone || null;
+  const whatsappPrompt = isHospitalityBusiness(business)
+    ? generateShopEntryPrompt(business)
+    : `Hi ${slug}`;
   const payload = {
     name: business.name,
     category: business.category || null,
@@ -999,18 +1026,21 @@ function publicShopPayload(business, { includeProducts = false } = {}) {
     slug,
     url: `/shop/${encodeURIComponent(slug)}`,
     whatsappUrl: publicNumber
-      ? `https://wa.me/${normalizePhone(publicNumber)}?text=${encodeURIComponent(`Hi ${slug}`)}`
+      ? `https://wa.me/${normalizePhone(publicNumber)}?text=${encodeURIComponent(whatsappPrompt)}`
       : null,
   };
   if (includeProducts) {
+    const menuAvailability = isHospitalityBusiness(business);
     payload.popularProducts = listProducts(business.id, { activeOnly: true })
-      .filter((product) => Number(product.stockQty) > 0)
+      .filter((product) => menuAvailability || Number(product.stockQty) > 0)
       .slice(0, 3)
       .map((product) => ({
       id: product.id,
       name: product.name,
       price: product.price,
       stockQty: product.stockQty,
+      availabilityMode: menuAvailability ? "menu" : "quantity",
+      active: product.active !== false,
     }));
   }
   return payload;
@@ -1066,6 +1096,7 @@ function searchPublicProducts(businessId, query, { limit = 12 } = {}) {
     candidate.id === businessId && isPublicShopDiscoverable(candidate)
   );
   if (!business) return [];
+  const menuAvailability = isHospitalityBusiness(business);
   const tokens = normalizeProductSearchText(query).split(/\s+/).filter(Boolean);
   if (!tokens.length) return [];
 
@@ -1092,6 +1123,8 @@ function searchPublicProducts(businessId, query, { limit = 12 } = {}) {
         variant: variantName || null,
         price: Number(product.price) || 0,
         stockQty: Number(variant.quantity) || 0,
+        availabilityMode: menuAvailability ? "menu" : "quantity",
+        active: product.active !== false,
         imageUrl,
       });
       if (results.length >= maxResults) return results;
@@ -2245,6 +2278,8 @@ function getConversationHistory(businessId, customerPhone, limit = 20) {
 // --- Orders --------------------------------------------------------------
 
 function createOrder(state, { businessId, customerId, items, serviceLocationId = null }) {
+  const business = (state.businesses || []).find((candidate) => candidate.id === businessId);
+  const stockTracked = !isHospitalityBusiness(business);
   // items: [{ productId, quantity }]
   if (serviceLocationId) {
     const location = (state.serviceLocations || []).find((item) => item.id === serviceLocationId && item.businessId === businessId && item.active);
@@ -2270,6 +2305,7 @@ function createOrder(state, { businessId, customerId, items, serviceLocationId =
     fulfillmentStatus: "NEW",
     paymentStatus: "PENDING",
     paymentMethod: null,
+    stockTracked,
     serviceLocationId: serviceLocationId || null,
     serviceLocationSnapshot: location ? { kind: location.kind, label: location.label } : null,
     totalAmount,
@@ -2284,7 +2320,7 @@ function createOrder(state, { businessId, customerId, items, serviceLocationId =
     }],
   };
   state.orders.push(order);
-  resolvedItems.forEach((i) => decrementStock(state, i.productId, i.quantity));
+  if (stockTracked) resolvedItems.forEach((i) => decrementStock(state, i.productId, i.quantity));
   return order;
 }
 
@@ -2324,7 +2360,11 @@ function updateOrderStatus(orderId, status, paymentMeta = null, { actor = "syste
       o.paymentStatus = "PAID";
       o.paymentMethod = paymentMeta.paymentMethod || o.paymentMethod || null;
     }
-    if (String(o.fulfillmentStatus || "").toUpperCase() === "CANCELLED" && !o.stockRestoredAt) {
+    const business = (state.businesses || []).find((candidate) => candidate.id === o.businessId);
+    const stockTracked = typeof o.stockTracked === "boolean"
+      ? o.stockTracked
+      : !isHospitalityBusiness(business);
+    if (String(o.fulfillmentStatus || "").toUpperCase() === "CANCELLED" && stockTracked && !o.stockRestoredAt) {
       for (const item of o.items || []) {
         const product = state.products.find((candidate) => candidate.id === item.productId && candidate.businessId === o.businessId);
         if (product) product.stockQty = Number(product.stockQty || 0) + Number(item.quantity || 0);
@@ -2371,14 +2411,20 @@ function updateOrderItems(orderId, requestedItems, { actor = "merchant" } = {}) 
       quantities.set(productId, (quantities.get(productId) || 0) + quantity);
     }
 
+    const business = (state.businesses || []).find((candidate) => candidate.id === order.businessId);
+    const stockTracked = typeof order.stockTracked === "boolean"
+      ? order.stockTracked
+      : !isHospitalityBusiness(business);
     const oldByProduct = new Map((order.items || []).map((item) => [item.productId, Number(item.quantity || 0)]));
     const resolvedItems = [];
     for (const [productId, quantity] of quantities) {
       const product = state.products.find((candidate) => candidate.id === productId && candidate.businessId === order.businessId && candidate.active !== false);
       if (!product) throw httpError(400, `Unknown or inactive product: ${productId}`);
       const previouslyReserved = oldByProduct.get(productId) || 0;
-      const available = Number(product.stockQty || 0) + previouslyReserved;
-      if (quantity > available) throw httpError(409, `Only ${available} of ${product.name} are available`);
+      if (stockTracked) {
+        const available = Number(product.stockQty || 0) + previouslyReserved;
+        if (quantity > available) throw httpError(409, `Only ${available} of ${product.name} are available`);
+      }
       resolvedItems.push({
         productId: product.id,
         productName: product.name,
@@ -2387,11 +2433,13 @@ function updateOrderItems(orderId, requestedItems, { actor = "merchant" } = {}) 
       });
     }
 
-    for (const oldItem of order.items || []) {
-      const product = state.products.find((candidate) => candidate.id === oldItem.productId && candidate.businessId === order.businessId);
-      if (product) product.stockQty = Number(product.stockQty || 0) + Number(oldItem.quantity || 0);
+    if (stockTracked) {
+      for (const oldItem of order.items || []) {
+        const product = state.products.find((candidate) => candidate.id === oldItem.productId && candidate.businessId === order.businessId);
+        if (product) product.stockQty = Number(product.stockQty || 0) + Number(oldItem.quantity || 0);
+      }
+      for (const item of resolvedItems) decrementStock(state, item.productId, item.quantity);
     }
-    for (const item of resolvedItems) decrementStock(state, item.productId, item.quantity);
 
     const before = (order.items || []).map((item) => ({ productId: item.productId, productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice }));
     order.items = resolvedItems;
@@ -2747,6 +2795,52 @@ function runOneTimeWhatsAppRoutingCorrection({ businessName, phoneNumberId, waba
   });
 }
 
+function runOneTimeExactWhatsAppPhoneNumberIdCorrection({ businessName, phoneNumberId, migrationId }) {
+  return mutate((state) => {
+    state.migrations = state.migrations && typeof state.migrations === "object" ? state.migrations : {};
+    if (state.migrations[migrationId]) {
+      return { applied: false, reason: "already-applied", businessId: state.migrations[migrationId].businessId };
+    }
+
+    const targetPhoneNumberId = String(phoneNumberId ?? "");
+    if (
+      typeof businessName !== "string" ||
+      businessName.length === 0 ||
+      targetPhoneNumberId.length === 0 ||
+      targetPhoneNumberId.trim() !== targetPhoneNumberId ||
+      typeof migrationId !== "string" ||
+      migrationId.length === 0
+    ) {
+      return { applied: false, reason: "invalid-correction-input" };
+    }
+
+    const matches = (state.businesses || []).filter((business) => business.name === businessName);
+    if (matches.length !== 1) {
+      return { applied: false, reason: "business-name-match-count", matchCount: matches.length };
+    }
+
+    const business = matches[0];
+    const conflictingBusiness = (state.businesses || []).find((candidate) =>
+      candidate !== business && String(candidate.whatsappPhoneNumberId ?? "") === targetPhoneNumberId
+    );
+    if (conflictingBusiness) {
+      return {
+        applied: false,
+        reason: "phone-number-id-already-assigned",
+        conflictingBusinessId: conflictingBusiness.id,
+      };
+    }
+
+    business.whatsappPhoneNumberId = targetPhoneNumberId;
+    state.migrations[migrationId] = {
+      appliedAt: now(),
+      businessId: business.id,
+      fields: ["whatsappPhoneNumberId"],
+    };
+    return { applied: true, businessId: business.id };
+  });
+}
+
 function runOneTimeWelcomeMessageUpdate({ businessName, welcomeMessage, migrationId }) {
   return mutate((state) => {
     state.migrations = state.migrations && typeof state.migrations === "object" ? state.migrations : {};
@@ -2819,6 +2913,7 @@ function runOneTimePhoneCorrection({ shopPhone, personalPhone, personalPhoneRaw,
 module.exports = {
   DATA_FILE,
   normalizeMerchantType,
+  isHospitalityBusiness,
   loadRaw,
   requestWhatsAppConnection,
   getVendorWhatsAppStatus,
@@ -2827,6 +2922,7 @@ module.exports = {
   runOneTimeSafeReset,
   runOneTimePhoneCorrection,
   runOneTimeWhatsAppRoutingCorrection,
+  runOneTimeExactWhatsAppPhoneNumberIdCorrection,
   runOneTimeWelcomeMessageUpdate,
   runOneTimeWhatsAppNumberCorrection,
   restoreDeletedBusinessForSingleOrphanedAccount,

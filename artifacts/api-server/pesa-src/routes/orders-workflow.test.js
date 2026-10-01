@@ -31,7 +31,7 @@ function setupOrder() {
   return { business, location, rice, drink, order };
 }
 
-test("order corrections recalculate totals, reserve stock, and keep history", () => {
+test("hospitality order corrections recalculate totals without changing numeric menu quantities", () => {
   const { rice, drink, order } = setupOrder();
   const corrected = db.updateOrderItems(order.id, [
     { productId: rice.id, quantity: 2 },
@@ -40,8 +40,8 @@ test("order corrections recalculate totals, reserve stock, and keep history", ()
   assert.equal(corrected.totalAmount, 850);
   assert.equal(corrected.revision, 2);
   assert.equal(corrected.history.at(-1).type, "items");
-  assert.equal(db.getProduct(rice.id).stockQty, 8);
-  assert.equal(db.getProduct(drink.id).stockQty, 9);
+  assert.equal(db.getProduct(rice.id).stockQty, 10);
+  assert.equal(db.getProduct(drink.id).stockQty, 10);
 });
 
 test("payment remains independent from kitchen fulfilment", () => {
@@ -54,9 +54,9 @@ test("payment remains independent from kitchen fulfilment", () => {
   assert.throws(() => db.updateOrderItems(order.id, [{ productId: paid.items[0].productId, quantity: 2 }]), /Paid orders cannot be edited/);
 });
 
-test("cancelling restores reserved stock exactly once", () => {
+test("cancelling hospitality orders does not restore or change numeric menu quantities", () => {
   const { rice, order } = setupOrder();
-  assert.equal(db.getProduct(rice.id).stockQty, 9);
+  assert.equal(db.getProduct(rice.id).stockQty, 10);
   const cancelled = db.updateOrderStatus(order.id, "CANCELLED");
   assert.equal(cancelled.fulfillmentStatus, "CANCELLED");
   assert.equal(db.getProduct(rice.id).stockQty, 10);

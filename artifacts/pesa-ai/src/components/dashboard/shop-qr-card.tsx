@@ -2,13 +2,15 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import QRCode from "qrcode";
 import { Download, QrCode } from "lucide-react";
 import { BRAND_NAME } from "@/constants/brand";
-import { getShopEntryPrompt, normalizeKenyanWhatsAppNumber } from "@/lib/shop-entry-prompt";
+import { getShopEntryPrompt, isHospitalityBusiness, isSkyviewOpalHotel, normalizeKenyanWhatsAppNumber } from "@/lib/shop-entry-prompt";
 
 interface ShopQRCardProps {
   businessName: string;
   phone: string; // raw phone from waStatus or business profile
   shopSlug?: string;
   whatsappConnected: boolean;
+  category?: string;
+  merchantType?: string;
 }
 
 /** Normalise any Kenyan phone format → digits only with country code, e.g. "254712345678" */
@@ -79,7 +81,7 @@ function roundRect(
   ctx.closePath();
 }
 
-export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }: ShopQRCardProps) {
+export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected, category, merchantType }: ShopQRCardProps) {
   const previewRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -89,10 +91,12 @@ export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }:
   const shopUrl = `${window.location.origin}${publicShopPath}`;
   const whatsappPhone = normalisePhone(phone);
   const hasWhatsappNumber = /^254\d{9}$/.test(whatsappPhone);
-  const isHotel = businessName.trim().toLowerCase() === "skyview opal hotel";
+  const business = { name: businessName, category, merchantType };
+  const isSkyview = isSkyviewOpalHotel(business);
+  const isHospitality = isHospitalityBusiness(business);
   const whatsappQrReady = whatsappConnected && hasWhatsappNumber;
   const whatsappUrl = hasWhatsappNumber
-    ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(getShopEntryPrompt(businessName))}`
+    ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(getShopEntryPrompt(business))}`
     : shopUrl;
   const canDownload = hasWhatsappNumber ? whatsappQrReady : true;
 
@@ -173,7 +177,11 @@ export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }:
     ctx.fillStyle = "#111827";
     ctx.fillText(
       hasWhatsappNumber
-        ? isHotel ? "📱  Scan to explore hotel services" : "📱  Scan to ask about menu & items"
+          ? isSkyview
+            ? "📱  Scan to explore hotel services"
+            : isHospitality
+              ? "📱  Scan to enquire or place an order"
+              : "📱  Scan to ask about menu & items"
         : "📱  Scan here to browse & order",
       W / 2,
       divY + Math.round(H * 0.055)
@@ -199,7 +207,7 @@ export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }:
     ctx.stroke();
 
     return canvas;
-  }, [whatsappUrl, businessName, phone, hasWhatsappNumber, isHotel]);
+  }, [whatsappUrl, businessName, phone, hasWhatsappNumber, isHospitality]);
 
   // Render preview into the visible canvas
   useEffect(() => {
@@ -274,9 +282,11 @@ export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }:
         {hasWhatsappNumber && !whatsappConnected
           ? "The WhatsApp QR is not ready to share yet. WhatsApp must show Active & Live first."
           : hasWhatsappNumber
-            ? isHotel
+            ? isSkyview
               ? "Customers can ask about dining, rooms, the pool, conferences, and events on WhatsApp."
-              : "Customers can ask on WhatsApp about your menu, items, stock, and prices."
+              : isHospitality
+                ? "Customers can send enquiries or place orders on WhatsApp."
+                : "Customers can ask on WhatsApp about your menu, items, stock, and prices."
             : "Connect a verified Duka number to enable WhatsApp chat. The web shop is available below."}
       </p>
       {qrError && <p role="alert" className="max-w-[280px] text-center text-xs text-destructive">{qrError}</p>}

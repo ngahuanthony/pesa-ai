@@ -12,9 +12,12 @@ const { buildConciergeList } = require("./concierge");
 const SHOP_LINK_TRIGGER = "hi, i'd like to shop";
 const HOTEL_SHOP_LINK_TRIGGER = db.generateShopEntryPrompt("Skyview Opal Hotel").toLowerCase();
 
-function isShopLinkTrigger(text) {
+function isShopLinkTrigger(text, business) {
   const normalized = String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
-  return normalized === SHOP_LINK_TRIGGER || normalized === HOTEL_SHOP_LINK_TRIGGER;
+  const businessPrompt = business ? db.generateShopEntryPrompt(business).toLowerCase() : null;
+  return normalized === SHOP_LINK_TRIGGER ||
+    normalized === HOTEL_SHOP_LINK_TRIGGER ||
+    normalized === businessPrompt;
 }
 
 // Keywords that signal a customer wants to speak to a human.
@@ -175,7 +178,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     };
   }
 
-  const isShopLinkEntry = isShopLinkTrigger(text);
+  const isShopLinkEntry = isShopLinkTrigger(text, business);
 
    if (isFirstMessage || locationChanged) {
     if (isShopLinkEntry) {
@@ -185,8 +188,10 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
       // Both land in sequence — greeting first, products right behind it.
        const locationGreeting = locationContext
          ? `Welcome to ${business.name}. You are at ${locationContext.label}. I can help you explore our services and place an order.`
-         : business.welcomeMessage;
-       const welcomeReply = locationGreeting || null;
+         : null;
+       const welcomeReply = locationGreeting ||
+         String(business.welcomeMessage || "").trim() ||
+         db.generateWelcomeMessage(business);
       if (welcomeReply) {
         db.mutate((state) => {
           db.addMessage(state, conversation.id, "assistant", welcomeReply);
@@ -200,7 +205,8 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
       // Return both so the WhatsApp sender can send them in order.
       return {
         replyText:    welcomeReply,   // sent first (null = skip)
-        extraReplies: [catalogReply], // sent immediately after
+        extraReplies: [prepared.replyText], // sent immediately after
+        interactiveButtons: prepared.interactiveButtons,
         order,
         customer,
         conversation,

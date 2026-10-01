@@ -578,7 +578,10 @@ const server = http.createServer(async (req, res) => {
 // Restore database from Object Storage before accepting any requests.
 // This ensures signups, products, and orders survive a redeploy.
 persistence.init(db.DATA_FILE).then(() => {
-  if (process.env.RAILWAY_ENVIRONMENT_NAME === "production") {
+  if (
+    process.env.RAILWAY_ENVIRONMENT_NAME === "production" &&
+    process.env.RUN_LEGACY_PRODUCTION_MIGRATIONS === "true"
+  ) {
     const businessRestore = db.restoreDeletedBusinessForSingleOrphanedAccount({
       businessName: "Digital Nation Accessories",
       category: "Mobile Phone Accessories",
@@ -608,6 +611,32 @@ persistence.init(db.DATA_FILE).then(() => {
       migrationId: "skyview-opal-hotel-whatsapp-number-format-2026-10-01",
     });
     console.log("[migration] Skyview Opal Hotel WhatsApp number format:", skyviewWhatsAppNumber);
+  }
+
+  if (process.env.RAILWAY_ENVIRONMENT_NAME === "production") {
+    if (process.env.RUN_LEGACY_PRODUCTION_MIGRATIONS !== "true") {
+      console.warn("[migration] Skipping legacy production migrations; set RUN_LEGACY_PRODUCTION_MIGRATIONS=true only for an approved maintenance run.");
+    }
+
+    const skyviewPhoneNumberId = db.runOneTimeExactWhatsAppPhoneNumberIdCorrection({
+      businessName: "Skyview Opal Hotel",
+      phoneNumberId: "1391881137336168",
+      migrationId: "skyview-opal-hotel-meta-phone-number-id-2026-10-01",
+    });
+    const productionBusinesses = db.load().businesses || [];
+    const skyviewBusinesses = productionBusinesses.filter((business) => business.name === "Skyview Opal Hotel");
+    const phoneNumberIdOwners = productionBusinesses.filter((business) =>
+      String(business.whatsappPhoneNumberId || "") === "1391881137336168"
+    );
+    if (
+      skyviewBusinesses.length !== 1 ||
+      String(skyviewBusinesses[0]?.whatsappPhoneNumberId || "") !== "1391881137336168" ||
+      phoneNumberIdOwners.length !== 1 ||
+      phoneNumberIdOwners[0]?.id !== skyviewBusinesses[0]?.id
+    ) {
+      throw new Error(`[migration] Skyview Meta phone-number ID correction failed: ${skyviewPhoneNumberId.reason || "postcondition check failed"}`);
+    }
+    console.log("[migration] Skyview Opal Hotel Meta phone-number ID:", skyviewPhoneNumberId);
   }
   startDailyReportScheduler();
   server.listen(PORT, "0.0.0.0", () => {
