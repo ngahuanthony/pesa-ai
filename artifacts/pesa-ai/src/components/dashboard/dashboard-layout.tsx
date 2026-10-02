@@ -4,12 +4,13 @@ import {
   LayoutDashboard, Package, ShoppingCart, MessageSquare,
   Settings, LogOut, Phone, ChevronDown, User, Tag,
   Users, CreditCard, Layers, ScanLine, BarChart2,
-  Menu, X, Mic, BrainCircuit, Bell
+  Menu, X, Mic, BrainCircuit, Bell, CalendarDays
 } from "lucide-react";
 import { useLogout, useGetMe } from "@workspace/api-client-react";
 import { useEffect, useRef, useState } from "react";
 import { BRAND_NAME } from "@/constants/brand";
 import { useToast } from "@/hooks/use-toast";
+import { isHospitalityBusiness } from "@/lib/business";
 
 const WA_SUB_ITEMS = [
   { label: "Phone Number",     href: "/dashboard/whatsapp" },
@@ -40,6 +41,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [latestOrderAlert, setLatestOrderAlert] = useState<any>(null);
   const seenOrders = useRef<Map<string, number> | null>(null);
   const businessId = (me as any)?.business?.id || "";
+  const hospitalityBusiness = isHospitalityBusiness((me as any)?.business);
 
   useEffect(() => {
     if (!businessId) return;
@@ -231,6 +233,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         {navLink("/dashboard/customers", "Customers", Users)}
         <div className="relative">
           {navLink("/dashboard/orders", "Orders", ShoppingCart)}
+          {hospitalityBusiness && navLink("/dashboard/reservations", "Reservations", CalendarDays)}
           {newOrderCount > 0 && (
             <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
               {newOrderCount}

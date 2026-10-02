@@ -2,31 +2,31 @@ const OPTIONS = [
   {
     id: "concierge:food",
     title: "Order Food",
-    description: "Browse food and drinks; place a table order.",
+    description: "Browse food and drinks; place an order.",
     prompt: "Please show me the complete current food and drinks menu, grouped by category with prices.",
   },
   {
     id: "concierge:rooms",
     title: "Rooms",
-    description: "Ask about rooms, rates, and availability.",
+    description: "Ask about rooms, rates, and dates.",
     prompt: "Tell me about your rooms, current rates, and availability.",
   },
   {
     id: "concierge:pool",
     title: "Swimming Pool",
-    description: "Ask about pool access and facilities.",
+    description: "Ask about pool access, hours, and prices.",
     prompt: "Tell me about the rooftop swimming pool, access prices, and opening hours.",
   },
   {
     id: "concierge:conferences",
     title: "Conferences",
-    description: "Ask about conference and meeting packages.",
+    description: "Ask about conference rooms and packages.",
     prompt: "Tell me about conference and meeting packages.",
   },
   {
     id: "concierge:events",
     title: "Events",
-    description: "Ask about celebrations and event services.",
+    description: "Ask about event venues and packages.",
     prompt: "Tell me about events and celebrations hosted here.",
   },
   {
@@ -37,14 +37,24 @@ const OPTIONS = [
   },
 ];
 
-function buildConciergeList(businessName) {
+function buildConciergeList(businessName, { servicesAvailableByDefault = false } = {}) {
   return {
     header: String(businessName || "Hotel concierge").slice(0, 60),
-    body: "What would you like help with? Choose an option below.",
-    footer: "You can also type your question.",
+    body: servicesAvailableByDefault
+      ? "All listed food and hotel services are available by default. Choose one for details."
+      : "What would you like help with? Choose an option below.",
+    footer: servicesAvailableByDefault
+      ? "The hotel will confirm specific rates, hours, and booking slots."
+      : "You can also type your question.",
     button: "Explore services",
     sectionTitle: "Hotel services",
-    rows: OPTIONS.map(({ id, title, description }) => ({ id, title, description })),
+    rows: OPTIONS.map(({ id, title, description }) => ({
+      id,
+      title,
+      description: servicesAvailableByDefault && id !== "concierge:hotel_info"
+        ? `Available — ${description}`
+        : description,
+    })),
   };
 }
 

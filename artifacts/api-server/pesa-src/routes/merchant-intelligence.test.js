@@ -33,7 +33,7 @@ test("knowledge and service locations are tenant scoped", () => {
   assert.throws(() => db.updateKnowledgeEntry(b.id, entry.id, { text: "leak" }), /not found/i);
 });
 
-test("Table 1–35 provisioning is tenant-scoped and idempotent", () => {
+test("Table 1–40 provisioning is tenant-scoped and idempotent", () => {
   const a = business("Hotel Default Tables A");
   const b = business("Hotel Default Tables B");
   const first = merchantIntelligence.locations.createDefaultTables({
@@ -42,12 +42,13 @@ test("Table 1–35 provisioning is tenant-scoped and idempotent", () => {
   });
 
   assert.equal(first.status, 201);
-  assert.equal(first.data.created, 35);
+  assert.equal(first.data.created, 40);
   assert.equal(first.data.existing, 0);
-  assert.equal(first.data.locations.length, 35);
+  assert.equal(first.data.locations.length, 40);
   assert.equal(first.data.locations[0].label, "Table 1");
   assert.equal(first.data.locations[11].label, "Table 12");
   assert.equal(first.data.locations[34].label, "Table 35");
+  assert.equal(first.data.locations[39].label, "Table 40");
   assert.ok(first.data.locations.every((location) => location.kind === "TABLE" && location.active && location.publicToken));
   assert.equal(db.listServiceLocations(b.id).length, 0);
 
@@ -56,8 +57,8 @@ test("Table 1–35 provisioning is tenant-scoped and idempotent", () => {
     session: { businessId: a.id },
   });
   assert.equal(second.data.created, 0);
-  assert.equal(second.data.existing, 35);
-  assert.equal(db.listServiceLocations(a.id).length, 35);
+  assert.equal(second.data.existing, 40);
+  assert.equal(db.listServiceLocations(a.id).length, 40);
 });
 
 test("table-number parsing accepts explicit and prompted numeric replies only", () => {
@@ -65,7 +66,8 @@ test("table-number parsing accepts explicit and prompted numeric replies only", 
   assert.equal(extractTableNumber("12", "What table number are you at?"), 12);
   assert.equal(extractTableNumber("12", "How many would you like?"), null);
   assert.equal(extractTableNumber("Table 36", ""), 36);
-  assert.equal(extractTableNumber("Table 1 to 35", ""), null);
+  assert.equal(extractTableNumber("Table 40", ""), 40);
+  assert.equal(extractTableNumber("Table 1 to 40", ""), null);
 });
 
 test("location remains attached to a new order and payment is independent", () => {

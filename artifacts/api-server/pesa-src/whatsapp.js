@@ -79,6 +79,132 @@ async function sendListMessage(phoneNumberId, to, list, accessToken) {
 
 function normalizeIncomingPhone(phone) { return String(phone || "").replace(/\D/g, ""); }
 
+function parseReservationStaffCommand(text) {
+  const value = String(text || "").trim();
+  const confirm = value.match(/^CONFIRM\s+(RR-[A-Z0-9-]+)\s+(?:(?:KSH|KES)\s*)?([\d,]+(?:\.\d{1,2})?)(?:\s+NOTE:\s*([\s\S]{1,1000}))?$/i);
+  if (confirm) {
+    const amount = Number(confirm[2].replace(/,/g, ""));
+    return Number.isFinite(amount) && amount >= 0
+      ? { action: "CONFIRM", reference: confirm[1].toUpperCase(), quotedAmount: amount, staffNotes: confirm[3]?.trim() || null }
+      : { action: "INVALID", message: "Enter a valid non-negative room rate." };
+  }
+  const decline = value.match(/^DECLINE\s+(RR-[A-Z0-9-]+)(?:\s+NOTE:\s*([\s\S]{1,1000}))?$/i);
+  if (decline) {
+    return { action: "DECLINE", reference: decline[1].toUpperCase(), staffNotes: decline[2]?.trim() || null };
+  }
+  if (/^(?:CONFIRM|DECLINE)\b/i.test(value)) {
+    return {
+      action: "INVALID",
+      message: "Use CONFIRM <reference> <rate in KSh> or DECLINE <reference>. Optional notes: NOTE: ...",
+    };
+  }
+  return null;
+}
+
+function buildReservationRequestNotice(reservation) {
+  return [
+    `New room request ${reservation.reference}`,
+    `Guest: ${reservation.customerName || "Guest"} (${reservation.customerPhone})`,
+    `Room: ${reservation.roomType}`,
+    `Dates: ${reservation.checkInDate} to ${reservation.checkOutDate}`,
+    `Guests: ${reservation.guestCount}`,
+    reservation.specialRequests ? `Special requests: ${reservation.specialRequests}` : null,
+    "",
+    `Check availability and rate, then reply: CONFIRM ${reservation.reference} <rate in KSh>`,
+    `Or reply: DECLINE ${reservation.reference}`,
+  ].filter((line) => line !== null).join("\n");
+}
+
+function buildPublicPaymentInstructions(business, customerPhone) {
+  const lines = [];
+  const config = business?.mpesa;
+  if (config?.shortcode) {
+    if (config.method === "till") {
+      lines.push(`M-Pesa: Lipa na M-Pesa → Buy Goods and Services → Till ${config.shortcode}`);
+    } else if (config.method === "paybill" || config.method === "paybill_account") {
+      lines.push(`M-Pesa: Lipa na M-Pesa → Paybill → Business number ${config.shortcode}`);
+      if (config.method === "paybill_account") {
+        const account = config.accountMode === "dynamic_customer_phone"
+          ? normalizeIncomingPhone(customerPhone)
+          : String(config.accountNumber || "").trim();
+        if (account) lines.push(`Account number: ${account}`);
+      }
+    }
+  } else if (business?.paymentMethod === "mpesa" && business.paybillNumber) {
+    if (business.mpesaType === "till") {
+      lines.push(`M-Pesa: Lipa na M-Pesa → Buy Goods and Services → Till ${business.paybillNumber}`);
+    } else {
+      lines.push(`M-Pesa: Lipa na M-Pesa → Paybill → Business number ${business.paybillNumber}`);
+      if (business.paybillAccountNumber) lines.push(`Account number: ${business.paybillAccountNumber}`);
+    }
+  }
+  if (business?.paymentMethod === "bank" && business.bankName && business.bankAccountNumber) {
+    lines.push(`Bank transfer: ${business.bankName}, account ${business.bankAccountNumber}`);
+  }
+  return lines.length ? `\n\nPayment details:\n${lines.join("\n")}` : "";
+}
+
+async function notifyReservationDecision(business, reservation) {
+  const accessToken = resolveAccessToken(business);
+  if (!business?.whatsappPhoneNumberId || !accessToken || !db.isCustomerMessagingActive(business)) return false;
+  let message;
+  if (reservation.status === "CONFIRMED") {
+    const paymentInstructions = buildPublicPaymentInstructions(business, reservation.customerPhone);
+    message = [
+      `Your room request ${reservation.reference} is confirmed.`,
+      `Room: ${reservation.roomType}`,
+      `Dates: ${reservation.checkInDate} to ${reservation.checkOutDate}`,
+      `Guests: ${reservation.guestCount}`,
+      `Rate: KSh ${Number(reservation.quotedAmount).toLocaleString("en-KE")}`,
+      paymentInstructions
+        ? "Please use these saved receiving details. This message does not charge you."
+        : "Please contact reception for payment instructions.",
+    ].join("\n") + paymentInstructions;
+  } else if (reservation.status === "DECLINED") {
+    message = `We’re unable to confirm your room request ${reservation.reference} for ${reservation.checkInDate} to ${reservation.checkOutDate}. Please contact reception to discuss other options.`;
+  } else {
+    return false;
+  }
+  return sendMessage(business.whatsappPhoneNumberId, reservation.customerPhone, message, accessToken);
+}
+
+async function handleReservationStaffReply({ business, phoneNumberId, from, text, accessToken }) {
+  if (!business.personalPhone || normalizeIncomingPhone(from) !== normalizeIncomingPhone(business.personalPhone)) {
+    return false;
+  }
+  const command = parseReservationStaffCommand(text);
+  if (!command) return false;
+  if (command.action === "INVALID") {
+    await sendMessage(phoneNumberId, from, command.message, accessToken);
+    return true;
+  }
+  const reservation = db.getRoomReservation(business.id, command.reference);
+  if (!reservation) {
+    await sendMessage(phoneNumberId, from, `No room request found for ${command.reference}.`, accessToken);
+    return true;
+  }
+  if (reservation.status !== "PENDING") {
+    await sendMessage(phoneNumberId, from, `${reservation.reference} has already been ${reservation.status.toLowerCase()}.`, accessToken);
+    return true;
+  }
+  try {
+    const patch = command.action === "CONFIRM"
+      ? { status: "CONFIRMED", quotedAmount: command.quotedAmount, ...(command.staffNotes ? { staffNotes: command.staffNotes } : {}) }
+      : { status: "DECLINED", ...(command.staffNotes ? { staffNotes: command.staffNotes } : {}) };
+    const updated = db.updateRoomReservation(business.id, reservation.id, patch);
+    if (updated.status === "CONFIRMED") {
+      await notifyReservationDecision(business, updated);
+      await sendMessage(phoneNumberId, from, `${updated.reference} confirmed at KSh ${Number(updated.quotedAmount).toLocaleString("en-KE")}.`, accessToken);
+    } else {
+      await notifyReservationDecision(business, updated);
+      await sendMessage(phoneNumberId, from, `${updated.reference} declined.`, accessToken);
+    }
+  } catch (error) {
+    await sendMessage(phoneNumberId, from, error.message || "The reservation request could not be updated.", accessToken);
+  }
+  return true;
+}
+
 async function handleButtonAction({ business, phoneNumberId, from, buttonId, accessToken }) {
   const [action, orderId] = String(buttonId || "").split(":");
   const order = db.getOrder(orderId);
@@ -141,6 +267,8 @@ async function handleIncomingWebhook(body) {
   const locationMatch = String(text || "").match(/(?:location|service_location|service-location)=([A-Za-z0-9_-]{20,})/i);
   const serviceLocationToken = locationMatch ? locationMatch[1] : null;
 
+  if (await handleReservationStaffReply({ business, phoneNumberId, from, text, accessToken })) return;
+
   // Public shop links use a short, deterministic greeting. Keep the first
   // response lightweight, then answer later product requests with only the
   // matching photographed variant rather than sending the whole catalogue.
@@ -152,9 +280,7 @@ async function handleIncomingWebhook(body) {
   const requestedVariants = db.searchPublicProducts(business.id, text, { limit: 1 });
   if (requestedVariants.length) {
     const variant = requestedVariants[0];
-    const label = variant.productName + (variant.variant ? " — " + variant.variant : "");
-    const stock = Number(variant.stockQty) > 0 ? "Stock: " + Number(variant.stockQty) : "Out of stock";
-    const caption = label + "\n" + stock + "\nPrice: KSh " + Number(variant.price || 0).toLocaleString("en-KE");
+    const caption = buildProductImageCaption(business, variant);
     await sendImageMessage(phoneNumberId, from, variant.imageUrl, caption, accessToken);
     return;
   }
@@ -185,7 +311,7 @@ async function handleIncomingWebhook(body) {
     return;
   }
 
-  const { replyText, welcomeText, assistantReplyText, extraReplies, interactiveButtons, interactiveList, mediaReplies } = await handleCustomerMessage({
+  const { replyText, welcomeText, assistantReplyText, extraReplies, interactiveButtons, interactiveList, mediaReplies, reservationRequest } = await handleCustomerMessage({
     business,
     customerPhone: from,
     customerName:  contactName,
@@ -193,6 +319,10 @@ async function handleIncomingWebhook(body) {
     channel: "whatsapp",
     serviceLocationToken,
   });
+
+  if (reservationRequest && business.personalPhone) {
+    await sendMessage(phoneNumberId, business.personalPhone, buildReservationRequestNotice(reservationRequest), accessToken);
+  }
 
   // Resolve the access token for THIS business (per-business, decrypted)
 
@@ -214,6 +344,15 @@ async function handleIncomingWebhook(body) {
     }
   }
   if (interactiveButtons) await sendButtonsMessage(phoneNumberId, from, "Choose a payment option:", interactiveButtons, accessToken);
+}
+
+function buildProductImageCaption(business, variant) {
+  const label = variant.productName + (variant.variant ? " — " + variant.variant : "");
+  const quantity = Number(variant.stockQty) || 0;
+  const availability = db.isHospitalityBusiness(business)
+    ? "Available by default"
+    : quantity > 0 ? "Stock: " + quantity : "Out of stock";
+  return label + "\n" + availability + "\nPrice: KSh " + Number(variant.price || 0).toLocaleString("en-KE");
 }
 
 // Decrypt and return the per-business WhatsApp access token.
@@ -438,6 +577,11 @@ module.exports = {
   sendMessage,
   sendImageMessage,
   sendPlatformOtp,
+  buildProductImageCaption,
+  parseReservationStaffCommand,
+  buildReservationRequestNotice,
+  buildPublicPaymentInstructions,
+  notifyReservationDecision,
   resolveAccessToken,
   updateWhatsAppBusinessProfile,
   updateWhatsAppProfilePicture,

@@ -20,6 +20,7 @@ import { StockTab }           from "@/components/dashboard/stock-tab";
 import { PricesTab }          from "@/components/dashboard/prices-tab";
 import { CustomersTab }       from "@/components/dashboard/customers-tab";
 import { PaymentsTab }        from "@/components/dashboard/payments-tab";
+import { ReservationsTab }    from "@/components/dashboard/reservations-tab";
 
 // Normalise path → section key
 function getSection(location: string): string {
@@ -48,6 +49,7 @@ function DashboardContent() {
       case "products/add/photo":return <PhotoScanTab />;
       case "products/add/csv":  return <CsvImportTab />;
       case "orders":            return <OrdersTab />;
+      case "reservations":      return <ReservationsTab />;
       case "chat":              return <ChatTesterTab />;
       case "sales":             return <SalesTab />;
       case "billing":           return <BillingTab />;
@@ -71,6 +73,7 @@ function DashboardContent() {
     "products/add/photo": { title: "Photo Scan",      sub: "Take or upload photos — AI detects products and suggests prices." },
     "products/add/csv":   { title: "Bulk Import",     sub: "Upload a CSV or Excel file — products appear instantly in your catalogue." },
     "orders":             { title: "Orders",          sub: "Track customer purchases." },
+    "reservations":       { title: "Room Reservations", sub: "Check dates and rates, then confirm or decline guest requests." },
     "chat":               { title: "Chat Tester",     sub: "Preview how your shop responds." },
     "sales":              { title: "Reports",         sub: "Review your revenue and performance." },
     "billing":            { title: "Billing",         sub: "Manage your subscription." },

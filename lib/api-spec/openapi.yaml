@@ -19,6 +19,7 @@ tags:
   - name: admin
   - name: reports
   - name: voice-stock
+  - name: reservations
 paths:
   /healthz:
     get:
@@ -318,6 +319,55 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Order"
+
+  /businesses/{businessId}/reservations:
+    get:
+      operationId: listRoomReservations
+      tags: [reservations]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Room reservation requests for this business
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RoomReservation"
+
+  /businesses/{businessId}/reservations/{reservationId}:
+    patch:
+      operationId: updateRoomReservation
+      tags: [reservations]
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: reservationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoomReservationUpdate"
+      responses:
+        "200":
+          description: Updated room reservation request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomReservation"
 
   /businesses/{businessId}/orders/{orderId}/status:
     put:
@@ -1404,6 +1454,65 @@ components:
         - createdAt
         - updatedAt
 
+    RoomReservation:
+      type: object
+      properties:
+        id:
+          type: string
+        businessId:
+          type: string
+        reference:
+          type: string
+        customerId:
+          type: string
+        customerName:
+          type: ["string", "null"]
+        customerPhone:
+          type: string
+        roomType:
+          type: string
+        checkInDate:
+          type: string
+          format: date
+        checkOutDate:
+          type: string
+          format: date
+        guestCount:
+          type: integer
+          minimum: 1
+        specialRequests:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [PENDING, CONFIRMED, DECLINED]
+        quotedAmount:
+          type: ["number", "null"]
+        paymentStatus:
+          type: string
+          enum: [PENDING, SUBMITTED, PAID]
+        paymentReference:
+          type: ["string", "null"]
+        staffNotes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - businessId
+        - reference
+        - customerId
+        - customerPhone
+        - roomType
+        - checkInDate
+        - checkOutDate
+        - guestCount
+        - status
+        - paymentStatus
+        - createdAt
+        - updatedAt
+
     SalesTrendPoint:
       type: object
       properties:
@@ -1852,6 +1961,25 @@ components:
           type: string
       required:
         - status
+
+    RoomReservationUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [CONFIRMED, DECLINED]
+        quotedAmount:
+          type: number
+          minimum: 0
+        paymentStatus:
+          type: string
+          enum: [PAID]
+        paymentReference:
+          type: string
+          maxLength: 120
+        staffNotes:
+          type: string
+          maxLength: 1000
 
     OrderItemUpdate:
       type: object

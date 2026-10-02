@@ -384,6 +384,82 @@ export const ListOrdersResponseItem = zod.object({
 export const ListOrdersResponse = zod.array(ListOrdersResponseItem)
 
 
+export const ListRoomReservationsParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+
+
+
+export const ListRoomReservationsResponseItem = zod.object({
+  "id": zod.string(),
+  "businessId": zod.string(),
+  "reference": zod.string(),
+  "customerId": zod.string(),
+  "customerName": zod.string().nullish(),
+  "customerPhone": zod.string(),
+  "roomType": zod.string(),
+  "checkInDate": zod.coerce.date(),
+  "checkOutDate": zod.coerce.date(),
+  "guestCount": zod.number().int().min(1),
+  "specialRequests": zod.string().nullish(),
+  "status": zod.enum(['PENDING', 'CONFIRMED', 'DECLINED']),
+  "quotedAmount": zod.number().nullish(),
+  "paymentStatus": zod.enum(['PENDING', 'SUBMITTED', 'PAID']),
+  "paymentReference": zod.string().nullish(),
+  "staffNotes": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListRoomReservationsResponse = zod.array(ListRoomReservationsResponseItem)
+
+
+export const UpdateRoomReservationParams = zod.object({
+  "businessId": zod.coerce.string(),
+  "reservationId": zod.coerce.string()
+})
+
+export const updateRoomReservationBodyQuotedAmountMin = 0;
+
+export const updateRoomReservationBodyPaymentReferenceMax = 120;
+
+export const updateRoomReservationBodyStaffNotesMax = 1000;
+
+
+
+export const UpdateRoomReservationBody = zod.object({
+  "status": zod.enum(['CONFIRMED', 'DECLINED']).optional(),
+  "quotedAmount": zod.number().min(updateRoomReservationBodyQuotedAmountMin).optional(),
+  "paymentStatus": zod.enum(['PAID']).optional(),
+  "paymentReference": zod.string().max(updateRoomReservationBodyPaymentReferenceMax).optional(),
+  "staffNotes": zod.string().max(updateRoomReservationBodyStaffNotesMax).optional()
+})
+
+
+
+
+export const UpdateRoomReservationResponse = zod.object({
+  "id": zod.string(),
+  "businessId": zod.string(),
+  "reference": zod.string(),
+  "customerId": zod.string(),
+  "customerName": zod.string().nullish(),
+  "customerPhone": zod.string(),
+  "roomType": zod.string(),
+  "checkInDate": zod.coerce.date(),
+  "checkOutDate": zod.coerce.date(),
+  "guestCount": zod.number().int().min(1),
+  "specialRequests": zod.string().nullish(),
+  "status": zod.enum(['PENDING', 'CONFIRMED', 'DECLINED']),
+  "quotedAmount": zod.number().nullish(),
+  "paymentStatus": zod.enum(['PENDING', 'SUBMITTED', 'PAID']),
+  "paymentReference": zod.string().nullish(),
+  "staffNotes": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
 export const UpdateOrderStatusParams = zod.object({
   "businessId": zod.coerce.string(),
   "orderId": zod.coerce.string()

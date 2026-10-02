@@ -39,6 +39,7 @@ function emptyState() {
     conversations: [],
     messages: [],
     orders: [],
+    roomReservations: [],
     reports: [],
     videoScans: [],
     stockMovements: [],
@@ -476,6 +477,12 @@ function normalizeMerchantType(value) {
   const type = String(value || "retail").toLowerCase();
   if (type === "hotel") return "hospitality";
   return MERCHANT_TYPES.has(type) ? type : "retail";
+}
+
+function isHospitalityBusiness(business) {
+  const category = String(business?.category || "").trim().toLowerCase();
+  return normalizeMerchantType(business?.merchantType) === "hospitality" ||
+    /\b(hotel|hospitality)\b/.test(category);
 }
 
 function createBusiness(
@@ -1042,13 +1049,14 @@ function publicShopPayload(business, { includeProducts = false } = {}) {
   };
   if (includeProducts) {
     payload.popularProducts = listProducts(business.id, { activeOnly: true })
-      .filter((product) => Number(product.stockQty) > 0)
+      .filter((product) => isProductAvailable(business, product))
       .slice(0, 3)
       .map((product) => ({
       id: product.id,
       name: product.name,
       price: product.price,
       stockQty: product.stockQty,
+      available: true,
     }));
   }
   return payload;
@@ -2019,6 +2027,11 @@ function getAdminGrowthSummary({ days = 30 } = {}) {
 
 // --- Products ------------------------------------------------------------
 
+function isProductAvailable(business, product, quantity = product?.stockQty) {
+  if (!product || product.active === false) return false;
+  return isHospitalityBusiness(business) || Number(quantity) > 0;
+}
+
 function createProduct(businessId, { name, description, price, stockQty, imageUrl, source }) {
   return mutate((state) => {
     if (!state.businesses.some((b) => b.id === businessId)) {
@@ -2318,11 +2331,17 @@ function createOrder(state, { businessId, customerId, items, serviceLocationId =
   const resolvedItems = items.map(({ productId, quantity }) => {
     const product = state.products.find((p) => p.id === productId && p.businessId === businessId);
     if (!product) throw httpError(400, `Unknown product: ${productId}`);
+    const requestedQuantity = Number(quantity);
+    const stockReservedQuantity = Math.min(
+      Math.max(0, Number(product.stockQty) || 0),
+      Math.max(0, requestedQuantity),
+    );
     return {
       productId: product.id,
       productName: product.name,
-      quantity,
+      quantity: requestedQuantity,
       unitPrice: product.price,
+      stockReservedQuantity,
     };
   });
   const totalAmount = resolvedItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
@@ -2349,7 +2368,7 @@ function createOrder(state, { businessId, customerId, items, serviceLocationId =
     }],
   };
   state.orders.push(order);
-  resolvedItems.forEach((i) => decrementStock(state, i.productId, i.quantity));
+  resolvedItems.forEach((i) => decrementStock(state, i.productId, i.stockReservedQuantity));
   return order;
 }
 
@@ -2362,6 +2381,119 @@ function listOrders(businessId) {
       return { ...o, customerPhone: customer ? customer.phone : null, customerName: customer ? customer.name : null };
     })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function isIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return false;
+  const [year, month, day] = String(value).split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function createRoomReservation({
+  businessId,
+  customerId,
+  customerName = null,
+  customerPhone,
+  roomType,
+  checkInDate,
+  checkOutDate,
+  guestCount,
+  specialRequests = null,
+}) {
+  const cleanRoomType = String(roomType || "").trim().slice(0, 120);
+  if (!cleanRoomType) throw httpError(400, "roomType is required");
+  if (!isIsoDate(checkInDate) || !isIsoDate(checkOutDate) || checkOutDate <= checkInDate) {
+    throw httpError(400, "Enter valid check-in and check-out dates; check-out must be later");
+  }
+  const guests = Number(guestCount);
+  if (!Number.isSafeInteger(guests) || guests < 1 || guests > 20) {
+    throw httpError(400, "guestCount must be from 1 to 20");
+  }
+  if (!String(customerPhone || "").trim()) throw httpError(400, "customerPhone is required");
+  return mutate((state) => {
+    if (!state.businesses.some((business) => business.id === businessId)) throw httpError(404, "Business not found");
+    if (!isHospitalityBusiness(state.businesses.find((business) => business.id === businessId))) {
+      throw httpError(400, "Room reservation requests are only available for hospitality businesses");
+    }
+    if (!Array.isArray(state.roomReservations)) state.roomReservations = [];
+    const reservationId = id();
+    const reservation = {
+      id: reservationId,
+      businessId,
+      reference: `RR-${reservationId.slice(0, 8).toUpperCase()}`,
+      customerId: customerId || null,
+      customerName: customerName ? String(customerName).trim().slice(0, 120) : null,
+      customerPhone: String(customerPhone).trim().slice(0, 32),
+      roomType: cleanRoomType,
+      checkInDate,
+      checkOutDate,
+      guestCount: guests,
+      specialRequests: specialRequests ? String(specialRequests).trim().slice(0, 1000) : null,
+      status: "PENDING",
+      quotedAmount: null,
+      paymentStatus: "PENDING",
+      paymentReference: null,
+      staffNotes: null,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    state.roomReservations.push(reservation);
+    return reservation;
+  });
+}
+
+function listRoomReservations(businessId) {
+  const state = load();
+  const customers = state.customers || [];
+  return (state.roomReservations || [])
+    .filter((reservation) => reservation.businessId === businessId)
+    .map((reservation) => ({
+      ...reservation,
+      customerName: reservation.customerName || customers.find((customer) => customer.id === reservation.customerId)?.name || null,
+    }))
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+function getRoomReservation(businessId, reservationIdOrReference) {
+  return (load().roomReservations || []).find((reservation) =>
+    reservation.businessId === businessId &&
+    (reservation.id === reservationIdOrReference || String(reservation.reference).toLowerCase() === String(reservationIdOrReference).toLowerCase())
+  ) || null;
+}
+
+function updateRoomReservation(businessId, reservationId, patch = {}) {
+  return mutate((state) => {
+    if (!Array.isArray(state.roomReservations)) state.roomReservations = [];
+    const reservation = state.roomReservations.find((item) => item.id === reservationId && item.businessId === businessId);
+    if (!reservation) throw httpError(404, "Room reservation request not found");
+    const nextStatus = patch.status;
+    if (nextStatus !== undefined && !["CONFIRMED", "DECLINED"].includes(nextStatus)) {
+      throw httpError(400, "status must be CONFIRMED or DECLINED");
+    }
+    if (nextStatus !== undefined && reservation.status !== "PENDING" && nextStatus !== reservation.status) {
+      throw httpError(409, "This reservation request has already been reviewed");
+    }
+    if (nextStatus === "CONFIRMED" && reservation.status === "PENDING" &&
+        patch.quotedAmount === undefined && reservation.quotedAmount === null) {
+      throw httpError(400, "A room rate is required before confirming the request");
+    }
+    if (patch.quotedAmount !== undefined) {
+      const amount = Number(patch.quotedAmount);
+      if (!Number.isFinite(amount) || amount < 0) throw httpError(400, "quotedAmount must be a non-negative amount");
+      reservation.quotedAmount = amount;
+    }
+    if (nextStatus !== undefined) reservation.status = nextStatus;
+    if (patch.paymentStatus !== undefined) {
+      if (patch.paymentStatus !== "PAID") throw httpError(400, "paymentStatus can only be set to PAID");
+      if (reservation.status !== "CONFIRMED") throw httpError(409, "Only a confirmed reservation can be marked paid");
+      reservation.paymentStatus = "PAID";
+    }
+    if (patch.paymentReference !== undefined) reservation.paymentReference = String(patch.paymentReference).trim().slice(0, 120) || null;
+    if (patch.staffNotes !== undefined) reservation.staffNotes = String(patch.staffNotes).trim().slice(0, 1000) || null;
+    reservation.updatedAt = now();
+    return reservation;
+  });
 }
 
 function getOrder(orderId) {
@@ -2392,7 +2524,10 @@ function updateOrderStatus(orderId, status, paymentMeta = null, { actor = "syste
     if (String(o.fulfillmentStatus || "").toUpperCase() === "CANCELLED" && !o.stockRestoredAt) {
       for (const item of o.items || []) {
         const product = state.products.find((candidate) => candidate.id === item.productId && candidate.businessId === o.businessId);
-        if (product) product.stockQty = Number(product.stockQty || 0) + Number(item.quantity || 0);
+        const reservedQuantity = item.stockReservedQuantity === undefined
+          ? Number(item.quantity || 0)
+          : Math.max(0, Number(item.stockReservedQuantity) || 0);
+        if (product && reservedQuantity > 0) product.stockQty = Number(product.stockQty || 0) + reservedQuantity;
       }
       o.stockRestoredAt = now();
     }
@@ -2436,27 +2571,36 @@ function updateOrderItems(orderId, requestedItems, { actor = "merchant" } = {}) 
       quantities.set(productId, (quantities.get(productId) || 0) + quantity);
     }
 
-    const oldByProduct = new Map((order.items || []).map((item) => [item.productId, Number(item.quantity || 0)]));
+    const oldReservedByProduct = new Map((order.items || []).map((item) => [
+      item.productId,
+      item.stockReservedQuantity === undefined
+        ? Number(item.quantity || 0)
+        : Math.max(0, Number(item.stockReservedQuantity) || 0),
+    ]));
+    const business = (state.businesses || []).find((candidate) => candidate.id === order.businessId);
+    const unlimitedAvailability = isHospitalityBusiness(business);
     const resolvedItems = [];
     for (const [productId, quantity] of quantities) {
       const product = state.products.find((candidate) => candidate.id === productId && candidate.businessId === order.businessId && candidate.active !== false);
       if (!product) throw httpError(400, `Unknown or inactive product: ${productId}`);
-      const previouslyReserved = oldByProduct.get(productId) || 0;
+      const previouslyReserved = oldReservedByProduct.get(productId) || 0;
       const available = Number(product.stockQty || 0) + previouslyReserved;
-      if (quantity > available) throw httpError(409, `Only ${available} of ${product.name} are available`);
+      if (!unlimitedAvailability && quantity > available) throw httpError(409, `Only ${available} of ${product.name} are available`);
       resolvedItems.push({
         productId: product.id,
         productName: product.name,
         quantity,
         unitPrice: Number(product.price || 0),
+        stockReservedQuantity: Math.min(Math.max(0, available), quantity),
       });
     }
 
     for (const oldItem of order.items || []) {
       const product = state.products.find((candidate) => candidate.id === oldItem.productId && candidate.businessId === order.businessId);
-      if (product) product.stockQty = Number(product.stockQty || 0) + Number(oldItem.quantity || 0);
+      const reservedQuantity = oldReservedByProduct.get(oldItem.productId) || 0;
+      if (product && reservedQuantity > 0) product.stockQty = Number(product.stockQty || 0) + reservedQuantity;
     }
-    for (const item of resolvedItems) decrementStock(state, item.productId, item.quantity);
+    for (const item of resolvedItems) decrementStock(state, item.productId, item.stockReservedQuantity);
 
     const before = (order.items || []).map((item) => ({ productId: item.productId, productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice }));
     order.items = resolvedItems;
@@ -2938,6 +3082,7 @@ function runOneTimePhoneCorrection({ shopPhone, personalPhone, personalPhoneRaw,
 module.exports = {
   DATA_FILE,
   normalizeMerchantType,
+  isHospitalityBusiness,
   loadRaw,
   requestWhatsAppConnection,
   getVendorWhatsAppStatus,
@@ -3025,6 +3170,7 @@ module.exports = {
   createProduct,
   bulkCreateProducts,
   listProducts,
+  isProductAvailable,
   getProduct,
   updateProduct,
   deleteProduct,
@@ -3036,6 +3182,10 @@ module.exports = {
   getConversationHistory,
   createOrder,
   listOrders,
+  createRoomReservation,
+  listRoomReservations,
+  getRoomReservation,
+  updateRoomReservation,
   getOrder,
   updateOrderStatus,
   updateOrderItems,
@@ -3133,7 +3283,7 @@ function createServiceLocation(businessId, { kind = "TABLE", label, active = tru
 }
 
 function ensureDefaultTableLocations(businessId) {
-  const labels = Array.from({ length: 35 }, (_, index) => `Table ${index + 1}`);
+  const labels = Array.from({ length: 40 }, (_, index) => `Table ${index + 1}`);
   return mutate((state) => {
     if (!state.businesses.some((business) => business.id === businessId)) throw httpError(404, "Business not found");
     if (!Array.isArray(state.serviceLocations)) state.serviceLocations = [];

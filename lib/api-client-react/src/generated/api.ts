@@ -53,6 +53,8 @@ import type {
   ReportGroup,
   ReportInput,
   ReportStatusUpdate,
+  RoomReservation,
+  RoomReservationUpdate,
   SalesSummary,
   SignupInput,
   StockMovement,
@@ -1186,6 +1188,145 @@ export function useListOrders<TData = Awaited<ReturnType<typeof listOrders>>, TE
 
 
 
+
+export const getListRoomReservationsUrl = (businessId: string,) => {
+
+
+
+
+  return `/api/businesses/${businessId}/reservations`
+}
+
+export const listRoomReservations = async (businessId: string, options?: Parameters<typeof customFetch>[1]): Promise<RoomReservation[]> => {
+
+  return customFetch<RoomReservation[]>(getListRoomReservationsUrl(businessId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListRoomReservationsQueryKey = (businessId: string,) => {
+    return [
+    `/api/businesses/${businessId}/reservations`
+    ] as const;
+    }
+
+
+export const getListRoomReservationsQueryOptions = <TData = Awaited<ReturnType<typeof listRoomReservations>>, TError = ErrorType<unknown>>(businessId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRoomReservations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListRoomReservationsQueryKey(businessId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listRoomReservations>>> = ({ signal }) => listRoomReservations(businessId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: businessId !== null && businessId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listRoomReservations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListRoomReservationsQueryResult = NonNullable<Awaited<ReturnType<typeof listRoomReservations>>>
+export type ListRoomReservationsQueryError = ErrorType<unknown>
+
+
+
+export function useListRoomReservations<TData = Awaited<ReturnType<typeof listRoomReservations>>, TError = ErrorType<unknown>>(
+ businessId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRoomReservations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListRoomReservationsQueryOptions(businessId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateRoomReservationUrl = (businessId: string,
+    reservationId: string,) => {
+
+
+
+
+  return `/api/businesses/${businessId}/reservations/${reservationId}`
+}
+
+export const updateRoomReservation = async (businessId: string,
+    reservationId: string,
+    roomReservationUpdate: RoomReservationUpdate, options?: Parameters<typeof customFetch>[1]): Promise<RoomReservation> => {
+
+  return customFetch<RoomReservation>(getUpdateRoomReservationUrl(businessId,reservationId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(roomReservationUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateRoomReservationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRoomReservation>>, TError,{businessId: string;reservationId: string;data: BodyType<RoomReservationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateRoomReservation>>, TError,{businessId: string;reservationId: string;data: BodyType<RoomReservationUpdate>}, TContext> => {
+
+const mutationKey = ['updateRoomReservation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateRoomReservation>>, {businessId: string;reservationId: string;data: BodyType<RoomReservationUpdate>}> = (props) => {
+          const {businessId,reservationId,data} = props ?? {};
+
+          return  updateRoomReservation(businessId,reservationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateRoomReservationMutationResult = NonNullable<Awaited<ReturnType<typeof updateRoomReservation>>>
+    export type UpdateRoomReservationMutationBody = BodyType<RoomReservationUpdate>
+    export type UpdateRoomReservationMutationError = ErrorType<unknown>
+
+    export const useUpdateRoomReservation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRoomReservation>>, TError,{businessId: string;reservationId: string;data: BodyType<RoomReservationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateRoomReservation>>,
+        TError,
+        {businessId: string;reservationId: string;data: BodyType<RoomReservationUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateRoomReservationMutationOptions(options));
+    }
 
 export const getUpdateOrderStatusUrl = (businessId: string,
     orderId: string,) => {

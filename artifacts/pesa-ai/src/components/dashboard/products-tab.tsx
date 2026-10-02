@@ -16,6 +16,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Product } from "@workspace/api-client-react";
 import { Link } from "wouter";
+import { isHospitalityBusiness as isHospitality } from "@/lib/business";
 
 const SOURCE_CHIP: Record<string, { icon: string; label: string; color: string }> = {
   photo_scan: { icon: "📸", label: "Photo",    color: "bg-blue-50 text-blue-700" },
@@ -80,15 +81,27 @@ function SourceBadge({ source }: { source?: string }) {
   );
 }
 
-function StockBadge({ qty }: { qty: number }) {
+function StockBadge({ qty, hospitality, productId }: { qty: number; hospitality: boolean; productId: string }) {
+  if (hospitality) {
+    return (
+      <span
+        data-testid={`status-product-availability-${productId}`}
+        title="Listed hospitality offerings are available by default; this count is for recorded stock."
+        className="inline-flex items-center rounded-full bg-primary/10 text-primary text-xs font-semibold px-2.5 py-0.5"
+      >
+        In Stock
+      </span>
+    );
+  }
   return qty > 0
-    ? <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-xs font-semibold px-2.5 py-0.5">In Stock</span>
-    : <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 text-xs font-semibold px-2.5 py-0.5">Out of Stock</span>;
+    ? <span data-testid={`status-product-availability-${productId}`} className="inline-flex items-center rounded-full bg-primary/10 text-primary text-xs font-semibold px-2.5 py-0.5">In Stock</span>
+    : <span data-testid={`status-product-availability-${productId}`} className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 text-xs font-semibold px-2.5 py-0.5">Out of Stock</span>;
 }
 
 export function ProductsTab() {
   const { data: me } = useGetMe();
   const businessId = me?.business?.id || "";
+  const hospitalityBusiness = isHospitality(me?.business);
   const { data: products, isLoading } = useListProducts(businessId, {
     query: { enabled: !!businessId, queryKey: getListProductsQueryKey(businessId) },
   });
@@ -102,19 +115,23 @@ export function ProductsTab() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [stockFilter,  setStockFilter]  = useState("all");
 
+  useEffect(() => {
+    if (hospitalityBusiness) setStockFilter("all");
+  }, [hospitalityBusiness]);
+
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     return products.filter((p) => {
       const q = search.toLowerCase();
       if (q && !p.name.toLowerCase().includes(q) && !(p.description || "").toLowerCase().includes(q)) return false;
       if (sourceFilter !== "all" && (p as any).source !== sourceFilter) return false;
-      if (stockFilter === "in_stock"    && p.stockQty <= 0) return false;
-      if (stockFilter === "out_of_stock" && p.stockQty > 0) return false;
+      if (!hospitalityBusiness && stockFilter === "in_stock" && p.stockQty <= 0) return false;
+      if (!hospitalityBusiness && stockFilter === "out_of_stock" && p.stockQty > 0) return false;
       return true;
     });
-  }, [products, search, sourceFilter, stockFilter]);
+  }, [products, search, sourceFilter, stockFilter, hospitalityBusiness]);
 
-  const filtersActive = search || sourceFilter !== "all" || stockFilter !== "all";
+  const filtersActive = search || sourceFilter !== "all" || (!hospitalityBusiness && stockFilter !== "all");
 
   const clearFilters = () => { setSearch(""); setSourceFilter("all"); setStockFilter("all"); };
   // ─────────────────────────────────────────────────────────────────
@@ -176,6 +193,16 @@ export function ProductsTab() {
         </Link>
       </div>
 
+      {hospitalityBusiness && (
+        <div
+          data-testid="notice-hospitality-availability"
+          role="note"
+          className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm text-foreground"
+        >
+          Listed offerings are available by default. Stock counts are for inventory tracking and do not prevent customer orders.
+        </div>
+      )}
+
       {/* ── Empty state (no products at all) ── */}
       {!products?.length ? (
         <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-20 text-center px-4">
@@ -223,17 +250,18 @@ export function ProductsTab() {
               </SelectContent>
             </Select>
 
-            {/* Stock filter */}
-            <Select value={stockFilter} onValueChange={setStockFilter}>
-              <SelectTrigger className="h-9 w-full sm:w-[140px] text-sm">
-                <SelectValue placeholder="All stock" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All stock</SelectItem>
-                <SelectItem value="in_stock">In Stock</SelectItem>
-                <SelectItem value="out_of_stock">Out of Stock</SelectItem>
-              </SelectContent>
-            </Select>
+            {!hospitalityBusiness && (
+              <Select value={stockFilter} onValueChange={setStockFilter}>
+                <SelectTrigger className="h-9 w-full sm:w-[140px] text-sm">
+                  <SelectValue placeholder="All stock" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All stock</SelectItem>
+                  <SelectItem value="in_stock">In Stock</SelectItem>
+                  <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
 
             {/* Clear */}
             {filtersActive && (
@@ -269,7 +297,7 @@ export function ProductsTab() {
               {/* ── Desktop table (hidden on mobile) ── */}
               <div className="hidden sm:block">
                 <div className="grid grid-cols-[2fr_1fr_0.7fr_0.7fr_80px] bg-muted/50 px-4 py-2.5 border-b border-border">
-                  {["PRODUCT", "PRICE", "STOCK", "STATUS", ""].map((h) => (
+                  {["PRODUCT", "PRICE", hospitalityBusiness ? "RECORDED STOCK" : "STOCK", "STATUS", ""].map((h) => (
                     <span key={h} className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{h}</span>
                   ))}
                 </div>
@@ -298,7 +326,7 @@ export function ProductsTab() {
                     </div>
                     <div className="text-sm font-semibold text-foreground">KES {p.price.toLocaleString()}</div>
                     <div className="text-sm text-foreground">{p.stockQty}</div>
-                    <div><StockBadge qty={p.stockQty} /></div>
+                    <div><StockBadge qty={p.stockQty} hospitality={hospitalityBusiness} productId={p.id} /></div>
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => setEditingProduct(p)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                         <Edit2 className="h-3.5 w-3.5" />
@@ -330,8 +358,8 @@ export function ProductsTab() {
                           )}
                           <div className="flex items-center gap-2 mt-2 flex-wrap">
                             <span className="text-sm font-bold text-foreground">KES {p.price.toLocaleString()}</span>
-                            <span className="text-xs text-muted-foreground">· {p.stockQty} in stock</span>
-                            <StockBadge qty={p.stockQty} />
+                            <span className="text-xs text-muted-foreground">· {p.stockQty} {hospitalityBusiness ? "recorded" : "in stock"}</span>
+                            <StockBadge qty={p.stockQty} hospitality={hospitalityBusiness} productId={p.id} />
                           </div>
                            {p.colorStock && p.colorStock.length > 0 && (
                              <div className="mt-2 flex flex-wrap gap-1.5">

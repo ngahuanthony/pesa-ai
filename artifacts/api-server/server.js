@@ -83,6 +83,7 @@ const photoScanRoutes   = require("./pesa-src/routes/photo-scan");
 const voiceStockRoutes  = require("./pesa-src/routes/voice-stock");
 const publicShopRoutes  = require("./pesa-src/routes/public-shops");
 const merchantIntelligenceRoutes = require("./pesa-src/routes/merchant-intelligence");
+const reservationRoutes = require("./pesa-src/routes/reservations");
 const videoProcessor = require("./pesa-src/video-processor");
 const whatsapp = require("./pesa-src/whatsapp");
 const mpesa = require("./pesa-src/mpesa");
@@ -195,6 +196,8 @@ router.delete("/api/businesses/:businessId/service-locations/:locationId", merch
 router.get("/api/public/service-locations/:token", merchantIntelligenceRoutes.locations.resolve);
 
 router.get("/api/businesses/:businessId/orders", orderRoutes.list);
+router.get("/api/businesses/:businessId/reservations", reservationRoutes.list);
+router.patch("/api/businesses/:businessId/reservations/:reservationId", reservationRoutes.update);
 router.put("/api/businesses/:businessId/orders/:orderId/status", orderRoutes.updateStatus);
 router.put("/api/businesses/:businessId/orders/:orderId/items", orderRoutes.updateItems);
 router.post("/api/businesses/:businessId/orders/:orderId/mpesa",      orderRoutes.payWithMpesa);

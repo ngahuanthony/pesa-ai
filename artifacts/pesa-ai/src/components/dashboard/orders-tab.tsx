@@ -9,6 +9,7 @@ import { ShoppingBag, Smartphone, CheckCircle2, Pencil, Minus, Plus, Trash2, Pri
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { isHospitalityBusiness } from "@/lib/business";
 
 const STATUS_STYLES: Record<string, string> = {
   new:       "bg-amber-100 text-amber-700",
@@ -208,6 +209,7 @@ function StatusSelect({ order, onChange }: { order: any; onChange: (id: string, 
 export function OrdersTab() {
   const { data: me } = useGetMe();
   const businessId = me?.business?.id || "";
+  const hospitalityBusiness = isHospitalityBusiness(me?.business);
   const { data: orders, isLoading } = useListOrders(businessId, {
     query: {
       enabled: !!businessId,
@@ -673,13 +675,17 @@ export function OrdersTab() {
               <label className="text-sm font-medium">Add an item</label>
               <select defaultValue="" onChange={(event) => { addProduct(event.target.value); event.target.value = ""; }} className="mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-sm">
                 <option value="" disabled>Choose a product…</option>
-                {products.filter((product) => product.active !== false && Number(product.stockQty || 0) > 0).map((product) => (
-                  <option key={product.id} value={product.id}>{product.name} · KSh {Number(product.price || 0).toLocaleString()} · {product.stockQty} available</option>
+                {products.filter((product) => product.active !== false && (hospitalityBusiness || Number(product.stockQty || 0) > 0)).map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name} · KSh {Number(product.price || 0).toLocaleString()} · {hospitalityBusiness ? "Available by default" : `${product.stockQty} available`}
+                  </option>
                 ))}
               </select>
             </div>
             <p className="text-xs text-muted-foreground">
-              Saving recalculates the total, adjusts reserved stock, records the correction, and tells the customer on WhatsApp.
+              {hospitalityBusiness
+                ? "Hospitality items remain orderable regardless of stock count. Saving recalculates the total, adjusts only stock actually reserved, and records the correction."
+                : "Saving recalculates the total, adjusts reserved stock, records the correction, and tells the customer on WhatsApp."}
             </p>
             <button type="button" onClick={saveItems} disabled={savingItems || editItems.length === 0} className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-white disabled:opacity-50">
               {savingItems ? "Saving correction…" : "Save corrected order"}

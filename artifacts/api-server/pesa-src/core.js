@@ -68,8 +68,8 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     const previousAssistantText = [...previousMessages].reverse().find((message) => message.role === "assistant")?.content || "";
     const tableNumber = extractTableNumber(text, previousAssistantText);
     if (tableNumber !== null) {
-      if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 35) {
-        return { replyText: "Our table numbers run from 1 to 35. Please check the number at your table and send it again.", order: null };
+      if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 40) {
+        return { replyText: "Our table numbers run from 1 to 40. Please check the number at your table and send it again.", order: null };
       }
       const tableLocation = db.listServiceLocations(business.id).find((location) =>
         location.active &&
@@ -142,12 +142,12 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     String(locationContext.kind).toUpperCase() === "TABLE"
   );
   if (isTableLocation) {
-    const { replyText: tableReply, mediaReplies, order } = await getAssistantReply(
+    const { replyText: tableReply, mediaReplies, order, reservationRequest } = await getAssistantReply(
       business,
       customer.id,
       priorHistory,
       text,
-      { shopEntry: isTableQrEntry, serviceLocationId: resolvedLocationId }
+      { shopEntry: isTableQrEntry, serviceLocationId: resolvedLocationId, customerPhone, customerName }
     );
     const prepared = orderActions(tableReply, order);
     const configuredWelcome = String(business.welcomeMessage || "").trim();
@@ -168,8 +168,11 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
       assistantReplyText: prepared.replyText,
       mediaReplies,
       interactiveButtons: prepared.interactiveButtons,
-      interactiveList: isTableQrEntry ? buildConciergeList(business.name) : null,
+      interactiveList: isTableQrEntry
+        ? buildConciergeList(business.name, { servicesAvailableByDefault: db.isHospitalityBusiness(business) })
+        : null,
       order,
+      reservationRequest,
       customer,
       conversation,
     };
@@ -191,7 +194,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
       replyText: welcomeReply,
       welcomeText: welcomeReply,
       assistantReplyText: null,
-      interactiveList: buildConciergeList(business.name),
+      interactiveList: buildConciergeList(business.name, { servicesAvailableByDefault: db.isHospitalityBusiness(business) }),
       order: null,
       customer,
       conversation,
@@ -214,7 +217,10 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
         });
       }
 
-       const { replyText: catalogReply, order } = await getAssistantReply(business, customer.id, [], text, { shopEntry: true, serviceLocationId: resolvedLocationId });
+       const { replyText: catalogReply, order, reservationRequest } = await getAssistantReply(
+         business, customer.id, [], text,
+         { shopEntry: true, serviceLocationId: resolvedLocationId, customerPhone, customerName }
+       );
       const prepared = orderActions(catalogReply, order);
       db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", prepared.replyText); });
 
@@ -223,6 +229,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
         replyText:    welcomeReply,   // sent first (null = skip)
         extraReplies: [catalogReply], // sent immediately after
         order,
+        reservationRequest,
         customer,
         conversation,
       };
@@ -238,10 +245,13 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     }
   }
 
-  const { replyText, mediaReplies, order } = await getAssistantReply(business, customer.id, priorHistory, text, { serviceLocationId: resolvedLocationId });
+  const { replyText, mediaReplies, order, reservationRequest } = await getAssistantReply(
+    business, customer.id, priorHistory, text,
+    { serviceLocationId: resolvedLocationId, customerPhone, customerName }
+  );
   const prepared = orderActions(replyText, order);
   db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", prepared.replyText); });
-  return { replyText: prepared.replyText, mediaReplies, interactiveButtons: prepared.interactiveButtons, order, customer, conversation };
+  return { replyText: prepared.replyText, mediaReplies, interactiveButtons: prepared.interactiveButtons, order, reservationRequest, customer, conversation };
 }
 
 module.exports = {

@@ -370,6 +370,51 @@ export interface Order {
   updatedAt: string;
 }
 
+export type RoomReservationStatus = typeof RoomReservationStatus[keyof typeof RoomReservationStatus];
+
+
+export const RoomReservationStatus = {
+  PENDING: 'PENDING',
+  CONFIRMED: 'CONFIRMED',
+  DECLINED: 'DECLINED',
+} as const;
+
+export type RoomReservationPaymentStatus = typeof RoomReservationPaymentStatus[keyof typeof RoomReservationPaymentStatus];
+
+
+export const RoomReservationPaymentStatus = {
+  PENDING: 'PENDING',
+  SUBMITTED: 'SUBMITTED',
+  PAID: 'PAID',
+} as const;
+
+export interface RoomReservation {
+  id: string;
+  businessId: string;
+  reference: string;
+  customerId: string;
+  /** @nullable */
+  customerName?: string | null;
+  customerPhone: string;
+  roomType: string;
+  checkInDate: string;
+  checkOutDate: string;
+  /** @minimum 1 */
+  guestCount: number;
+  /** @nullable */
+  specialRequests?: string | null;
+  status: RoomReservationStatus;
+  /** @nullable */
+  quotedAmount?: number | null;
+  paymentStatus: RoomReservationPaymentStatus;
+  /** @nullable */
+  paymentReference?: string | null;
+  /** @nullable */
+  staffNotes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SalesTrendPoint {
   date: string;
   revenue: number;
@@ -594,6 +639,32 @@ export interface ProductImportInput {
 
 export interface OrderStatusUpdate {
   status: string;
+}
+
+export type RoomReservationUpdateStatus = typeof RoomReservationUpdateStatus[keyof typeof RoomReservationUpdateStatus];
+
+
+export const RoomReservationUpdateStatus = {
+  CONFIRMED: 'CONFIRMED',
+  DECLINED: 'DECLINED',
+} as const;
+
+export type RoomReservationUpdatePaymentStatus = typeof RoomReservationUpdatePaymentStatus[keyof typeof RoomReservationUpdatePaymentStatus];
+
+
+export const RoomReservationUpdatePaymentStatus = {
+  PAID: 'PAID',
+} as const;
+
+export interface RoomReservationUpdate {
+  status?: RoomReservationUpdateStatus;
+  /** @minimum 0 */
+  quotedAmount?: number;
+  paymentStatus?: RoomReservationUpdatePaymentStatus;
+  /** @maxLength 120 */
+  paymentReference?: string;
+  /** @maxLength 1000 */
+  staffNotes?: string;
 }
 
 export interface OrderItemUpdate {
