@@ -16,6 +16,7 @@ const crypto = require("crypto");
 const fieldCrypto = require("./crypto");
 const productImages = require("./product-images");
 const { normalizeTranscript } = require("./transcriptNormalizer");
+const { HOTEL_MENU_CATEGORY_ITEMS, getHotelMenuClassification, normalizeMenuProductName } = require("./hospitality-menu");
 
 // Override with a DATA_DIR env var to point this at a mounted persistent
 // disk on hosts like Render/Railway (their filesystem is otherwise wiped
@@ -3036,6 +3037,92 @@ function runOneTimeWelcomeMessageUpdate({ businessName, welcomeMessage, migratio
   });
 }
 
+function runOneTimeHotelMenuCategoryMigration({ businessName, migrationId }) {
+  const normalizedBusinessName = String(businessName || "").trim().toLowerCase();
+  if (!normalizedBusinessName || !migrationId) {
+    return { applied: false, reason: "invalid-migration-input" };
+  }
+
+  const currentState = load();
+  const currentMigrations = currentState.migrations && typeof currentState.migrations === "object"
+    ? currentState.migrations
+    : {};
+  if (currentMigrations[migrationId]) {
+    return {
+      applied: false,
+      reason: "already-applied",
+      ...currentMigrations[migrationId],
+    };
+  }
+
+  const businesses = (currentState.businesses || []).filter(
+    (business) => String(business.name || "").trim().toLowerCase() === normalizedBusinessName
+  );
+  if (businesses.length !== 1) {
+    return { applied: false, reason: "business-name-match-count", matchCount: businesses.length };
+  }
+
+  const businessId = businesses[0].id;
+  const products = (currentState.products || []).filter((product) =>
+    product.businessId === businessId && getHotelMenuClassification(product.name)
+  );
+  if (!products.length) {
+    return { applied: false, reason: "no-matching-menu-items", businessId, matchedProducts: 0 };
+  }
+
+  const matchedNames = new Set(products.map((product) => normalizeMenuProductName(product.name)));
+  const unmatchedMenuItemCount = HOTEL_MENU_CATEGORY_ITEMS.filter(
+    (item) => !matchedNames.has(item.normalizedName)
+  ).length;
+
+  return mutate((state) => {
+    state.migrations = state.migrations && typeof state.migrations === "object"
+      ? state.migrations
+      : {};
+    if (state.migrations[migrationId]) {
+      return { applied: false, reason: "already-applied", ...state.migrations[migrationId] };
+    }
+
+    const matches = (state.businesses || []).filter(
+      (business) => String(business.name || "").trim().toLowerCase() === normalizedBusinessName
+    );
+    if (matches.length !== 1) {
+      return { applied: false, reason: "business-name-match-count", matchCount: matches.length };
+    }
+
+    const targetBusinessId = matches[0].id;
+    let matchedProducts = 0;
+    let updatedProducts = 0;
+    const categoryCounts = { food: 0, drinks: 0 };
+    for (const product of state.products || []) {
+      if (product.businessId !== targetBusinessId) continue;
+      const classification = getHotelMenuClassification(product.name);
+      if (!classification) continue;
+      matchedProducts += 1;
+      categoryCounts[classification.category] += 1;
+      if (product.category !== classification.category) {
+        product.category = classification.category;
+        updatedProducts += 1;
+      }
+    }
+    if (!matchedProducts) {
+      return { applied: false, reason: "no-matching-menu-items", businessId: targetBusinessId, matchedProducts: 0 };
+    }
+
+    const migration = {
+      appliedAt: now(),
+      businessId: targetBusinessId,
+      fields: ["products.category"],
+      matchedProducts,
+      updatedProducts,
+      categoryCounts,
+      unmatchedMenuItemCount,
+    };
+    state.migrations[migrationId] = migration;
+    return { applied: true, ...migration };
+  });
+}
+
 function runOneTimeWhatsAppNumberCorrection({ businessName, migrationId }) {
   return mutate((state) => {
     state.migrations = state.migrations && typeof state.migrations === "object" ? state.migrations : {};
@@ -3095,6 +3182,7 @@ module.exports = {
   runOneTimeWhatsAppRoutingCorrection,
   runOneTimeExactWhatsAppPhoneNumberIdCorrection,
   runOneTimeWelcomeMessageUpdate,
+  runOneTimeHotelMenuCategoryMigration,
   runOneTimeWhatsAppNumberCorrection,
   restoreDeletedBusinessForSingleOrphanedAccount,
   repairSingleOrphanedAccount,

@@ -606,6 +606,11 @@ persistence.init(db.DATA_FILE).then(() => {
       migrationId: "skyview-opal-hotel-welcome-message-v1",
     });
     console.log("[migration] Skyview Opal Hotel welcome message:", skyviewWelcome);
+    const skyviewMenuCategories = db.runOneTimeHotelMenuCategoryMigration({
+      businessName: "Skyview Opal Hotel",
+      migrationId: "skyview-opal-hotel-food-drinks-categories-v1",
+    });
+    console.log("[migration] Skyview Opal Hotel Food and Drinks categories:", skyviewMenuCategories);
     const skyviewWhatsAppNumber = db.runOneTimeWhatsAppNumberCorrection({
       businessName: "Skyview Opal Hotel",
       migrationId: "skyview-opal-hotel-whatsapp-number-format-2026-10-01",

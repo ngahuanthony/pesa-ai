@@ -10,6 +10,7 @@ process.env.ANTHROPIC_API_KEY = "";
 const db = require("../db");
 const merchantIntelligence = require("./merchant-intelligence");
 const { handleCustomerMessage, extractTableNumber } = require("../core");
+const hospitalityMenu = require("../hospitality-menu");
 const mpesa = require("../mpesa");
 const { buildKnowledgeContext, runClaudeAssistant } = require("../ai");
 const { buildConciergeList, buildWhatsAppListPayload, getConciergePrompt } = require("../concierge");
@@ -440,9 +441,11 @@ test("hotel menu and Order Food selection reply only with active catalog names a
   });
   assert.match(menu.replyText, /Welcome to Hotel Fast Menu\./);
   assert.match(menu.replyText, /🍽️ \*FOOD\*/);
-  assert.match(menu.replyText, /Grilled Fish Fillet — KSh 850/);
+  assert.match(menu.replyText, /\*Seafood\*/);
+  assert.match(menu.replyText, /Grilled Fish Fillet — KES 850/);
   assert.match(menu.replyText, /🥤 \*DRINKS\*/);
-  assert.match(menu.replyText, /Fresh Juice — KSh 250/);
+  assert.match(menu.replyText, /\*Other Drinks\*/);
+  assert.match(menu.replyText, /Fresh Juice — KES 250/);
   assert.match(menu.replyText, /reply with the item name and quantity/i);
   assert.doesNotMatch(menu.replyText, /Garden Suite|Swimming Pool Access|Archived Special|Lobster Thermidor|out of stock|reference only|mock AI/i);
 
@@ -453,9 +456,74 @@ test("hotel menu and Order Food selection reply only with active catalog names a
     channel: "whatsapp",
     text: getConciergePrompt("concierge:food"),
   });
-  assert.match(orderFood.replyText, /Grilled Fish Fillet — KSh 850/);
-  assert.match(orderFood.replyText, /Fresh Juice — KSh 250/);
+  assert.match(orderFood.replyText, /Grilled Fish Fillet — KES 850/);
+  assert.match(orderFood.replyText, /Fresh Juice — KES 250/);
   assert.match(orderFood.replyText, /reply with the item name and quantity/i);
   assert.doesNotMatch(orderFood.replyText, /Garden Suite|Swimming Pool Access|Archived Special|Lobster Thermidor|out of stock|reference only|mock AI/i);
   assert.equal(fish.stockQty, 0);
+});
+
+test("Skyview menu category migration assigns the approved Food and Drinks list once without changing stock or prices", async () => {
+  assert.equal(hospitalityMenu.HOTEL_MENU_CATEGORY_ITEMS.length, 63);
+  assert.equal(hospitalityMenu.getHotelMenuClassification("  GRILLED fish-filLET ")?.category, "food");
+  assert.equal(hospitalityMenu.getHotelMenuClassification("Vanilla Iced Latte")?.category, "drinks");
+  assert.equal(hospitalityMenu.getHotelMenuClassification("Low Fat Milk"), null);
+
+  db.mutate((state) => {
+    for (const key of Object.keys(state)) {
+      if (Array.isArray(state[key])) state[key] = [];
+    }
+    state.migrations = {};
+  });
+
+  const hotel = business("Skyview Opal Hotel");
+  const fish = db.createProduct(hotel.id, { name: "Grilled Fish Fillet", price: 850, stockQty: 7 });
+  const icedCoffee = db.createProduct(hotel.id, { name: "Vanilla Iced Latte", category: "other", price: 400, stockQty: 3 });
+  const room = db.createProduct(hotel.id, { name: "Garden Suite", price: 18000, stockQty: 0 });
+  const archived = db.createProduct(hotel.id, { name: "Beef Stew", price: 800, stockQty: 2 });
+  db.updateProduct(hotel.id, archived.id, { active: false });
+
+  const otherHotel = business("Other Hotel");
+  const otherFish = db.createProduct(otherHotel.id, { name: "Grilled Fish Fillet", price: 900, stockQty: 5 });
+
+  const migration = db.runOneTimeHotelMenuCategoryMigration({
+    businessName: "Skyview Opal Hotel",
+    migrationId: "test-skyview-food-drinks-categories",
+  });
+  assert.equal(migration.applied, true);
+  assert.equal(migration.matchedProducts, 3);
+  assert.equal(migration.updatedProducts, 3);
+  assert.deepEqual(migration.categoryCounts, { food: 2, drinks: 1 });
+  assert.ok(migration.unmatchedMenuItemCount > 0);
+
+  assert.equal(db.getProduct(fish.id).category, "food");
+  assert.equal(db.getProduct(icedCoffee.id).category, "drinks");
+  assert.equal(db.getProduct(room.id).category, null);
+  assert.equal(db.getProduct(archived.id).category, "food");
+  assert.equal(db.getProduct(otherFish.id).category, null);
+  assert.equal(db.getProduct(fish.id).price, 850);
+  assert.equal(db.getProduct(fish.id).stockQty, 7);
+  assert.equal(db.getProduct(fish.id).active, true);
+  assert.equal(db.getProduct(archived.id).active, false);
+
+  const repeatedMigration = db.runOneTimeHotelMenuCategoryMigration({
+    businessName: "Skyview Opal Hotel",
+    migrationId: "test-skyview-food-drinks-categories",
+  });
+  assert.equal(repeatedMigration.reason, "already-applied");
+
+  const menu = await handleCustomerMessage({
+    business: hotel,
+    customerPhone: "254799000099",
+    customerName: "Guest",
+    channel: "whatsapp",
+    text: "Menu",
+  });
+  assert.match(menu.replyText, /✅ All listed items are available\./);
+  assert.match(menu.replyText, /\*Seafood\*/);
+  assert.match(menu.replyText, /Grilled Fish Fillet — KES 850/);
+  assert.match(menu.replyText, /\*Iced Coffee\*/);
+  assert.match(menu.replyText, /Vanilla Iced Latte — KES 400/);
+  assert.doesNotMatch(menu.replyText, /Garden Suite|Beef Stew|Low Fat Milk/);
+  assert.match(menu.replyText, /reply with the item name and quantity/i);
 });

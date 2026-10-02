@@ -5,6 +5,7 @@
 const db = require("./db");
 const { getAssistantReply, getProductImageReplies } = require("./ai");
 const { buildConciergeList } = require("./concierge");
+const { HOTEL_MENU_GROUPS, getHotelMenuClassification } = require("./hospitality-menu");
 
 // The pre-filled text baked into the shop QR / wa.me link.
 // When a customer taps the link, WhatsApp sends exactly this message.
@@ -85,16 +86,23 @@ function isQuickMenuRequest(text) {
 
 function buildHospitalityMenuReply(business) {
   const products = db.listProducts(business.id, { activeOnly: true });
-  const formatItems = (items) => items
+  const formatItems = (items, category, groupHeading = null) => items
     .slice()
-    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .sort((a, b) => {
+      if (groupHeading) {
+        const orderA = getHotelMenuClassification(a.name)?.order ?? Number.MAX_SAFE_INTEGER;
+        const orderB = getHotelMenuClassification(b.name)?.order ?? Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+      }
+      return String(a.name).localeCompare(String(b.name));
+    })
     .map((product) => {
     const rawPrice = product.price;
     const price = rawPrice === null || rawPrice === undefined || rawPrice === ""
       ? null
       : Number(rawPrice);
     const priceText = price !== null && Number.isFinite(price)
-      ? " — KSh " + price.toLocaleString("en-KE")
+        ? " — KES " + price.toLocaleString("en-KE")
       : "";
     return "• " + product.name + priceText;
     });
@@ -103,8 +111,27 @@ function buildHospitalityMenuReply(business) {
     { category: "drinks", heading: "🥤 *DRINKS*" },
   ]
     .map(({ category, heading }) => {
-      const items = formatItems(products.filter((product) => product.category === category));
-      return items.length ? heading + "\n" + items.join("\n") : null;
+      const categoryProducts = products.filter((product) => product.category === category);
+      if (!categoryProducts.length) return null;
+
+      const groupedProducts = new Set();
+      const groups = (HOTEL_MENU_GROUPS[category] || []).map((group) => {
+        const items = categoryProducts.filter((product) => {
+          const classification = getHotelMenuClassification(product.name);
+          return classification?.category === category && classification.group === group.heading;
+        });
+        if (!items.length) return null;
+        items.forEach((product) => groupedProducts.add(product));
+        return `*${group.heading}*\n${formatItems(items, category, group.heading).join("\n")}`;
+      }).filter(Boolean);
+
+      const otherItems = categoryProducts.filter((product) => !groupedProducts.has(product));
+      if (otherItems.length) {
+        const label = category === "food" ? "Other Food Items" : "Other Drinks";
+        groups.push(`*${label}*\n${formatItems(otherItems, category).join("\n")}`);
+      }
+
+      return heading + "\n\n" + groups.join("\n\n");
     })
     .filter(Boolean);
 
@@ -112,8 +139,11 @@ function buildHospitalityMenuReply(business) {
     return "Our Food & Drinks menu is being updated. Please contact the hotel team for help with an order.";
   }
 
-  return "Welcome to our Food & Drinks menu!\n\n" + sections.join("\n\n") +
-    "\n\nTo order, reply with the item name and quantity (for example, “2 Grilled Fish Fillet and 1 Fresh Juice”). I’ll confirm your order before placing it.";
+  const availabilityNotice = String(business.name || "").trim().toLowerCase() === "skyview opal hotel"
+    ? "✅ All listed items are available.\n\n"
+    : "";
+  return "Welcome to our Food & Drinks menu!\n\n" + availabilityNotice + sections.join("\n\n") +
+    "\n\nTo order, reply with the item name and quantity. I’ll confirm your order before placing it.";
 }
 
 async function handleCustomerMessage({ business, customerPhone, customerName, text, channel, serviceLocationToken = null, serviceLocationId = null }) {
