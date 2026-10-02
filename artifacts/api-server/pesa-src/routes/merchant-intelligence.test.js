@@ -11,7 +11,7 @@ const db = require("../db");
 const merchantIntelligence = require("./merchant-intelligence");
 const { handleCustomerMessage, extractTableNumber } = require("../core");
 const mpesa = require("../mpesa");
-const { buildKnowledgeContext } = require("../ai");
+const { buildKnowledgeContext, runClaudeAssistant } = require("../ai");
 const { buildConciergeList, buildWhatsAppListPayload, getConciergePrompt } = require("../concierge");
 
 function business(name) {
@@ -257,6 +257,7 @@ test("Skyview's direct WhatsApp QR opens the concierge list before any AI catalo
   });
 
   assert.match(firstScan.welcomeText, /WELCOME TO SKYVIEW OPAL HOTEL/);
+  assert.equal(firstScan.interactiveList.button, "Explore services");
   assert.deepEqual(firstScan.interactiveList.rows.map((row) => row.title), [
     "Order Food", "Rooms", "Swimming Pool", "Conferences", "Events", "Hotel Information",
   ]);
@@ -339,4 +340,111 @@ test("knowledge retrieval selects a relevant late section across full approved t
   assert.doesNotMatch(result.text, /never available/);
   assert.ok(result.text.length <= 12000);
   assert.throws(() => db.createKnowledgeEntry(a.id, { title: "Too big", text: "x".repeat(100001) }), /100,000/i);
+});
+
+test("hotel WhatsApp menu treats active catalog items as available despite stale menu stock warnings", async () => {
+  const hotel = business("Hotel Menu Availability");
+  const product = db.createProduct(hotel.id, {
+    name: "Grilled Fish Fillet",
+    price: 850,
+    stockQty: 0,
+  });
+  db.createKnowledgeEntry(hotel.id, {
+    title: "Complete menu",
+    category: "menu",
+    text: "Items are currently showing as out of stock in our ordering system, but prices are listed for reference.",
+    source: "uploaded menu",
+  });
+
+  const originalFetch = global.fetch;
+  const requests = [];
+  global.fetch = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    requests.push(body);
+    if (requests.length === 1) {
+      return {
+        ok: true,
+        json: async () => ({
+          stop_reason: "tool_use",
+          content: [{
+            type: "tool_use",
+            id: "search-menu",
+            name: "search_products",
+            input: { query: "fish" },
+          }],
+        }),
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: "Grilled Fish Fillet is available for KES 850." }],
+      }),
+    };
+  };
+
+  let result;
+  try {
+    result = await runClaudeAssistant(hotel, "customer-menu-test", [], "Menu");
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.match(result.replyText, /available/i);
+  assert.doesNotMatch(result.replyText, /out of stock|for reference only/i);
+  assert.match(requests[0].system, /active product catalog is the source of truth/i);
+  assert.match(requests[0].system, /Do not use stock warnings or availability claims in uploaded menus/i);
+  assert.match(requests[0].system, /Items are currently showing as out of stock/);
+
+  const toolResult = requests[1].messages.at(-1).content
+    .find((message) => message.type === "tool_result");
+  const catalogResult = JSON.parse(toolResult.content);
+  assert.deepEqual(catalogResult.results.map(({ name, price, stockQty, availability }) => ({
+    name, price, stockQty, availability,
+  })), [{
+    name: product.name,
+    price: product.price,
+    stockQty: null,
+    availability: "available",
+  }]);
+});
+
+test("hotel menu and Order Food selection reply only with active catalog names and prices", async () => {
+  const hotel = business("Hotel Fast Menu");
+  hotel.welcomeMessage = "Welcome to Hotel Fast Menu.";
+  const fish = db.createProduct(hotel.id, { name: "Grilled Fish Fillet", price: 850, stockQty: 0 });
+  db.createProduct(hotel.id, { name: "Fresh Juice", price: 250, stockQty: 4 });
+  const inactive = db.createProduct(hotel.id, { name: "Archived Special", price: 999, stockQty: 0 });
+  db.updateProduct(hotel.id, inactive.id, { active: false });
+  db.createKnowledgeEntry(hotel.id, {
+    title: "Old menu",
+    category: "menu",
+    text: "Lobster Thermidor — KES 9,999. Items are out of stock and prices are for reference only.",
+    source: "old menu",
+  });
+
+  const menu = await handleCustomerMessage({
+    business: hotel,
+    customerPhone: "254799000021",
+    customerName: "Guest",
+    channel: "whatsapp",
+    text: "Menu",
+  });
+  assert.match(menu.replyText, /Welcome to Hotel Fast Menu\./);
+  assert.match(menu.replyText, /Grilled Fish Fillet — KSh 850/);
+  assert.match(menu.replyText, /Fresh Juice — KSh 250/);
+  assert.doesNotMatch(menu.replyText, /Archived Special|Lobster Thermidor|out of stock|reference only|mock AI/i);
+
+  const orderFood = await handleCustomerMessage({
+    business: hotel,
+    customerPhone: "254799000022",
+    customerName: "Guest",
+    channel: "whatsapp",
+    text: getConciergePrompt("concierge:food"),
+  });
+  assert.match(orderFood.replyText, /Grilled Fish Fillet — KSh 850/);
+  assert.match(orderFood.replyText, /Fresh Juice — KSh 250/);
+  assert.doesNotMatch(orderFood.replyText, /Archived Special|Lobster Thermidor|out of stock|reference only|mock AI/i);
+  assert.equal(fish.stockQty, 0);
 });

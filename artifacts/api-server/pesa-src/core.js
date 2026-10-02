@@ -59,6 +59,51 @@ function extractTableNumber(text, previousAssistantText = "") {
   return null;
 }
 
+function isQuickMenuRequest(text) {
+  const normalized = String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return new Set([
+    "menu",
+    "menu please",
+    "current menu",
+    "food menu",
+    "show menu",
+    "show me menu",
+    "show the menu",
+    "show me the menu",
+    "show me the current menu",
+    "show me the food menu",
+    "show me the current food menu",
+    "show me the complete current food and drinks menu grouped by category with prices",
+    "please show me the complete current food and drinks menu grouped by category with prices",
+    "what is on the menu",
+    "what is on menu",
+    "what do you have on the menu",
+    "can i see the menu",
+    "send me the menu",
+  ]).has(normalized);
+}
+
+function buildHospitalityMenuReply(business) {
+  const products = db.listProducts(business.id, { activeOnly: true });
+  if (!products.length) {
+    return "There are no active food or drink items listed in the current catalog.";
+  }
+
+  const items = products.map((product) => {
+    const rawPrice = product.price;
+    const price = rawPrice === null || rawPrice === undefined || rawPrice === ""
+      ? null
+      : Number(rawPrice);
+    const priceText = price !== null && Number.isFinite(price)
+      ? " — KSh " + price.toLocaleString("en-KE")
+      : "";
+    return "• " + product.name + priceText;
+  });
+
+  return "Current menu from the catalog:\n\n" + items.join("\n") +
+    "\n\nReply with the item name and quantity to order.";
+}
+
 async function handleCustomerMessage({ business, customerPhone, customerName, text, channel, serviceLocationToken = null, serviceLocationId = null }) {
   let resolvedLocationId = serviceLocationId;
   let locationChanged = false;
@@ -141,6 +186,33 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     locationContext &&
     String(locationContext.kind).toUpperCase() === "TABLE"
   );
+  if (db.isHospitalityBusiness(business) && isQuickMenuRequest(text)) {
+    const menuReply = buildHospitalityMenuReply(business);
+    const configuredWelcome = String(business.welcomeMessage || "").trim();
+    const locationGreeting = locationContext
+      ? "📍 You're connected to " + locationContext.label + ". Just in case, please also tell me the table number printed beside you on the table."
+      : null;
+    const contextGreeting = isFirstMessage
+      ? locationContext
+        ? [configuredWelcome || ("Welcome to " + business.name + "! I can help with dining, rooms, the pool, conferences, and events."), locationGreeting].filter(Boolean).join("\n\n")
+        : configuredWelcome || null
+      : locationChanged
+        ? locationGreeting
+        : null;
+    const replyText = [contextGreeting, menuReply].filter(Boolean).join("\n\n");
+    db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", replyText); });
+    return {
+      replyText,
+      welcomeText: contextGreeting,
+      assistantReplyText: menuReply,
+      interactiveList: isTableQrEntry
+        ? buildConciergeList(business.name, { servicesAvailableByDefault: true })
+        : null,
+      order: null,
+      customer,
+      conversation,
+    };
+  }
   if (isTableLocation) {
     const { replyText: tableReply, mediaReplies, order, reservationRequest } = await getAssistantReply(
       business,
