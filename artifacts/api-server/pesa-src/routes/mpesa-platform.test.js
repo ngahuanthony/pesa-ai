@@ -142,8 +142,9 @@ test("admin WhatsApp readiness recognizes the production legacy shared token", (
   }
 });
 
-test("admin WhatsApp activation uses the same legacy token and sender aliases as runtime", async () => {
-  const account = business("WhatsApp alias connection");
+test("admin WhatsApp activation resolves the exact customer number instead of reusing another shop's sender ID", async () => {
+  const existingShop = business("AdPlayMedia sender");
+  const account = business("Skyview exact-number connection");
   const keys = [
     "WHATSAPP_PLATFORM_TOKEN", "WHATSAPP_TOKEN",
     "WHATSAPP_PLATFORM_PHONE_NUMBER_ID", "WHATSAPP_PHONE_NUMBER_ID",
@@ -159,20 +160,94 @@ test("admin WhatsApp activation uses the same legacy token and sender aliases as
     process.env.WHATSAPP_PHONE_NUMBER_ID = "sender-123";
     process.env.WHATSAPP_PLATFORM_WABA_ID = "waba-456";
     process.env.WHATSAPP_VERIFY_TOKEN = "verify-token-for-test";
+    db.setWhatsAppCredentials(existingShop.id, {
+      phoneNumberId: "sender-123",
+      accessToken: "existing-shop-token",
+      verifyToken: "existing-shop-verify",
+      wabaId: "waba-456",
+      displayName: existingShop.name,
+      waPhone: "254792717918",
+    });
     global.fetch = async (url, options) => {
       requests.push({ url: String(url), authorization: options?.headers?.authorization });
+      if (String(url).includes("/phone_numbers?")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: [
+              { id: "sender-123", display_phone_number: "+254 792 717 918", status: "CONNECTED" },
+              { id: "skyview-meta-id", display_phone_number: "+254 700 000 002", status: "CONNECTED" },
+            ],
+          }),
+        };
+      }
       return { ok: true, text: async () => "" };
     };
     const result = await admin.setWhatsAppCredentials({
       session: { isAdmin: true },
       params: { businessId: account.id },
-      body: { displayName: account.name },
+      body: { displayName: account.name, waPhone: "254700000002" },
     });
     assert.equal(result.connected, true);
     assert.equal(result.connectionStatus, "live");
     assert.equal(db.getWhatsAppStatus(account.id).connected, true);
-    assert.equal(requests.length >= 2, true);
+    assert.equal(db.getWhatsAppStatus(account.id).phoneNumberId, "skyview-meta-id");
+    assert.equal(db.getWhatsAppStatus(existingShop.id).phoneNumberId, "sender-123");
+    assert.equal(requests.some((request) => request.url.includes("/skyview-meta-id/whatsapp_business_profile")), true);
+    assert.equal(requests.some((request) => request.url.includes("/sender-123/whatsapp_business_profile")), false);
+    assert.equal(requests.length >= 3, true);
     assert.equal(requests.every((request) => request.authorization === "Bearer legacy-shared-token-for-test"), true);
+  } finally {
+    global.fetch = oldFetch;
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
+});
+
+test("admin WhatsApp activation fails closed when Meta has no connected exact-number match", async () => {
+  const account = business("WhatsApp unmatched number");
+  const keys = [
+    "WHATSAPP_PLATFORM_TOKEN", "WHATSAPP_TOKEN",
+    "WHATSAPP_PLATFORM_PHONE_NUMBER_ID", "WHATSAPP_PHONE_NUMBER_ID",
+    "WHATSAPP_PLATFORM_WABA_ID", "WHATSAPP_VERIFY_TOKEN",
+  ];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  const oldFetch = global.fetch;
+  let requestCount = 0;
+  try {
+    delete process.env.WHATSAPP_PLATFORM_TOKEN;
+    process.env.WHATSAPP_TOKEN = "legacy-shared-token-for-test";
+    delete process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID;
+    process.env.WHATSAPP_PHONE_NUMBER_ID = "sender-123";
+    process.env.WHATSAPP_PLATFORM_WABA_ID = "waba-456";
+    global.fetch = async () => {
+      requestCount += 1;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: [
+            { id: "sender-123", display_phone_number: "+254 792 717 918", status: "CONNECTED" },
+            { id: "pending-meta-id", display_phone_number: "+254 700 000 002", status: "PENDING" },
+          ],
+        }),
+      };
+    };
+    await assert.rejects(
+      admin.setWhatsAppCredentials({
+        session: { isAdmin: true },
+        params: { businessId: account.id },
+        body: { displayName: account.name, waPhone: "254700000002" },
+      }),
+      /has not connected this exact customer-facing WhatsApp number/
+    );
+    assert.equal(requestCount, 1);
+    assert.equal(db.getWhatsAppStatus(account.id).phoneNumberId, null);
+    assert.equal(db.getWhatsAppStatus(account.id).accessTokenSet, false);
+    assert.notEqual(db.getWhatsAppStatus(account.id).connectionStatus, "live");
   } finally {
     global.fetch = oldFetch;
     for (const key of keys) {
@@ -187,6 +262,17 @@ test("failed WABA subscription preserves a useful admin error without reporting 
   const oldFetch = global.fetch;
   try {
     global.fetch = async (url) => {
+      if (String(url).includes("/phone_numbers?")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: [
+              { id: "sender-error-test", display_phone_number: "+254 700 000 002", status: "CONNECTED" },
+            ],
+          }),
+        };
+      }
       if (String(url).includes("/subscribed_apps")) {
         return {
           ok: false,

@@ -55,25 +55,51 @@ function listPendingSignups({ session }) {
   return db.listPendingSignups();
 }
 
+async function findConnectedMetaPhoneNumber({ wabaId, token, phone }) {
+  const expected = db.normalizePhone(phone);
+  if (!expected) throw db.httpError(400, "A valid WhatsApp customer number is required");
+  if (!wabaId || !token) throw db.httpError(503, "Platform WhatsApp WABA credentials are not configured");
+
+  let response;
+  try {
+    response = await fetch(`https://graph.facebook.com/${whatsapp.GRAPH_API_VERSION}/${encodeURIComponent(wabaId)}/phone_numbers?fields=id,display_phone_number,status&limit=200`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+  } catch {
+    throw db.httpError(502, "Could not reach Meta to verify this WhatsApp number");
+  }
+  if (!response.ok) throw db.httpError(502, `Meta phone-number lookup failed (${response.status})`);
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw db.httpError(502, "Meta returned an invalid phone-number response");
+  }
+  if (!Array.isArray(payload?.data)) throw db.httpError(502, "Meta returned an invalid phone-number list");
+
+  const matches = payload.data.filter((item) =>
+    item?.id &&
+    db.normalizePhone(item.display_phone_number) === expected &&
+    String(item.status || "").toUpperCase() === "CONNECTED"
+  );
+  if (matches.length > 1) {
+    throw db.httpError(409, "Meta returned multiple connected IDs for this exact WhatsApp number");
+  }
+  return matches[0] || null;
+}
+
 async function verifyPendingSignupMeta({ params, session }) {
   auth.requireAdmin(session);
   const pending = db.getPendingSignup(params.pendingSignupId);
   if (!pending || new Date(pending.expiresAt).getTime() < Date.now()) throw db.httpError(404, "Signup not found or expired");
   const wabaId = process.env.WHATSAPP_PLATFORM_WABA_ID || process.env.WHATSAPP_WABA_ID;
   const token = process.env.WHATSAPP_PLATFORM_TOKEN || process.env.WHATSAPP_TOKEN;
-  if (!wabaId || !token) throw db.httpError(503, "Platform WhatsApp WABA credentials are not configured");
-  const response = await fetch(`https://graph.facebook.com/${whatsapp.GRAPH_API_VERSION}/${encodeURIComponent(wabaId)}/phone_numbers?fields=id,display_phone_number,status&limit=200`, {
-    headers: { authorization: `Bearer ${token}` },
+  const match = await findConnectedMetaPhoneNumber({
+    wabaId,
+    token,
+    phone: pending.pesaAiNumber,
   });
-  if (!response.ok) throw db.httpError(502, `Meta phone-number lookup failed (${response.status})`);
-  const payload = await response.json();
-  if (!Array.isArray(payload?.data)) throw db.httpError(502, "Meta returned an invalid phone-number list");
-  const expected = db.normalizePhone(pending.pesaAiNumber);
-  const match = (payload.data || []).find((item) =>
-    item.id &&
-    db.normalizePhone(item.display_phone_number) === expected &&
-    String(item.status || "").toUpperCase() === "CONNECTED"
-  );
   if (!match) {
     return { verified: false, status: "pending_meta_verification", message: "Meta has not connected this exact Duka number." };
   }
@@ -177,14 +203,30 @@ async function setWhatsAppCredentials({ params, body, session }) {
   auth.requireAdmin(session);
   let { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone, profileImageDataUrl } = body || {};
   const business = db.getBusiness(params.businessId);
-  if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
   if (!accessToken) accessToken = process.env.WHATSAPP_PLATFORM_TOKEN || process.env.WHATSAPP_TOKEN;
-  if (!wabaId) wabaId = process.env.WHATSAPP_PLATFORM_WABA_ID;
+  if (!wabaId) wabaId = process.env.WHATSAPP_PLATFORM_WABA_ID || process.env.WHATSAPP_WABA_ID;
   if (!verifyToken) verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
-  if (!waPhone) waPhone = business.pesaAiNumber || business.shopNumber || business.publicPhone || null;
+  if (!waPhone) waPhone = business.pesaAiNumber || business.whatsappNumber || business.shopNumber || business.publicPhone || null;
   if (!displayName) displayName = business.name;
-  if (!phoneNumberId) throw db.httpError(400, "WhatsApp Phone Number ID is required");
   if (!accessToken) throw db.httpError(503, "WhatsApp access token is not configured");
+  if (!wabaId) throw db.httpError(503, "WhatsApp WABA ID is not configured");
+  if (!waPhone) throw db.httpError(400, "A WhatsApp customer number is required");
+
+  // The environment sender ID is shared platform configuration, not the
+  // phone-number ID for every merchant. Resolve the ID belonging to this
+  // exact customer number and only accept a supplied ID if it agrees.
+  const metaPhone = await findConnectedMetaPhoneNumber({ wabaId, token: accessToken, phone: waPhone });
+  if (!metaPhone) {
+    throw db.httpError(409, "Meta has not connected this exact customer-facing WhatsApp number.");
+  }
+  const sharedPhoneNumberId =
+    process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID ||
+    process.env.WHATSAPP_PHONE_NUMBER_ID ||
+    "1414909975031488";
+  if (phoneNumberId && String(phoneNumberId) !== sharedPhoneNumberId && String(phoneNumberId) !== String(metaPhone.id)) {
+    throw db.httpError(409, "The supplied Meta phone-number ID does not match this customer-facing WhatsApp number.");
+  }
+  phoneNumberId = String(metaPhone.id);
 
   db.setWhatsAppConnectionStatus(params.businessId, "connecting");
   let result;

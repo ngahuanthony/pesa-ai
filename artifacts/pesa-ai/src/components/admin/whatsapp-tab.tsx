@@ -53,7 +53,6 @@ export function AdminWhatsAppTab() {
   const [waPhone, setWaPhone] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [verifyToken, setVerifyToken] = useState("");
-  const [phoneNumberId, setPhoneNumberId] = useState("");
   const [wabaId, setWabaId] = useState("");
   const [platformReady, setPlatformReady] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -67,9 +66,8 @@ export function AdminWhatsAppTab() {
       .then(async (res) => {
         if (!res.ok) throw new Error("Could not load platform WhatsApp settings");
         const defaults = await res.json();
-        setPhoneNumberId(defaults.phoneNumberId || "");
         setWabaId(defaults.wabaId || "");
-        setPlatformReady(Boolean(defaults.hasToken && defaults.phoneNumberId && defaults.wabaId && defaults.hasWebhookVerifyToken));
+        setPlatformReady(Boolean(defaults.hasToken && defaults.wabaId && defaults.hasWebhookVerifyToken));
       })
       .catch(() => setPlatformReady(false));
   }, []);
@@ -127,7 +125,6 @@ export function AdminWhatsAppTab() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phoneNumberId,
           wabaId,
           verifyToken,
           displayName: displayName.trim(),
@@ -186,8 +183,8 @@ export function AdminWhatsAppTab() {
           </p>
           <p className="text-xs opacity-80 mt-0.5">
             {platformReady
-              ? "Phone Number ID, WABA ID, access token, and webhook are managed by the server."
-              : "A Meta token, sender ID, WABA ID, or webhook verification token is missing."}
+              ? "Meta credentials and webhook are managed by the server. Pesa SI will match this number to its own connected Meta phone-number ID."
+              : "A Meta token, WABA ID, or webhook verification token is missing."}
           </p>
         </div>
       </div>
