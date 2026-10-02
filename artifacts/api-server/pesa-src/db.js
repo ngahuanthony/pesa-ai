@@ -737,7 +737,7 @@ function setWhatsAppConnectionStatus(businessId, status, error = null) {
   });
 }
 
-function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone }) {
+function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone, metaVerification }) {
   return mutate((state) => {
     const b = state.businesses.find((b) => b.id === businessId);
     if (!b) throw httpError(404, "Business not found");
@@ -766,6 +766,21 @@ function setWhatsAppCredentials(businessId, { phoneNumberId, accessToken, verify
     // Auto-generate the customer welcome message on first connection
     const isNowConnected = !!(b.whatsappPhoneNumberId && b.whatsappAccessTokenEnc);
     b.whatsappConnectionStatus = isNowConnected ? "live" : (b.whatsappConnectionStatus || "connecting");
+    if (metaVerification && b.requiresVerifiedOwnerAuth === true && b.ownerSecurityVerified === true) {
+      const verifiedPhone = normalizePhone(metaVerification.phoneNumber);
+      const registeredPhone = normalizePhone(b.pesaAiNumber);
+      if (!registeredPhone || verifiedPhone !== registeredPhone ||
+          String(metaVerification.phoneNumberId || "") !== String(b.whatsappPhoneNumberId || "") ||
+          String(metaVerification.wabaId || "") !== String(b.whatsappWabaId || "") ||
+          normalizePhone(b.whatsappNumber) !== registeredPhone) {
+        throw httpError(409, "Meta verification must match this owner's exact registered WhatsApp number");
+      }
+      b.whatsappMetaVerified = true;
+      b.whatsappMetaPhoneNumber = String(metaVerification.phoneNumber);
+      b.whatsappMetaPhoneNumberId = String(metaVerification.phoneNumberId);
+      b.whatsappMetaWabaId = String(metaVerification.wabaId);
+      b.whatsappMetaVerifiedAt = metaVerification.verifiedAt || now();
+    }
     if (isNowConnected && !b.welcomeMessage) {
       b.welcomeMessage = generateWelcomeMessage(b);
     }
@@ -982,6 +997,26 @@ function isPublicShopDiscoverable(business) {
     business.whatsappPhoneNumberId ||
     business.whatsappConnectionStatus === "connected"
   ));
+}
+
+function hasExactVerifiedWhatsAppNumber(business) {
+  if (!business || (business.metaVerified !== true && business.whatsappMetaVerified !== true)) return false;
+  const usingAdminVerification = business.whatsappMetaVerified === true;
+  const verifiedPhone = usingAdminVerification ? business.whatsappMetaPhoneNumber : business.metaPhoneNumber;
+  const verifiedPhoneNumberId = usingAdminVerification ? business.whatsappMetaPhoneNumberId : business.metaPhoneNumberId;
+  const verifiedWabaId = usingAdminVerification ? business.whatsappMetaWabaId : business.metaWabaId;
+  const shopNumber = normalizePhone(business.pesaAiNumber);
+  return Boolean(
+    shopNumber &&
+    normalizePhone(verifiedPhone) === shopNumber &&
+    normalizePhone(business.whatsappNumber) === shopNumber &&
+    verifiedPhoneNumberId &&
+    String(verifiedPhoneNumberId) === String(business.whatsappPhoneNumberId || "") &&
+    verifiedWabaId &&
+    String(verifiedWabaId) === String(business.whatsappWabaId || "") &&
+    business.whatsappConnectionStatus === "live" &&
+    business.whatsappAccessTokenEnc
+  );
 }
 
 function publicShopPayload(business, { includeProducts = false } = {}) {
@@ -1327,6 +1362,8 @@ function finalizePendingSignup(pendingId, { draftToken = null, accessToken = nul
     business.shopNumberStatus = "meta_verified";
     business.shopNumberVerificationStatus = "verified";
     business.metaVerified = true;
+    business.metaPhoneNumberId = pending.metaPhoneNumberId;
+    business.metaWabaId = pending.metaWabaId;
     business.whatsappPhoneNumberId = pending.metaPhoneNumberId;
     business.whatsappWabaId = pending.metaWabaId;
     business.metaPhoneNumber = pending.metaPhoneNumber;
@@ -1360,6 +1397,7 @@ function activateOwnerBusinessFromMeta(business, pending, accessToken) {
   business.shopNumberVerificationStatus = "verified";
   business.metaVerified = true;
   business.metaPhoneNumberId = pending.metaPhoneNumberId;
+  business.metaWabaId = pending.metaWabaId;
   business.whatsappPhoneNumberId = pending.metaPhoneNumberId;
   business.whatsappWabaId = pending.metaWabaId;
   business.metaPhoneNumber = pending.metaPhoneNumber;
@@ -1544,7 +1582,7 @@ function markPendingSignupMetaVerified(pendingId, { phoneNumberId, wabaId, phone
 function isCustomerMessagingActive(business) {
   if (!business) return false;
   if (business.requiresVerifiedOwnerAuth !== true) return true;
-  return business.ownerSecurityVerified === true && isPublicShopDiscoverable(business);
+  return business.ownerSecurityVerified === true && hasExactVerifiedWhatsAppNumber(business);
 }
 
 function getWhatsAppMessagingReadiness(business) {

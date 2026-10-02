@@ -176,6 +176,27 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
   }
 
   const isShopLinkEntry = isShopLinkTrigger(text);
+  const isSkyviewHotel =
+    String(business.name || "").trim().toLowerCase() === "skyview opal hotel";
+
+  // The hotel's general-purpose WhatsApp QR should open the service menu
+  // before invoking AI. Table QR entries are handled above with their
+  // location context; this covers the hotel's non-table QR link.
+  if (isShopLinkEntry && isSkyviewHotel) {
+    const welcomeReply = business.welcomeMessage || db.generateWelcomeMessage(business);
+    db.mutate((state) => {
+      db.addMessage(state, conversation.id, "assistant", welcomeReply);
+    });
+    return {
+      replyText: welcomeReply,
+      welcomeText: welcomeReply,
+      assistantReplyText: null,
+      interactiveList: buildConciergeList(business.name),
+      order: null,
+      customer,
+      conversation,
+    };
+  }
 
    if (isFirstMessage || locationChanged) {
     if (isShopLinkEntry) {

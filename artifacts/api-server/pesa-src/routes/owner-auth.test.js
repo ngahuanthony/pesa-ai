@@ -114,7 +114,20 @@ test("exact Meta confirmation activates the shop and existing Clerk owners sign 
 
   const business = db.getBusiness(pending.businessId);
   const account = db.getAccountByClerkUserId(currentIdentity.clerkUserId);
-  assert.equal(db.isCustomerMessagingActive(business), true);
+  assert.equal(db.isCustomerMessagingActive(business), true, JSON.stringify({
+    requiresVerifiedOwnerAuth: business.requiresVerifiedOwnerAuth,
+    ownerSecurityVerified: business.ownerSecurityVerified,
+    metaVerified: business.metaVerified,
+    metaPhoneNumber: business.metaPhoneNumber,
+    metaPhoneNumberId: business.metaPhoneNumberId,
+    metaWabaId: business.metaWabaId,
+    pesaAiNumber: business.pesaAiNumber,
+    whatsappNumber: business.whatsappNumber,
+    whatsappPhoneNumberId: business.whatsappPhoneNumberId,
+    whatsappWabaId: business.whatsappWabaId,
+    whatsappConnectionStatus: business.whatsappConnectionStatus,
+    accessTokenSet: Boolean(business.whatsappAccessTokenEnc),
+  }));
   assert.equal(db.isPublicShopDiscoverable(business), true);
   assert.equal(business.whatsappPhoneNumberId, "meta-phone-owner-1");
   const whatsappStatus = db.getVendorWhatsAppStatus(business.id);

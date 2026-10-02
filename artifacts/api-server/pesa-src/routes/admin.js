@@ -203,6 +203,8 @@ async function setWhatsAppCredentials({ params, body, session }) {
   auth.requireAdmin(session);
   let { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone, profileImageDataUrl } = body || {};
   const business = db.getBusiness(params.businessId);
+  const wasAlreadyLive = business.whatsappConnectionStatus === "live" &&
+    Boolean(business.whatsappPhoneNumberId && business.whatsappAccessTokenEnc);
   if (!accessToken) accessToken = process.env.WHATSAPP_PLATFORM_TOKEN || process.env.WHATSAPP_TOKEN;
   if (!wabaId) wabaId = process.env.WHATSAPP_PLATFORM_WABA_ID || process.env.WHATSAPP_WABA_ID;
   if (!verifyToken) verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
@@ -211,6 +213,10 @@ async function setWhatsAppCredentials({ params, body, session }) {
   if (!accessToken) throw db.httpError(503, "WhatsApp access token is not configured");
   if (!wabaId) throw db.httpError(503, "WhatsApp WABA ID is not configured");
   if (!waPhone) throw db.httpError(400, "A WhatsApp customer number is required");
+  if (business.requiresVerifiedOwnerAuth === true &&
+      db.normalizePhone(waPhone) !== db.normalizePhone(business.pesaAiNumber)) {
+    throw db.httpError(409, "The WhatsApp number must match this owner's exact registered shop number.");
+  }
 
   // The environment sender ID is shared platform configuration, not the
   // phone-number ID for every merchant. Resolve the ID belonging to this
@@ -227,11 +233,27 @@ async function setWhatsAppCredentials({ params, body, session }) {
     throw db.httpError(409, "The supplied Meta phone-number ID does not match this customer-facing WhatsApp number.");
   }
   phoneNumberId = String(metaPhone.id);
+  const metaVerification = business.requiresVerifiedOwnerAuth === true && business.ownerSecurityVerified === true
+    ? {
+        phoneNumber: metaPhone.display_phone_number,
+        phoneNumberId,
+        wabaId: String(wabaId),
+        verifiedAt: new Date().toISOString(),
+      }
+    : undefined;
 
   db.setWhatsAppConnectionStatus(params.businessId, "connecting");
   let result;
   try {
-    result = db.setWhatsAppCredentials(params.businessId, { phoneNumberId, accessToken, verifyToken, wabaId, displayName, waPhone });
+    result = db.setWhatsAppCredentials(params.businessId, {
+      phoneNumberId,
+      accessToken,
+      verifyToken,
+      wabaId,
+      displayName,
+      waPhone,
+      metaVerification,
+    });
   } catch (error) {
     db.setWhatsAppConnectionStatus(params.businessId, "failed", error.message);
     throw error;
@@ -272,7 +294,7 @@ async function setWhatsAppCredentials({ params, body, session }) {
     db.setWhatsAppConnectionStatus(params.businessId, connectionStatus, connectionError);
     const vendorPhone = setupLive ? (savedBusiness.personalPhone || null) : null;
     const shopDigits = db.normalizePhone(savedBusiness.whatsappNumber || savedBusiness.whatsappRequestedPhone || savedBusiness.pesaAiNumber || savedBusiness.shopPhone || waPhone || "");
-    if (vendorPhone) {
+    if (vendorPhone && !wasAlreadyLive) {
       const shareLink = shopDigits
         ? " https://wa.me/" + shopDigits + "?text=" + encodeURIComponent(db.generateShopEntryPrompt(savedBusiness.name))
         : "";

@@ -242,6 +242,37 @@ test("table QR entry sends the hotel concierge list and later orders retain the 
   assert.equal(order.order.serviceLocationSnapshot.label, "Table 12");
 });
 
+test("Skyview's direct WhatsApp QR opens the concierge list before any AI catalog reply", async () => {
+  const a = business("SKYVIEW OPAL HOTEL");
+  const qrText = db.generateShopEntryPrompt("Skyview Opal Hotel");
+  const customerPhone = "254799000015";
+  const firstScan = await handleCustomerMessage({
+    business: a,
+    customerPhone,
+    customerName: "Guest",
+    channel: "whatsapp",
+    text: qrText,
+  });
+
+  assert.match(firstScan.welcomeText, /WELCOME TO SKYVIEW OPAL HOTEL/);
+  assert.deepEqual(firstScan.interactiveList.rows.map((row) => row.title), [
+    "Order Food", "Rooms", "Swimming Pool", "Conferences", "Events", "Hotel Information",
+  ]);
+  assert.equal(firstScan.assistantReplyText, null);
+  assert.equal(firstScan.extraReplies, undefined);
+
+  // Re-scanning the hotel's QR in an existing conversation still opens the list.
+  const rescan = await handleCustomerMessage({
+    business: a,
+    customerPhone,
+    customerName: "Guest",
+    channel: "whatsapp",
+    text: qrText,
+  });
+  assert.equal(rescan.interactiveList.rows.length, 6);
+  assert.equal(rescan.extraReplies, undefined);
+});
+
 test("guests can confirm a table by typing it after scanning or in an existing chat", async () => {
   const a = business("SKYVIEW OPAL HOTEL Table Confirmation");
   const location = db.createServiceLocation(a.id, { kind: "TABLE", label: "Table 12" });

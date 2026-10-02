@@ -207,6 +207,86 @@ test("admin WhatsApp activation resolves the exact customer number instead of re
   }
 });
 
+test("verified owner can activate WhatsApp replies through exact Meta verification without publishing the public shop", async () => {
+  const account = business("Verified owner WhatsApp activation");
+  const keys = [
+    "WHATSAPP_PLATFORM_TOKEN", "WHATSAPP_TOKEN",
+    "WHATSAPP_PLATFORM_PHONE_NUMBER_ID", "WHATSAPP_PHONE_NUMBER_ID",
+    "WHATSAPP_PLATFORM_WABA_ID", "WHATSAPP_VERIFY_TOKEN",
+  ];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  const oldFetch = global.fetch;
+  const requests = [];
+  try {
+    delete process.env.WHATSAPP_PLATFORM_TOKEN;
+    process.env.WHATSAPP_TOKEN = "verified-owner-token";
+    delete process.env.WHATSAPP_PLATFORM_PHONE_NUMBER_ID;
+    process.env.WHATSAPP_PHONE_NUMBER_ID = "platform-sender-id";
+    process.env.WHATSAPP_PLATFORM_WABA_ID = "verified-waba";
+    process.env.WHATSAPP_VERIFY_TOKEN = "verified-owner-webhook-token";
+    db.mutate((state) => {
+      const shop = state.businesses.find((item) => item.id === account.id);
+      shop.pesaAiNumber = "254700000002";
+      shop.requiresVerifiedOwnerAuth = true;
+      shop.ownerSecurityVerified = true;
+      shop.publicShopPublished = false;
+      shop.shopPublished = false;
+      shop.published = false;
+      shop.discoverable = false;
+    });
+    db.setWhatsAppCredentials(account.id, {
+      phoneNumberId: "verified-meta-phone-id",
+      accessToken: "existing-live-token",
+      verifyToken: "existing-verify-token",
+      wabaId: "verified-waba",
+      displayName: account.name,
+      waPhone: "254700000002",
+    });
+    db.setWhatsAppConnectionStatus(account.id, "live");
+    assert.equal(db.getWhatsAppStatus(account.id).connected, true);
+    assert.equal(db.getWhatsAppStatus(account.id).canReceiveCustomerMessages, false);
+    assert.equal(db.isCustomerMessagingActive(db.getBusiness(account.id)), false);
+
+    global.fetch = async (url, options) => {
+      requests.push({ url: String(url), method: options?.method || "GET" });
+      if (String(url).includes("/phone_numbers?")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: [
+              { id: "verified-meta-phone-id", display_phone_number: "+254 700 000 002", status: "CONNECTED" },
+            ],
+          }),
+        };
+      }
+      return { ok: true, status: 200, text: async () => "" };
+    };
+
+    const result = await admin.setWhatsAppCredentials({
+      session: { isAdmin: true },
+      params: { businessId: account.id },
+      body: { displayName: account.name, waPhone: "254700000002" },
+    });
+
+    const savedBusiness = db.getBusiness(account.id);
+    assert.equal(result.connectionStatus, "live");
+    assert.equal(result.canReceiveCustomerMessages, true);
+    assert.equal(savedBusiness.whatsappMetaVerified, true);
+    assert.equal(savedBusiness.metaVerified, undefined);
+    assert.equal(db.isCustomerMessagingActive(savedBusiness), true);
+    assert.equal(db.isPublicShopDiscoverable(savedBusiness), false);
+    assert.equal(result.vendorAlertSent, false);
+    assert.equal(requests.some((request) => request.url.includes("/messages")), false);
+  } finally {
+    global.fetch = oldFetch;
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
+});
+
 test("admin WhatsApp activation fails closed when Meta has no connected exact-number match", async () => {
   const account = business("WhatsApp unmatched number");
   const keys = [
