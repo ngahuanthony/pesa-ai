@@ -44,7 +44,7 @@ function buildConciergeList(businessName, { servicesAvailableByDefault = false }
       ? "All listed food and hotel services are available by default. Choose one for details."
       : "What would you like help with? Choose an option below.",
     footer: servicesAvailableByDefault
-      ? "The hotel will confirm specific rates, hours, and booking slots."
+      ? "Hotel will confirm rates, hours, and booking slots."
       : "You can also type your question.",
     button: "Explore services",
     sectionTitle: "Hotel services",
@@ -67,6 +67,9 @@ function buildWhatsAppListPayload(to, list) {
     throw new Error("WhatsApp list messages require between 1 and 10 rows");
   }
   if (String(list.button || "").length > 20) throw new Error("WhatsApp list button text exceeds 20 characters");
+  if (String(list.header || "").length > 60) throw new Error("WhatsApp list header text exceeds 60 characters");
+  if (String(list.body || "").length > 1024) throw new Error("WhatsApp list body text exceeds 1024 characters");
+  if (String(list.footer || "").length > 60) throw new Error("WhatsApp list footer text exceeds 60 characters");
   for (const row of list.rows) {
     if (!row.id || String(row.id).length > 200) throw new Error("WhatsApp list row IDs must be 1–200 characters");
     if (!row.title || String(row.title).length > 24) throw new Error("WhatsApp list row titles must be 1–24 characters");

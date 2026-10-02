@@ -261,6 +261,10 @@ test("Skyview's direct WhatsApp QR opens the concierge list before any AI catalo
   assert.deepEqual(firstScan.interactiveList.rows.map((row) => row.title), [
     "Order Food", "Rooms", "Swimming Pool", "Conferences", "Events", "Hotel Information",
   ]);
+  const qrListPayload = buildWhatsAppListPayload("254799000015", firstScan.interactiveList);
+  assert.equal(qrListPayload.interactive.action.button, "Explore services");
+  assert.equal(qrListPayload.interactive.footer.text, "Hotel will confirm rates, hours, and booking slots.");
+  assert.ok(qrListPayload.interactive.footer.text.length <= 60);
   assert.equal(firstScan.assistantReplyText, null);
   assert.equal(firstScan.extraReplies, undefined);
 
