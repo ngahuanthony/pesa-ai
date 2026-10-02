@@ -16,6 +16,37 @@ const { buildWhatsAppListPayload, getConciergePrompt } = require("./concierge");
 const mpesa = require("./mpesa");
 
 const GRAPH_API_VERSION = "v21.0";
+const WHATSAPP_TEXT_LIMIT = 4000;
+
+function splitWhatsAppText(text) {
+  let remaining = String(text ?? "");
+  const chunks = [];
+
+  while (remaining.length > WHATSAPP_TEXT_LIMIT) {
+    const newlineIndex = remaining.lastIndexOf("\n", WHATSAPP_TEXT_LIMIT - 1);
+    let splitIndex = newlineIndex >= WHATSAPP_TEXT_LIMIT / 2
+      ? newlineIndex + 1
+      : WHATSAPP_TEXT_LIMIT;
+
+    // Do not split a UTF-16 surrogate pair when a single line is too long.
+    const previousCodeUnit = remaining.charCodeAt(splitIndex - 1);
+    const nextCodeUnit = remaining.charCodeAt(splitIndex);
+    if (
+      previousCodeUnit >= 0xD800 &&
+      previousCodeUnit <= 0xDBFF &&
+      nextCodeUnit >= 0xDC00 &&
+      nextCodeUnit <= 0xDFFF
+    ) {
+      splitIndex -= 1;
+    }
+
+    chunks.push(remaining.slice(0, splitIndex));
+    remaining = remaining.slice(splitIndex);
+  }
+
+  if (remaining.length || !chunks.length) chunks.push(remaining);
+  return chunks;
+}
 
 // GET /webhook/whatsapp — Meta calls this once per business when you click
 // "Verify and save" in the App Dashboard.  We check the incoming verify_token
@@ -382,29 +413,30 @@ function resolveAccessToken(business) {
 
 async function sendMessage(phoneNumberId, to, text, accessToken) {
   if (!accessToken) {
-    console.warn("[whatsapp] No access token available — skipping send. Reply was:", text);
+    console.warn("[whatsapp] No access token available — skipping send.");
     return false;
   }
-  const res = await fetch(
-    `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`,
-    {
+
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`;
+  for (const body of splitWhatsAppText(text)) {
+    const res = await fetch(url, {
       method: "POST",
       headers: {
-        "content-type":  "application/json",
-        authorization:   `Bearer ${accessToken}`,
+        "content-type": "application/json",
+        authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
         messaging_product: "whatsapp",
         to,
         type: "text",
-        text: { body: text },
+        text: { body },
       }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error(`[whatsapp] Send failed (${res.status}): ${errText}`);
+      return false;
     }
-  );
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    console.error(`[whatsapp] Send failed (${res.status}): ${errText}`);
-    return false;
   }
   return true;
 }
