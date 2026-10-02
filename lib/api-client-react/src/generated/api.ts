@@ -26,6 +26,7 @@ import type {
   AdminLoginInput,
   AdminResetPasswordInput,
   AdminStats,
+  AdminWhatsAppStatus,
   AuthResult,
   Business,
   BusinessUpdate,
@@ -59,6 +60,7 @@ import type {
   SubscriptionChargeInput,
   UploadVoiceStockVariantImageParams,
   VariantImageUploadResult,
+  VendorWhatsAppStatus,
   VoiceStockConfirmInput,
   VoiceStockConfirmResult,
   VoiceStockInterpretInput,
@@ -1662,6 +1664,77 @@ export function useGetSalesSummary<TData = Awaited<ReturnType<typeof getSalesSum
 
 
 
+export const getGetBusinessWhatsAppStatusUrl = (businessId: string,) => {
+
+
+
+
+  return `/api/businesses/${businessId}/whatsapp/status`
+}
+
+export const getBusinessWhatsAppStatus = async (businessId: string, options?: Parameters<typeof customFetch>[1]): Promise<VendorWhatsAppStatus> => {
+
+  return customFetch<VendorWhatsAppStatus>(getGetBusinessWhatsAppStatusUrl(businessId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBusinessWhatsAppStatusQueryKey = (businessId: string,) => {
+    return [
+    `/api/businesses/${businessId}/whatsapp/status`
+    ] as const;
+    }
+
+
+export const getGetBusinessWhatsAppStatusQueryOptions = <TData = Awaited<ReturnType<typeof getBusinessWhatsAppStatus>>, TError = ErrorType<unknown>>(businessId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessWhatsAppStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBusinessWhatsAppStatusQueryKey(businessId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBusinessWhatsAppStatus>>> = ({ signal }) => getBusinessWhatsAppStatus(businessId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: businessId !== null && businessId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBusinessWhatsAppStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBusinessWhatsAppStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getBusinessWhatsAppStatus>>>
+export type GetBusinessWhatsAppStatusQueryError = ErrorType<unknown>
+
+
+
+export function useGetBusinessWhatsAppStatus<TData = Awaited<ReturnType<typeof getBusinessWhatsAppStatus>>, TError = ErrorType<unknown>>(
+ businessId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessWhatsAppStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBusinessWhatsAppStatusQueryOptions(businessId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getSendChatMessageUrl = (businessId: string,) => {
 
 
@@ -2479,6 +2552,77 @@ export function useAdminListBusinesses<TData = Awaited<ReturnType<typeof adminLi
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getAdminListBusinessesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAdminGetWhatsAppStatusUrl = (businessId: string,) => {
+
+
+
+
+  return `/api/admin/businesses/${businessId}/whatsapp`
+}
+
+export const adminGetWhatsAppStatus = async (businessId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminWhatsAppStatus> => {
+
+  return customFetch<AdminWhatsAppStatus>(getAdminGetWhatsAppStatusUrl(businessId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAdminGetWhatsAppStatusQueryKey = (businessId: string,) => {
+    return [
+    `/api/admin/businesses/${businessId}/whatsapp`
+    ] as const;
+    }
+
+
+export const getAdminGetWhatsAppStatusQueryOptions = <TData = Awaited<ReturnType<typeof adminGetWhatsAppStatus>>, TError = ErrorType<unknown>>(businessId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminGetWhatsAppStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAdminGetWhatsAppStatusQueryKey(businessId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof adminGetWhatsAppStatus>>> = ({ signal }) => adminGetWhatsAppStatus(businessId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: businessId !== null && businessId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof adminGetWhatsAppStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type AdminGetWhatsAppStatusQueryResult = NonNullable<Awaited<ReturnType<typeof adminGetWhatsAppStatus>>>
+export type AdminGetWhatsAppStatusQueryError = ErrorType<unknown>
+
+
+
+export function useAdminGetWhatsAppStatus<TData = Awaited<ReturnType<typeof adminGetWhatsAppStatus>>, TError = ErrorType<unknown>>(
+ businessId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminGetWhatsAppStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getAdminGetWhatsAppStatusQueryOptions(businessId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -472,6 +472,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/SalesSummary"
 
+  /businesses/{businessId}/whatsapp/status:
+    get:
+      operationId: getBusinessWhatsAppStatus
+      tags: [business]
+      parameters:
+        - $ref: "#/components/parameters/BusinessId"
+      responses:
+        "200":
+          description: WhatsApp connection and customer-message readiness for the signed-in business owner.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorWhatsAppStatus"
+
   /businesses/{businessId}/chat:
     post:
       operationId: sendChatMessage
@@ -732,6 +746,20 @@ paths:
                 items:
                   $ref: "#/components/schemas/BusinessWithSubscription"
 
+  /admin/businesses/{businessId}/whatsapp:
+    get:
+      operationId: adminGetWhatsAppStatus
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/BusinessId"
+      responses:
+        "200":
+          description: WhatsApp connection and customer-message readiness for an administrator.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminWhatsAppStatus"
+
   /admin/businesses/{businessId}/subscription/charge:
     post:
       operationId: adminChargeSubscription
@@ -906,6 +934,12 @@ components:
         whatsappPhoneNumberId:
           type: string
           nullable: true
+        canReceiveCustomerMessages:
+          type: boolean
+          description: True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages.
+        messagingBlockReason:
+          type: ["string", "null"]
+          enum: [owner_verification_required, business_activation_incomplete, business_inactive, whatsapp_connection_inactive, null]
         createdAt:
           type: string
       required:
@@ -914,7 +948,63 @@ components:
         - personaName
         - category
         - phone
+        - canReceiveCustomerMessages
+        - messagingBlockReason
         - createdAt
+
+    VendorWhatsAppStatus:
+      type: object
+      properties:
+        requestedPhone:
+          type: ["string", "null"]
+        connectionStatus:
+          type: ["string", "null"]
+        connected:
+          type: boolean
+          description: Meta transport connection only; does not by itself mean customer messages are accepted.
+        displayName:
+          type: ["string", "null"]
+        welcomeMessage:
+          type: ["string", "null"]
+        testShopUrl:
+          type: ["string", "null"]
+        canReceiveCustomerMessages:
+          type: boolean
+          description: True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages.
+        messagingBlockReason:
+          type: ["string", "null"]
+          enum: [owner_verification_required, business_activation_incomplete, business_inactive, whatsapp_connection_inactive, null]
+      required: [connected, canReceiveCustomerMessages, messagingBlockReason]
+
+    AdminWhatsAppStatus:
+      type: object
+      properties:
+        phoneNumberId:
+          type: ["string", "null"]
+        verifyToken:
+          type: ["string", "null"]
+        accessTokenSet:
+          type: boolean
+        connected:
+          type: boolean
+          description: Meta transport connection only; does not by itself mean customer messages are accepted.
+        connectionStatus:
+          type: ["string", "null"]
+        connectionError:
+          type: ["string", "null"]
+        requestedPhone:
+          type: ["string", "null"]
+        wabaId:
+          type: ["string", "null"]
+        displayName:
+          type: ["string", "null"]
+        canReceiveCustomerMessages:
+          type: boolean
+          description: True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages.
+        messagingBlockReason:
+          type: ["string", "null"]
+          enum: [owner_verification_required, business_activation_incomplete, business_inactive, whatsapp_connection_inactive, null]
+      required: [accessTokenSet, connected, canReceiveCustomerMessages, messagingBlockReason]
 
     Account:
       type: object

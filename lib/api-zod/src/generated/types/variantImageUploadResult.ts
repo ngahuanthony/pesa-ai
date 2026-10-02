@@ -6,8 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface SignupInput {
-  businessName: string;
-  pesaAiNumber: string;
-  personalPhone: string;
+export interface VariantImageUploadResult {
+  imageUrl: string;
+  path: string;
+  bytes: number;
 }

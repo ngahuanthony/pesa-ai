@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface SignupInput {
-  businessName: string;
-  pesaAiNumber: string;
-  personalPhone: string;
-}
+export type VoiceStockItemSuggestedProduct = {
+  id?: string;
+  name?: string;
+} | null;

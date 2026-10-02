@@ -5,8 +5,15 @@
  * Pesa AI API
  * OpenAPI spec version: 0.1.0
  */
+import type { MpesaStatusAccountMode } from './mpesaStatusAccountMode';
+import type { MpesaStatusMethod } from './mpesaStatusMethod';
 
 export interface MpesaStatus {
   connected: boolean;
+  verified?: boolean;
+  method?: MpesaStatusMethod;
+  accountMode?: MpesaStatusAccountMode;
+  passkeyConfigured?: boolean;
+  platformConfigured?: boolean;
   shortcodeMasked?: string | null;
 }

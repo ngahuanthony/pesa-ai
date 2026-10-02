@@ -5,6 +5,7 @@
  * Pesa AI API
  * OpenAPI spec version: 0.1.0
  */
+import type { BusinessMessagingBlockReason } from './businessMessagingBlockReason';
 
 export interface Business {
   id: string;
@@ -12,7 +13,14 @@ export interface Business {
   personaName: string;
   category: string;
   phone: string;
+  personalPhone?: string;
+  pesaAiNumber?: string | null;
+  pesaAiNumberVerified?: boolean;
   paybillNumber?: string | null;
   whatsappPhoneNumberId?: string | null;
+  /** True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages. */
+  canReceiveCustomerMessages: boolean;
+  /** @nullable */
+  messagingBlockReason: BusinessMessagingBlockReason;
   createdAt: string;
 }

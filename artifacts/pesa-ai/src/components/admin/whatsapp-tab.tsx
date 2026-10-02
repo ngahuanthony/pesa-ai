@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { useAdminListBusinesses, getAdminListBusinessesQueryKey } from "@workspace/api-client-react";
+import {
+  getAdminGetWhatsAppStatusQueryKey,
+  getAdminListBusinessesQueryKey,
+  useAdminGetWhatsAppStatus,
+  useAdminListBusinesses,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { AlertCircle, CheckCircle2, MessageSquare, Wifi } from "lucide-react";
@@ -7,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import QRCode from "qrcode";
 import { BRAND_NAME } from "@/constants/brand";
+import { getMessagingBlockMessage } from "@/lib/whatsapp-readiness";
 
 async function buildQrProfilePicture(businessName: string, phone: string): Promise<string> {
   const canvas = document.createElement("canvas");
@@ -58,8 +64,16 @@ export function AdminWhatsAppTab() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<"connected" | "not_connected" | "failed" | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [messagingReady, setMessagingReady] = useState<boolean | null>(null);
+  const [messagingBlockReason, setMessagingBlockReason] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: whatsAppStatus, refetch: refetchWhatsAppStatus } = useAdminGetWhatsAppStatus(selectedId || "", {
+    query: {
+      enabled: Boolean(selectedId),
+      queryKey: getAdminGetWhatsAppStatusQueryKey(selectedId || ""),
+    },
+  });
 
   useEffect(() => {
     fetch("/api/admin/platform-defaults", { credentials: "include" })
@@ -72,7 +86,17 @@ export function AdminWhatsAppTab() {
       .catch(() => setPlatformReady(false));
   }, []);
 
-  const loadBusiness = async (id: string) => {
+  useEffect(() => {
+    if (!whatsAppStatus) return;
+    setWaPhone(whatsAppStatus.requestedPhone || "");
+    setVerifyToken(whatsAppStatus.verifyToken || "");
+    setStatus(whatsAppStatus.connectionStatus === "failed" ? "failed" : whatsAppStatus.connected ? "connected" : "not_connected");
+    setConnectionError(whatsAppStatus.connectionError || null);
+    setMessagingReady(whatsAppStatus.canReceiveCustomerMessages);
+    setMessagingBlockReason(whatsAppStatus.messagingBlockReason);
+  }, [whatsAppStatus]);
+
+  const loadBusiness = (id: string) => {
     setSelectedId(id);
     const business = businesses?.find((item: any) => item.id === id);
     setDisplayName(business?.name || "");
@@ -80,22 +104,8 @@ export function AdminWhatsAppTab() {
     setVerifyToken("");
     setStatus(null);
     setConnectionError(null);
-    try {
-      const res = await fetch(`/api/admin/businesses/${id}/whatsapp`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Could not load WhatsApp status");
-      const data = await res.json();
-      setWaPhone(data.requestedPhone || "");
-      setVerifyToken(data.verifyToken || "");
-      setStatus(data.connectionStatus === "failed" ? "failed" : data.connected ? "connected" : "not_connected");
-      setConnectionError(data.connectionError || null);
-    } catch {
-      toast({
-        title: "Could not load WhatsApp status",
-        variant: "destructive",
-      });
-    }
+    setMessagingReady(null);
+    setMessagingBlockReason(null);
   };
 
   const handleSave = async () => {
@@ -136,11 +146,17 @@ export function AdminWhatsAppTab() {
       if (!res.ok) throw new Error(data.error || "Could not activate WhatsApp");
       setStatus(data.connectionStatus === "failed" ? "failed" : data.connected ? "connected" : "not_connected");
       setConnectionError(data.connectionError || null);
-      toast(data.connected ? {
+      setMessagingReady(data.canReceiveCustomerMessages === true);
+      setMessagingBlockReason(data.messagingBlockReason || null);
+      await refetchWhatsAppStatus();
+      toast(data.connected && data.canReceiveCustomerMessages === true ? {
         title: "WhatsApp connected",
         description: data.profilePictureUpdated
           ? "Connected and the QR profile picture was applied."
           : "Connected. Meta did not update the profile picture yet; click Update to retry.",
+      } : data.connected ? {
+        title: "Meta connection is live; customer replies are paused",
+        description: getMessagingBlockMessage(data.messagingBlockReason),
       } : {
         title: "WhatsApp setup needs attention",
         description: data.connectionError || "Meta did not finish subscribing the business number to the webhook.",
@@ -230,19 +246,26 @@ export function AdminWhatsAppTab() {
             </div>
 
             {status && (
-              <div className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm ${
-                status === "connected"
+              <div data-testid="status-admin-whatsapp-readiness" className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm ${
+                status === "connected" && messagingReady === true
                   ? "bg-emerald-950/40 text-emerald-300"
                   : status === "failed"
                     ? "bg-rose-950/40 text-rose-300"
                     : "bg-amber-950/40 text-amber-300"
               }`}>
-                {status === "connected"
-                  ? <><CheckCircle2 className="h-4 w-4" /> Connected &amp; live</>
+                {status === "connected" && messagingReady === true
+                  ? <><CheckCircle2 className="h-4 w-4" /> Connected &amp; accepting customer messages</>
+                  : status === "connected"
+                    ? <><AlertCircle className="h-4 w-4" /> Meta connection live; customer replies paused</>
                   : status === "failed"
                     ? <><AlertCircle className="h-4 w-4" /> Connection needs attention</>
                     : <><MessageSquare className="h-4 w-4" /> Ready to activate</>}
               </div>
+            )}
+            {status === "connected" && messagingReady !== true && (
+              <p role="status" className="rounded-lg border border-amber-800 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+                {getMessagingBlockMessage(messagingBlockReason)}
+              </p>
             )}
             {status === "failed" && connectionError && (
               <p role="alert" className="rounded-lg border border-rose-800 bg-rose-950/30 px-3 py-2 text-xs text-rose-200">

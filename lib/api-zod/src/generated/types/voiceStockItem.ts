@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { VoiceStockItemAction } from './voiceStockItemAction';
+import type { VoiceStockItemConfidenceLevel } from './voiceStockItemConfidenceLevel';
+import type { VoiceStockItemMatchType } from './voiceStockItemMatchType';
+import type { VoiceStockItemSuggestedProduct } from './voiceStockItemSuggestedProduct';
 
 export interface VoiceStockItem {
   productId: string | null;
@@ -14,6 +17,9 @@ export interface VoiceStockItem {
   quantity: number | null;
   unit: string;
   color?: string | null;
+  size?: string | null;
+  confidenceLevel: VoiceStockItemConfidenceLevel;
+  evidence?: string | null;
   colorCurrentStock?: number | null;
   colorProposedStock?: number | null;
   confidence: number;
@@ -21,6 +27,6 @@ export interface VoiceStockItem {
   proposedStock: number | null;
   warning?: string | null;
   imageUrl?: string | null;
-  matchType?: 'exact' | 'suggested' | 'new';
-  suggestedProduct?: { id: string; name: string } | null;
+  matchType: VoiceStockItemMatchType;
+  suggestedProduct?: VoiceStockItemSuggestedProduct;
 }

@@ -8,7 +8,7 @@ interface ShopQRCardProps {
   businessName: string;
   phone: string; // raw phone from waStatus or business profile
   shopSlug?: string;
-  whatsappConnected: boolean;
+  whatsappReady: boolean;
 }
 
 /** Normalise any Kenyan phone format → digits only with country code, e.g. "254712345678" */
@@ -79,7 +79,7 @@ function roundRect(
   ctx.closePath();
 }
 
-export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }: ShopQRCardProps) {
+export function ShopQRCard({ businessName, phone, shopSlug, whatsappReady }: ShopQRCardProps) {
   const previewRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -90,7 +90,7 @@ export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }:
   const whatsappPhone = normalisePhone(phone);
   const hasWhatsappNumber = /^254\d{9}$/.test(whatsappPhone);
   const isHotel = businessName.trim().toLowerCase() === "skyview opal hotel";
-  const whatsappQrReady = whatsappConnected && hasWhatsappNumber;
+  const whatsappQrReady = whatsappReady && hasWhatsappNumber;
   const whatsappUrl = hasWhatsappNumber
     ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(getShopEntryPrompt(businessName))}`
     : shopUrl;
@@ -206,7 +206,7 @@ export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }:
     if (!previewRef.current) return;
     setReady(false);
     setQrError(null);
-    if (!phone || !businessName || (hasWhatsappNumber && !whatsappConnected)) {
+    if (!phone || !businessName || (hasWhatsappNumber && !whatsappReady)) {
       const context = previewRef.current.getContext("2d");
       context?.clearRect(0, 0, previewRef.current.width, previewRef.current.height);
       return;
@@ -221,7 +221,7 @@ export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }:
       console.error("Failed to generate shop QR:", error);
       setQrError("The QR preview could not be generated. Please try again.");
     });
-  }, [buildCanvas, phone, businessName, hasWhatsappNumber, whatsappConnected]);
+  }, [buildCanvas, phone, businessName, hasWhatsappNumber, whatsappReady]);
 
   const handleDownload = async () => {
     if (!canDownload || !ready) return;
@@ -271,8 +271,8 @@ export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }:
       </button>
 
       <p className="max-w-[280px] text-center text-sm text-muted-foreground">
-        {hasWhatsappNumber && !whatsappConnected
-          ? "The WhatsApp QR is not ready to share yet. WhatsApp must show Active & Live first."
+        {hasWhatsappNumber && !whatsappReady
+          ? "The WhatsApp QR is not ready to share yet. Customer-message readiness must be active first."
           : hasWhatsappNumber
             ? isHotel
               ? "Customers can ask about dining, rooms, the pool, conferences, and events on WhatsApp."
@@ -280,8 +280,8 @@ export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }:
             : "Connect a verified Duka number to enable WhatsApp chat. The web shop is available below."}
       </p>
       {qrError && <p role="alert" className="max-w-[280px] text-center text-xs text-destructive">{qrError}</p>}
-      {hasWhatsappNumber && !whatsappConnected && (
-        <p role="status" className="max-w-[280px] text-center text-xs font-medium text-amber-700">
+      {hasWhatsappNumber && !whatsappReady && (
+        <p role="status" data-testid="status-whatsapp-qr-readiness" className="max-w-[280px] text-center text-xs font-medium text-amber-700">
           Not ready to download or share as a WhatsApp QR.
         </p>
       )}
@@ -291,7 +291,7 @@ export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }:
         </p>
       )}
       <div className="flex w-full max-w-[280px] flex-col gap-2">
-        {hasWhatsappNumber && whatsappConnected && (
+        {hasWhatsappNumber && whatsappReady && (
           <a
             href={whatsappUrl}
             target="_blank"
@@ -313,7 +313,7 @@ export function ShopQRCard({ businessName, phone, shopSlug, whatsappConnected }:
 
       <p className="text-[11px] text-muted-foreground text-center max-w-[220px]">
         {hasWhatsappNumber
-          ? whatsappConnected ? "WhatsApp QR · Web shop link available as a fallback" : "WhatsApp QR unavailable until connection is live"
+          ? whatsappReady ? "WhatsApp QR · Web shop link available as a fallback" : "WhatsApp QR unavailable until customer replies are active"
           : "Web shop QR"}
       </p>
     </div>

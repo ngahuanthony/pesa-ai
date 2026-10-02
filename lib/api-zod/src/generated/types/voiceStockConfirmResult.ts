@@ -9,6 +9,7 @@ import type { Product } from './product';
 import type { StockMovement } from './stockMovement';
 
 export interface VoiceStockConfirmResult {
+  idempotent?: boolean;
   products: Product[];
   movements: StockMovement[];
 }

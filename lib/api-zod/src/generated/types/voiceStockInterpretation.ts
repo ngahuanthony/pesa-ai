@@ -8,9 +8,7 @@
 import type { VoiceStockItem } from './voiceStockItem';
 
 export interface VoiceStockInterpretation {
-  rawTranscript?: string;
   transcript: string;
-  cleanedTranscript?: string;
-  parserVersion?: string;
+  normalizedTranscript: string;
   items: VoiceStockItem[];
 }

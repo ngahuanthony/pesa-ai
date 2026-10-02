@@ -1,10 +1,21 @@
-import { useGetMe, useListOrders, useListProducts, useGetSalesSummary, getListOrdersQueryKey, getListProductsQueryKey, getGetSalesSummaryQueryKey } from "@workspace/api-client-react";
+import {
+  getGetBusinessWhatsAppStatusQueryKey,
+  getGetSalesSummaryQueryKey,
+  getListOrdersQueryKey,
+  getListProductsQueryKey,
+  useGetBusinessWhatsAppStatus,
+  useGetMe,
+  useGetSalesSummary,
+  useListOrders,
+  useListProducts,
+} from "@workspace/api-client-react";
 import { ShoppingCart, DollarSign, Package, Bot, AlertTriangle, CheckCircle2, Circle, ExternalLink, Copy, Check, Wifi, QrCode, Mic, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ShopQRCard } from "@/components/dashboard/shop-qr-card";
 import { getShopEntryPrompt, normalizeKenyanWhatsAppNumber } from "@/lib/shop-entry-prompt";
+import { getMessagingBlockMessage } from "@/lib/whatsapp-readiness";
 
 interface HandoverConvo {
   conversationId: string;
@@ -35,10 +46,16 @@ export function OverviewTab() {
   const { data: ordersData }   = useListOrders(businessId,   { query: { enabled: !!businessId, queryKey: getListOrdersQueryKey(businessId) } });
   const { data: productsData, isLoading: productsLoading } = useListProducts(businessId, { query: { enabled: !!businessId, queryKey: getListProductsQueryKey(businessId) } });
   const { data: salesData }    = useGetSalesSummary(businessId, { query: { enabled: !!businessId, queryKey: getGetSalesSummaryQueryKey(businessId) } });
+  const { data: waStatus } = useGetBusinessWhatsAppStatus(businessId, {
+    query: {
+      enabled: Boolean(businessId),
+      queryKey: getGetBusinessWhatsAppStatusQueryKey(businessId),
+      refetchInterval: 10000,
+    },
+  });
 
   const [handoverConvos, setHandoverConvos] = useState<HandoverConvo[]>([]);
   const [resumingId, setResumingId]         = useState<string | null>(null);
-  const [waStatus, setWaStatus]             = useState<any>(null);
   const [activity, setActivity]             = useState<ActivityEvent[]>([]);
   const [linkCopied, setLinkCopied]         = useState(false);
 
@@ -47,14 +64,6 @@ export function OverviewTab() {
     try {
       const res = await fetch(`/api/businesses/${businessId}/conversations`, { credentials: "include" });
       if (res.ok) setHandoverConvos((await res.json()).conversations || []);
-    } catch { /* ignore */ }
-  };
-
-  const fetchWaStatus = async () => {
-    if (!businessId) return;
-    try {
-      const res = await fetch(`/api/businesses/${businessId}/whatsapp/status`, { credentials: "include" });
-      if (res.ok) setWaStatus(await res.json());
     } catch { /* ignore */ }
   };
 
@@ -68,7 +77,6 @@ export function OverviewTab() {
 
   useEffect(() => {
     fetchHandover();
-    fetchWaStatus();
     fetchActivity();
   }, [businessId]);
 
@@ -93,10 +101,11 @@ export function OverviewTab() {
   const recentOrders = orders.slice(0, 5);
 
   const waConnected = waStatus?.connected === true;
+  const canReceiveMessages = waStatus?.canReceiveCustomerMessages === true;
 
   // Build shop link from WhatsApp status
   const shopUrl = (() => {
-    if (!waStatus?.requestedPhone) return null;
+    if (!waStatus?.requestedPhone || !canReceiveMessages) return null;
     const digits = normalizeKenyanWhatsAppNumber(waStatus.requestedPhone);
     return `https://wa.me/${digits}?text=${encodeURIComponent(getShopEntryPrompt(businessName))}`;
   })();
@@ -132,10 +141,12 @@ export function OverviewTab() {
       <div className="rounded-2xl bg-[#0d3d26] text-white p-7">
         <h2 className="text-xl font-bold mb-1">Welcome to {businessName} 👋</h2>
         <p className="text-white/70 text-sm mb-5">
-          {waConnected
+          {canReceiveMessages
             ? isHotel
               ? "Your hotel WhatsApp is live. Customers can ask about dining, rooms, the pool, conferences, and events."
               : "Your WhatsApp shop is live. Share your link and the AI handles the rest."
+            : waConnected
+              ? getMessagingBlockMessage(waStatus?.messagingBlockReason)
             : isHotel
               ? "Connect WhatsApp to receive customer enquiries about dining, rooms, the pool, conferences, and events."
               : "You're almost set up. Connect WhatsApp to start selling — the AI does the rest."}
@@ -159,7 +170,7 @@ export function OverviewTab() {
           <ArrowRight className="h-4 w-4 shrink-0" />
         </Link>
 
-        {waConnected && shopUrl ? (
+        {canReceiveMessages && shopUrl ? (
           /* Connected: show shop link in hero */
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2 min-w-0">
@@ -179,13 +190,13 @@ export function OverviewTab() {
             </a>
           </div>
         ) : (
-          /* Not connected: big Connect CTA */
+          /* Connect if needed; otherwise direct the owner to the readiness details. */
           <Link
             href="/dashboard/whatsapp"
             className="inline-flex items-center gap-2 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] px-5 py-3 text-sm font-bold text-white transition-colors shadow-lg"
           >
             <Wifi className="h-4 w-4" />
-            Connect WhatsApp to start selling →
+            {waConnected ? "View WhatsApp status →" : "Connect WhatsApp to start selling →"}
           </Link>
         )}
       </div>
@@ -254,7 +265,7 @@ export function OverviewTab() {
           <div className="p-5 flex flex-col sm:flex-row gap-6 items-start">
             {/* QR card preview + download */}
             <div className="flex-shrink-0 w-full sm:w-auto flex justify-center">
-              <ShopQRCard businessName={businessName} phone={waStatus.requestedPhone} whatsappConnected={waConnected} />
+              <ShopQRCard businessName={businessName} phone={waStatus.requestedPhone} whatsappReady={canReceiveMessages} />
             </div>
 
             {/* Instructions */}
@@ -440,8 +451,10 @@ export function OverviewTab() {
               </div>
               <p className="text-sm font-medium text-foreground">No activity yet</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
-                {waConnected
+                {canReceiveMessages
                   ? "Share your shop link to get your first customer."
+                  : waConnected
+                    ? "Customer replies are paused. Check your WhatsApp status."
                   : "Connect WhatsApp — then the AI gets to work."}
               </p>
             </div>

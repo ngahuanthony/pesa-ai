@@ -87,6 +87,10 @@ test("verified Clerk email creates a dashboard session without an authenticator"
   assert.equal(business.personalPhone, null);
   assert.equal(db.isCustomerMessagingActive(business), false);
   assert.equal(db.isPublicShopDiscoverable(business), false);
+  const whatsappStatus = db.getVendorWhatsAppStatus(business.id);
+  assert.equal(whatsappStatus.connected, false);
+  assert.equal(whatsappStatus.canReceiveCustomerMessages, false);
+  assert.equal(whatsappStatus.messagingBlockReason, "business_activation_incomplete");
 
   await assert.rejects(
     chatRoutes.send({
@@ -113,6 +117,10 @@ test("exact Meta confirmation activates the shop and existing Clerk owners sign 
   assert.equal(db.isCustomerMessagingActive(business), true);
   assert.equal(db.isPublicShopDiscoverable(business), true);
   assert.equal(business.whatsappPhoneNumberId, "meta-phone-owner-1");
+  const whatsappStatus = db.getVendorWhatsAppStatus(business.id);
+  assert.equal(whatsappStatus.connected, true);
+  assert.equal(whatsappStatus.canReceiveCustomerMessages, true);
+  assert.equal(whatsappStatus.messagingBlockReason, null);
 
   const login = await authRoutes.ownerLoginStart({ req: request });
   assert.equal(login.status, 200);

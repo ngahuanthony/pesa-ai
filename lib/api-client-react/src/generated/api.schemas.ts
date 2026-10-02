@@ -9,6 +9,19 @@ export interface HealthStatus {
   status: string;
 }
 
+/**
+ * @nullable
+ */
+export type BusinessMessagingBlockReason = typeof BusinessMessagingBlockReason[keyof typeof BusinessMessagingBlockReason] | null;
+
+
+export const BusinessMessagingBlockReason = {
+  owner_verification_required: 'owner_verification_required',
+  business_activation_incomplete: 'business_activation_incomplete',
+  business_inactive: 'business_inactive',
+  whatsapp_connection_inactive: 'whatsapp_connection_inactive',
+} as const;
+
 export interface Business {
   id: string;
   name: string;
@@ -20,7 +33,80 @@ export interface Business {
   pesaAiNumberVerified?: boolean;
   paybillNumber?: string | null;
   whatsappPhoneNumberId?: string | null;
+  /** True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages. */
+  canReceiveCustomerMessages: boolean;
+  /** @nullable */
+  messagingBlockReason: BusinessMessagingBlockReason;
   createdAt: string;
+}
+
+/**
+ * @nullable
+ */
+export type VendorWhatsAppStatusMessagingBlockReason = typeof VendorWhatsAppStatusMessagingBlockReason[keyof typeof VendorWhatsAppStatusMessagingBlockReason] | null;
+
+
+export const VendorWhatsAppStatusMessagingBlockReason = {
+  owner_verification_required: 'owner_verification_required',
+  business_activation_incomplete: 'business_activation_incomplete',
+  business_inactive: 'business_inactive',
+  whatsapp_connection_inactive: 'whatsapp_connection_inactive',
+} as const;
+
+export interface VendorWhatsAppStatus {
+  /** @nullable */
+  requestedPhone?: string | null;
+  /** @nullable */
+  connectionStatus?: string | null;
+  /** Meta transport connection only; does not by itself mean customer messages are accepted. */
+  connected: boolean;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
+  welcomeMessage?: string | null;
+  /** @nullable */
+  testShopUrl?: string | null;
+  /** True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages. */
+  canReceiveCustomerMessages: boolean;
+  /** @nullable */
+  messagingBlockReason: VendorWhatsAppStatusMessagingBlockReason;
+}
+
+/**
+ * @nullable
+ */
+export type AdminWhatsAppStatusMessagingBlockReason = typeof AdminWhatsAppStatusMessagingBlockReason[keyof typeof AdminWhatsAppStatusMessagingBlockReason] | null;
+
+
+export const AdminWhatsAppStatusMessagingBlockReason = {
+  owner_verification_required: 'owner_verification_required',
+  business_activation_incomplete: 'business_activation_incomplete',
+  business_inactive: 'business_inactive',
+  whatsapp_connection_inactive: 'whatsapp_connection_inactive',
+} as const;
+
+export interface AdminWhatsAppStatus {
+  /** @nullable */
+  phoneNumberId?: string | null;
+  /** @nullable */
+  verifyToken?: string | null;
+  accessTokenSet: boolean;
+  /** Meta transport connection only; does not by itself mean customer messages are accepted. */
+  connected: boolean;
+  /** @nullable */
+  connectionStatus?: string | null;
+  /** @nullable */
+  connectionError?: string | null;
+  /** @nullable */
+  requestedPhone?: string | null;
+  /** @nullable */
+  wabaId?: string | null;
+  /** @nullable */
+  displayName?: string | null;
+  /** True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages. */
+  canReceiveCustomerMessages: boolean;
+  /** @nullable */
+  messagingBlockReason: AdminWhatsAppStatusMessagingBlockReason;
 }
 
 export interface Account {
@@ -306,11 +392,28 @@ export interface SalesSummary {
   advancedAnalyticsLocked?: boolean | null;
 }
 
+export type MpesaStatusMethod = typeof MpesaStatusMethod[keyof typeof MpesaStatusMethod] | null;
+
+
+export const MpesaStatusMethod = {
+  till: 'till',
+  paybill: 'paybill',
+  paybill_account: 'paybill_account',
+} as const;
+
+export type MpesaStatusAccountMode = typeof MpesaStatusAccountMode[keyof typeof MpesaStatusAccountMode];
+
+
+export const MpesaStatusAccountMode = {
+  static: 'static',
+  dynamic_customer_phone: 'dynamic_customer_phone',
+} as const;
+
 export interface MpesaStatus {
   connected: boolean;
   verified?: boolean;
-  method?: 'till' | 'paybill' | 'paybill_account' | null;
-  accountMode?: 'static' | 'dynamic_customer_phone';
+  method?: MpesaStatusMethod;
+  accountMode?: MpesaStatusAccountMode;
   passkeyConfigured?: boolean;
   platformConfigured?: boolean;
   shortcodeMasked?: string | null;
@@ -508,12 +611,29 @@ export interface MpesaPayInput {
   phone: string;
 }
 
+export type MpesaConnectInputMethod = typeof MpesaConnectInputMethod[keyof typeof MpesaConnectInputMethod];
+
+
+export const MpesaConnectInputMethod = {
+  till: 'till',
+  paybill: 'paybill',
+  paybill_account: 'paybill_account',
+} as const;
+
+export type MpesaConnectInputAccountMode = typeof MpesaConnectInputAccountMode[keyof typeof MpesaConnectInputAccountMode];
+
+
+export const MpesaConnectInputAccountMode = {
+  static: 'static',
+  dynamic_customer_phone: 'dynamic_customer_phone',
+} as const;
+
 export interface MpesaConnectInput {
-  method: 'till' | 'paybill' | 'paybill_account';
+  method: MpesaConnectInputMethod;
   tillNumber?: string | null;
   paybillNumber?: string | null;
   accountNumber?: string | null;
-  accountMode?: 'static' | 'dynamic_customer_phone';
+  accountMode?: MpesaConnectInputAccountMode;
 }
 
 export interface PlanInput {

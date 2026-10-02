@@ -34,6 +34,8 @@ export const SignupResponse = zod.object({
   "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
+  "canReceiveCustomerMessages": zod.boolean().describe('True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages.'),
+  "messagingBlockReason": zod.union([zod.literal('owner_verification_required'),zod.literal('business_activation_incomplete'),zod.literal('business_inactive'),zod.literal('whatsapp_connection_inactive'),zod.literal(null)]).nullable(),
   "createdAt": zod.string()
 }),
   "account": zod.object({
@@ -70,6 +72,8 @@ export const LoginResponse = zod.object({
   "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
+  "canReceiveCustomerMessages": zod.boolean().describe('True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages.'),
+  "messagingBlockReason": zod.union([zod.literal('owner_verification_required'),zod.literal('business_activation_incomplete'),zod.literal('business_inactive'),zod.literal('whatsapp_connection_inactive'),zod.literal(null)]).nullable(),
   "createdAt": zod.string()
 }),
   "account": zod.object({
@@ -110,6 +114,8 @@ export const GetMeResponse = zod.object({
   "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
+  "canReceiveCustomerMessages": zod.boolean().describe('True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages.'),
+  "messagingBlockReason": zod.union([zod.literal('owner_verification_required'),zod.literal('business_activation_incomplete'),zod.literal('business_inactive'),zod.literal('whatsapp_connection_inactive'),zod.literal(null)]).nullable(),
   "createdAt": zod.string()
 }).optional(),
   "subscription": zod.object({
@@ -140,6 +146,8 @@ export const GetBusinessResponse = zod.object({
   "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
+  "canReceiveCustomerMessages": zod.boolean().describe('True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages.'),
+  "messagingBlockReason": zod.union([zod.literal('owner_verification_required'),zod.literal('business_activation_incomplete'),zod.literal('business_inactive'),zod.literal('whatsapp_connection_inactive'),zod.literal(null)]).nullable(),
   "createdAt": zod.string()
 })
 
@@ -166,6 +174,8 @@ export const UpdateBusinessResponse = zod.object({
   "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
+  "canReceiveCustomerMessages": zod.boolean().describe('True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages.'),
+  "messagingBlockReason": zod.union([zod.literal('owner_verification_required'),zod.literal('business_activation_incomplete'),zod.literal('business_inactive'),zod.literal('whatsapp_connection_inactive'),zod.literal(null)]).nullable(),
   "createdAt": zod.string()
 })
 
@@ -478,8 +488,8 @@ export const GetMpesaStatusParams = zod.object({
 export const GetMpesaStatusResponse = zod.object({
   "connected": zod.boolean(),
   "verified": zod.boolean().optional(),
-  "method": zod.enum(['till','paybill','paybill_account']).nullish(),
-  "accountMode": zod.enum(['static','dynamic_customer_phone']).optional(),
+  "method": zod.enum(['till', 'paybill', 'paybill_account']).nullish(),
+  "accountMode": zod.enum(['static', 'dynamic_customer_phone']).optional(),
   "passkeyConfigured": zod.boolean().optional(),
   "platformConfigured": zod.boolean().optional(),
   "shortcodeMasked": zod.string().nullish()
@@ -491,11 +501,11 @@ export const ConnectMpesaParams = zod.object({
 })
 
 export const ConnectMpesaBody = zod.object({
-  "method": zod.enum(['till','paybill','paybill_account']),
+  "method": zod.enum(['till', 'paybill', 'paybill_account']),
   "tillNumber": zod.string().nullish(),
   "paybillNumber": zod.string().nullish(),
   "accountNumber": zod.string().nullish(),
-  "accountMode": zod.enum(['static','dynamic_customer_phone']).optional()
+  "accountMode": zod.enum(['static', 'dynamic_customer_phone']).optional()
 })
 
 export const ConnectMpesaResponse = zod.void()
@@ -528,6 +538,22 @@ export const GetSalesSummaryResponse = zod.object({
   "qty": zod.number()
 })).optional(),
   "advancedAnalyticsLocked": zod.boolean().nullish()
+})
+
+
+export const GetBusinessWhatsAppStatusParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+export const GetBusinessWhatsAppStatusResponse = zod.object({
+  "requestedPhone": zod.string().nullish(),
+  "connectionStatus": zod.string().nullish(),
+  "connected": zod.boolean().describe('Meta transport connection only; does not by itself mean customer messages are accepted.'),
+  "displayName": zod.string().nullish(),
+  "welcomeMessage": zod.string().nullish(),
+  "testShopUrl": zod.string().nullish(),
+  "canReceiveCustomerMessages": zod.boolean().describe('True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages.'),
+  "messagingBlockReason": zod.union([zod.literal('owner_verification_required'),zod.literal('business_activation_incomplete'),zod.literal('business_inactive'),zod.literal('whatsapp_connection_inactive'),zod.literal(null)]).nullable()
 })
 
 
@@ -934,6 +960,25 @@ export const AdminListBusinessesResponseItem = zod.object({
 export const AdminListBusinessesResponse = zod.array(AdminListBusinessesResponseItem)
 
 
+export const AdminGetWhatsAppStatusParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+export const AdminGetWhatsAppStatusResponse = zod.object({
+  "phoneNumberId": zod.string().nullish(),
+  "verifyToken": zod.string().nullish(),
+  "accessTokenSet": zod.boolean(),
+  "connected": zod.boolean().describe('Meta transport connection only; does not by itself mean customer messages are accepted.'),
+  "connectionStatus": zod.string().nullish(),
+  "connectionError": zod.string().nullish(),
+  "requestedPhone": zod.string().nullish(),
+  "wabaId": zod.string().nullish(),
+  "displayName": zod.string().nullish(),
+  "canReceiveCustomerMessages": zod.boolean().describe('True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages.'),
+  "messagingBlockReason": zod.union([zod.literal('owner_verification_required'),zod.literal('business_activation_incomplete'),zod.literal('business_inactive'),zod.literal('whatsapp_connection_inactive'),zod.literal(null)]).nullable()
+})
+
+
 export const AdminChargeSubscriptionParams = zod.object({
   "businessId": zod.coerce.string()
 })
@@ -1054,6 +1099,8 @@ export const AdminListReportsResponseItem = zod.object({
   "pesaAiNumberVerified": zod.boolean().optional(),
   "paybillNumber": zod.string().nullish(),
   "whatsappPhoneNumberId": zod.string().nullish(),
+  "canReceiveCustomerMessages": zod.boolean().describe('True only when the WhatsApp connection is live and the existing inbound customer-messaging gate allows messages.'),
+  "messagingBlockReason": zod.union([zod.literal('owner_verification_required'),zod.literal('business_activation_incomplete'),zod.literal('business_inactive'),zod.literal('whatsapp_connection_inactive'),zod.literal(null)]).nullable(),
   "createdAt": zod.string()
 }).optional(),
   "openCount": zod.number(),

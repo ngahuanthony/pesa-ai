@@ -1,17 +1,27 @@
-import { useState, useEffect } from "react";
-import { useGetMe } from "@workspace/api-client-react";
+import { useState } from "react";
+import {
+  getGetBusinessWhatsAppStatusQueryKey,
+  useGetBusinessWhatsAppStatus,
+  useGetMe,
+} from "@workspace/api-client-react";
 import { Wifi, CheckCircle2, Clock, AlertCircle, Phone, RefreshCw, Copy, Check, Pencil, X, Share2, QrCode } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ShopQRCard } from "@/components/dashboard/shop-qr-card";
 import { BRAND_NAME } from "@/constants/brand";
 import { formatKenyanWhatsAppNumber, getShopEntryPrompt, normalizeKenyanWhatsAppNumber } from "@/lib/shop-entry-prompt";
+import { getMessagingBlockMessage } from "@/lib/whatsapp-readiness";
 
 export function WhatsAppAccountTab() {
   const { data: me } = useGetMe();
   const businessId = me?.business?.id;
 
-  const [status, setStatus]           = useState<any>(null);
-  const [loading, setLoading]         = useState(true);
+  const { data: status, isLoading, refetch } = useGetBusinessWhatsAppStatus(businessId || "", {
+    query: {
+      enabled: Boolean(businessId),
+      queryKey: getGetBusinessWhatsAppStatusQueryKey(businessId || ""),
+      refetchInterval: 10000,
+    },
+  });
   const [phone, setPhone]             = useState("");
   const [submitting, setSubmitting]   = useState(false);
   const [error, setError]             = useState("");
@@ -21,23 +31,8 @@ export function WhatsAppAccountTab() {
   const [draft, setDraft]             = useState("");
   const [saving, setSaving]           = useState(false);
   const [linkCopied, setLinkCopied]   = useState(false);
-
-  const load = async () => {
-    if (!businessId) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/businesses/${businessId}/whatsapp/status`, { credentials: "include" });
-      if (res.ok) setStatus(await res.json());
-    } finally { setLoading(false); }
-  };
-
-  useEffect(() => {
-    if (!businessId) return;
-    void load();
-    const timer = window.setInterval(() => { void load(); }, 10000);
-    return () => window.clearInterval(timer);
-  }, [businessId]);
-
+  const [changePhoneMode, setChangePhoneMode] = useState(false);
+  const canReceiveMessages = status?.canReceiveCustomerMessages === true;
 
   const handleRequest = async () => {
     if (!phone.trim()) { setError("Please enter your WhatsApp Business phone number."); return; }
@@ -49,7 +44,10 @@ export function WhatsAppAccountTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: phone.trim() }),
       });
-      if (res.ok) { await load(); }
+      if (res.ok) {
+        await refetch();
+        setChangePhoneMode(false);
+      }
       else { const e = await res.json(); setError(e.error || "Failed to submit request."); }
     } finally { setSubmitting(false); }
   };
@@ -62,8 +60,8 @@ export function WhatsAppAccountTab() {
       });
       if (res.ok) {
         const { welcomeMessage } = await res.json();
-        setStatus((s: any) => ({ ...s, welcomeMessage }));
         setDraft(welcomeMessage);
+        await refetch();
       }
     } finally { setRegenerating(false); }
   };
@@ -83,7 +81,7 @@ export function WhatsAppAccountTab() {
         body: JSON.stringify({ welcomeMessage: draft }),
       });
       if (res.ok) {
-        setStatus((s: any) => ({ ...s, welcomeMessage: draft }));
+        await refetch();
         setEditing(false);
       }
     } finally { setSaving(false); }
@@ -97,7 +95,7 @@ export function WhatsAppAccountTab() {
     }
   };
 
-  if (loading) {
+  if (!businessId || isLoading) {
     return <div className="py-16 text-center text-sm text-muted-foreground">Loading…</div>;
   }
 
@@ -114,15 +112,30 @@ export function WhatsAppAccountTab() {
           <div>
             <h2 className="text-xl font-bold text-foreground">WhatsApp Connected</h2>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Your shop is live and accepting customer messages.
+              {canReceiveMessages
+                ? "Your shop is live and accepting customer messages."
+                : "The Meta connection is live, but customer replies are paused."}
             </p>
           </div>
         </div>
 
-        {/* Active status */}
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
-          <span className="text-sm font-semibold text-emerald-700">Active &amp; Live — accepting customer messages</span>
+        <div
+          role="status"
+          data-testid="status-whatsapp-messaging-readiness"
+          className={`rounded-xl border p-3 flex items-center gap-2 ${
+            canReceiveMessages
+              ? "border-emerald-200 bg-emerald-50"
+              : "border-amber-200 bg-amber-50"
+          }`}
+        >
+          {canReceiveMessages
+            ? <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+            : <AlertCircle className="h-4 w-4 text-amber-700 flex-shrink-0" />}
+          <span className={`text-sm font-semibold ${canReceiveMessages ? "text-emerald-700" : "text-amber-800"}`}>
+            {canReceiveMessages
+              ? "Active & Live — accepting customer messages"
+              : getMessagingBlockMessage(status.messagingBlockReason)}
+          </span>
         </div>
 
         {/* How customers see you */}
@@ -174,7 +187,7 @@ export function WhatsAppAccountTab() {
               <div className="p-5 flex flex-col sm:flex-row gap-6 items-start">
                 {/* Branded QR card (same as Overview) */}
                 <div className="flex-shrink-0 w-full sm:w-auto flex justify-center">
-                  <ShopQRCard businessName={businessName} phone={status.requestedPhone} whatsappConnected={status.connected === true} />
+                  <ShopQRCard businessName={businessName} phone={status.requestedPhone} whatsappReady={canReceiveMessages} />
                 </div>
 
                 {/* Shop link + open button */}
@@ -300,20 +313,12 @@ export function WhatsAppAccountTab() {
           )}
         </div>
 
-        {/* Verify token */}
-        {status.verifyToken && (
-          <div className="rounded-xl border border-border bg-gray-50 p-4 space-y-1">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Webhook Verify Token</p>
-            <p className="text-xs font-mono text-gray-700 break-all">{status.verifyToken}</p>
-            <p className="text-[11px] text-gray-400">Only the {BRAND_NAME} team needs this. Your account is already configured.</p>
-          </div>
-        )}
       </div>
     );
   }
 
   // ── Setup in progress ──────────────────────────────────────────────────────
-  if (status?.requestedPhone) {
+  if (status?.requestedPhone && !changePhoneMode) {
     return (
       <div className="flex flex-col items-center pt-8 pb-4 text-center space-y-6 max-w-md mx-auto">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
@@ -355,7 +360,7 @@ export function WhatsAppAccountTab() {
         )}
 
         <button
-          onClick={() => { setStatus((s: any) => ({ ...s, requestedPhone: null })); }}
+          onClick={() => setChangePhoneMode(true)}
           className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors"
         >
           Change phone number

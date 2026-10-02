@@ -5,11 +5,13 @@
  * Pesa AI API
  * OpenAPI spec version: 0.1.0
  */
+import type { MpesaConnectInputAccountMode } from './mpesaConnectInputAccountMode';
+import type { MpesaConnectInputMethod } from './mpesaConnectInputMethod';
 
 export interface MpesaConnectInput {
-  method: 'till' | 'paybill' | 'paybill_account';
+  method: MpesaConnectInputMethod;
   tillNumber?: string | null;
   paybillNumber?: string | null;
   accountNumber?: string | null;
-  accountMode?: 'static' | 'dynamic_customer_phone';
+  accountMode?: MpesaConnectInputAccountMode;
 }

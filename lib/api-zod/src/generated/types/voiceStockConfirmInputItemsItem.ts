@@ -9,6 +9,10 @@ import type { VoiceStockConfirmInputItemsItemAction } from './voiceStockConfirmI
 
 export type VoiceStockConfirmInputItemsItem = {
   productId?: string | null;
+  /**
+     * @minLength 3
+     * @maxLength 200
+     */
   productName?: string;
   action: VoiceStockConfirmInputItemsItemAction;
   /** @exclusiveMinimum 0 */

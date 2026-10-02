@@ -16,6 +16,11 @@ export interface StockMovement {
   quantity: number;
   unit: string;
   color?: string | null;
+  size?: string | null;
+  requestId?: string | null;
+  clientRequestId?: string | null;
+  rawTranscript?: string | null;
+  parserVersion?: string | null;
   colorPreviousStock?: number | null;
   colorResultingStock?: number | null;
   delta: number;

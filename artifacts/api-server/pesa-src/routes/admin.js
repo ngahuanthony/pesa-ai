@@ -285,11 +285,14 @@ async function setWhatsAppCredentials({ params, body, session }) {
     }
   }
 
+  const whatsappStatus = db.getWhatsAppStatus(params.businessId);
   return {
     ...result,
     connected: Boolean(result.connected && connectionStatus === "live"),
     connectionStatus,
-    connectionError: db.getWhatsAppStatus(params.businessId).connectionError,
+    connectionError: whatsappStatus.connectionError,
+    canReceiveCustomerMessages: whatsappStatus.canReceiveCustomerMessages,
+    messagingBlockReason: whatsappStatus.messagingBlockReason,
     profilePictureUpdated,
     webhookSubscribed,
     vendorAlertSent,

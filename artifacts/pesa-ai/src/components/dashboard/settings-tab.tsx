@@ -8,6 +8,7 @@ import { Store, Bot, CreditCard, CheckCircle2, Headphones, MapPin, Mail, KeyRoun
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BRAND_NAME } from "@/constants/brand";
 import { MERCHANT_TYPES, displayMerchantType } from "@/constants/merchant-types";
+import { getMessagingBlockMessage } from "@/lib/whatsapp-readiness";
 
 const CATEGORIES = [
   "Retail & Fashion",
@@ -272,7 +273,8 @@ export function SettingsTab() {
   };
 
   /* ── WhatsApp status banner ── */
-  const waConnected = !!(business?.whatsappPhoneNumberId);
+  const hasWhatsAppConnection = Boolean(business?.whatsappPhoneNumberId);
+  const canReceiveMessages = business?.canReceiveCustomerMessages === true;
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -288,17 +290,19 @@ export function SettingsTab() {
 
       {/* WhatsApp status pill — read-only */}
       <div className={`flex items-center gap-2.5 rounded-xl px-4 py-3 border ${
-        waConnected ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"
+        canReceiveMessages ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"
       }`}>
-        <span className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${waConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-400"}`} />
+        <span className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${canReceiveMessages ? "bg-emerald-500 animate-pulse" : "bg-amber-400"}`} />
         <div>
-          <p className={`text-sm font-semibold ${waConnected ? "text-emerald-700" : "text-amber-700"}`}>
-            WhatsApp Shop: {waConnected ? "Connected & Live" : "Pending Connection"}
+          <p data-testid="status-whatsapp-messaging-readiness" className={`text-sm font-semibold ${canReceiveMessages ? "text-emerald-700" : "text-amber-700"}`}>
+            WhatsApp Shop: {canReceiveMessages ? "Connected & accepting customer messages" : hasWhatsAppConnection ? "Connection or activation needs attention" : "Pending Connection"}
           </p>
-          <p className={`text-xs ${waConnected ? "text-emerald-600" : "text-amber-600"}`}>
-            {waConnected
+          <p className={`text-xs ${canReceiveMessages ? "text-emerald-600" : "text-amber-600"}`}>
+            {canReceiveMessages
               ? "Your assistant is live and handling customer messages."
-              : "Our team will connect your WhatsApp number — usually within 24 hours of signup."}
+              : hasWhatsAppConnection
+                ? getMessagingBlockMessage(business?.messagingBlockReason)
+                : "Our team will connect your WhatsApp number — usually within 24 hours of signup."}
           </p>
         </div>
       </div>

@@ -636,6 +636,7 @@ function sanitizeBusiness(business) {
     publicPhone: maskPhone(rest.publicPhone),
     mpesaConnected: Boolean(mpesa?.shortcode),
     mpesaShortcodeMasked: fieldCrypto.maskShortcode(mpesa?.shortcode),
+    ...getWhatsAppMessagingReadiness(business),
   };
 }
 
@@ -785,6 +786,7 @@ function getWhatsAppStatus(businessId) {
     requestedPhone: b.whatsappRequestedPhone || null,
     wabaId: b.whatsappWabaId || null,
     displayName: b.whatsappDisplayName || null,
+    ...getWhatsAppMessagingReadiness(b),
   };
 }
 
@@ -803,6 +805,7 @@ function getVendorWhatsAppStatus(businessId) {
     testShopUrl: digits
       ? "https://wa.me/" + digits + "?text=" + encodeURIComponent(generateShopEntryPrompt(b.name))
       : null,
+    ...getWhatsAppMessagingReadiness(b),
   };
 }
 
@@ -1542,6 +1545,30 @@ function isCustomerMessagingActive(business) {
   if (!business) return false;
   if (business.requiresVerifiedOwnerAuth !== true) return true;
   return business.ownerSecurityVerified === true && isPublicShopDiscoverable(business);
+}
+
+function getWhatsAppMessagingReadiness(business) {
+  const connected = business.whatsappConnectionStatus === "live" &&
+    Boolean(business.whatsappPhoneNumberId && business.whatsappAccessTokenEnc);
+  const customerMessagingActive = isCustomerMessagingActive(business);
+  let messagingBlockReason = null;
+
+  if (!customerMessagingActive) {
+    if (business.suspended === true || business.deletedAt) {
+      messagingBlockReason = "business_inactive";
+    } else if (business.requiresVerifiedOwnerAuth === true && business.ownerSecurityVerified !== true) {
+      messagingBlockReason = "owner_verification_required";
+    } else {
+      messagingBlockReason = "business_activation_incomplete";
+    }
+  } else if (!connected) {
+    messagingBlockReason = "whatsapp_connection_inactive";
+  }
+
+  return {
+    canReceiveCustomerMessages: connected && customerMessagingActive,
+    messagingBlockReason,
+  };
 }
 
 

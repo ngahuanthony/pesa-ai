@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface SignupInput {
-  businessName: string;
-  pesaAiNumber: string;
-  personalPhone: string;
-}
+export type AdminGetGrowthSummaryParams = {
+/**
+ * @minimum 1
+ * @maximum 90
+ */
+days?: number;
+};
