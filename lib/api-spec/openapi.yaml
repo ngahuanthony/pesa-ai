@@ -1105,6 +1105,9 @@ components:
           type: string
         name:
           type: string
+        category:
+          type: ["string", "null"]
+          enum: [food, drinks, other, null]
         description:
           type: string
           nullable: true
@@ -1916,6 +1919,9 @@ components:
       properties:
         name:
           type: string
+        category:
+          type: ["string", "null"]
+          enum: [food, drinks, other, null]
         description:
           type: string
         price:
@@ -1933,6 +1939,9 @@ components:
       properties:
         name:
           type: string
+        category:
+          type: ["string", "null"]
+          enum: [food, drinks, other, null]
         description:
           type: string
         price:

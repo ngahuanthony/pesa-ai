@@ -350,6 +350,7 @@ test("hotel WhatsApp menu treats active catalog items as available despite stale
   const hotel = business("Hotel Menu Availability");
   const product = db.createProduct(hotel.id, {
     name: "Grilled Fish Fillet",
+    category: "food",
     price: 850,
     stockQty: 0,
   });
@@ -417,9 +418,11 @@ test("hotel WhatsApp menu treats active catalog items as available despite stale
 test("hotel menu and Order Food selection reply only with active catalog names and prices", async () => {
   const hotel = business("Hotel Fast Menu");
   hotel.welcomeMessage = "Welcome to Hotel Fast Menu.";
-  const fish = db.createProduct(hotel.id, { name: "Grilled Fish Fillet", price: 850, stockQty: 0 });
-  db.createProduct(hotel.id, { name: "Fresh Juice", price: 250, stockQty: 4 });
-  const inactive = db.createProduct(hotel.id, { name: "Archived Special", price: 999, stockQty: 0 });
+  const fish = db.createProduct(hotel.id, { name: "Grilled Fish Fillet", category: "food", price: 850, stockQty: 0 });
+  db.createProduct(hotel.id, { name: "Fresh Juice", category: "drinks", price: 250, stockQty: 4 });
+  db.createProduct(hotel.id, { name: "Garden Suite", category: "other", price: 18000, stockQty: 0 });
+  db.createProduct(hotel.id, { name: "Swimming Pool Access", price: 500, stockQty: 0 });
+  const inactive = db.createProduct(hotel.id, { name: "Archived Special", category: "food", price: 999, stockQty: 0 });
   db.updateProduct(hotel.id, inactive.id, { active: false });
   db.createKnowledgeEntry(hotel.id, {
     title: "Old menu",
@@ -436,9 +439,12 @@ test("hotel menu and Order Food selection reply only with active catalog names a
     text: "Menu",
   });
   assert.match(menu.replyText, /Welcome to Hotel Fast Menu\./);
+  assert.match(menu.replyText, /🍽️ \*FOOD\*/);
   assert.match(menu.replyText, /Grilled Fish Fillet — KSh 850/);
+  assert.match(menu.replyText, /🥤 \*DRINKS\*/);
   assert.match(menu.replyText, /Fresh Juice — KSh 250/);
-  assert.doesNotMatch(menu.replyText, /Archived Special|Lobster Thermidor|out of stock|reference only|mock AI/i);
+  assert.match(menu.replyText, /reply with the item name and quantity/i);
+  assert.doesNotMatch(menu.replyText, /Garden Suite|Swimming Pool Access|Archived Special|Lobster Thermidor|out of stock|reference only|mock AI/i);
 
   const orderFood = await handleCustomerMessage({
     business: hotel,
@@ -449,6 +455,7 @@ test("hotel menu and Order Food selection reply only with active catalog names a
   });
   assert.match(orderFood.replyText, /Grilled Fish Fillet — KSh 850/);
   assert.match(orderFood.replyText, /Fresh Juice — KSh 250/);
-  assert.doesNotMatch(orderFood.replyText, /Archived Special|Lobster Thermidor|out of stock|reference only|mock AI/i);
+  assert.match(orderFood.replyText, /reply with the item name and quantity/i);
+  assert.doesNotMatch(orderFood.replyText, /Garden Suite|Swimming Pool Access|Archived Special|Lobster Thermidor|out of stock|reference only|mock AI/i);
   assert.equal(fish.stockQty, 0);
 });

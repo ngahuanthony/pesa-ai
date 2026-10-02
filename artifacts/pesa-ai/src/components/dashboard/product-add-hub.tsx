@@ -9,14 +9,17 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { isHospitalityBusiness as isHospitality } from "@/lib/business";
 
 const schema = z.object({
   name:        z.string().min(1, "Name is required"),
   price:       z.coerce.number().min(1, "Price must be at least 1"),
   stockQty:    z.coerce.number().min(0).default(0),
   description: z.string().optional(),
+  category:    z.enum(["food", "drinks", "other", "unclassified"]),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -72,6 +75,7 @@ const METHODS = [
 export function ProductAddHub() {
   const { data: me } = useGetMe();
   const businessId = (me as any)?.business?.id || "";
+  const hospitalityBusiness = isHospitality(me?.business);
   const [manualOpen, setManualOpen] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -79,12 +83,20 @@ export function ProductAddHub() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", price: 0, stockQty: 0, description: "" },
+    defaultValues: { name: "", price: 0, stockQty: 0, description: "", category: "unclassified" },
   });
 
   const onSubmit = async (values: FormValues) => {
+    if (hospitalityBusiness && values.category === "unclassified") {
+      form.setError("category", { message: "Choose Food, Drinks, or Other hotel service." });
+      return;
+    }
+    const { category, ...productFields } = values;
+    const data = hospitalityBusiness
+      ? { ...productFields, category: category === "unclassified" ? null : category }
+      : productFields;
     await createProduct.mutateAsync(
-      { businessId, data: { name: values.name, price: values.price, stockQty: values.stockQty, description: values.description } },
+      { businessId, data },
       {
         onSuccess: () => {
           toast({ title: "Product added!" });
@@ -200,6 +212,25 @@ export function ProductAddHub() {
                   </FormItem>
                 )} />
               </div>
+              {hospitalityBusiness && (
+                <FormField control={form.control} name="category" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Order Food category</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Choose a category" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="food">Food</SelectItem>
+                        <SelectItem value="drinks">Drinks</SelectItem>
+                        <SelectItem value="other">Other hotel service — not in Order Food</SelectItem>
+                        <SelectItem value="unclassified">Choose a category</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
               <FormField control={form.control} name="description" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Description (optional)</FormLabel>

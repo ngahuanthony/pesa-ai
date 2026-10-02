@@ -125,6 +125,18 @@ export interface Subscription {
   createdAt: string;
 }
 
+/**
+ * @nullable
+ */
+export type ProductCategory = typeof ProductCategory[keyof typeof ProductCategory] | null;
+
+
+export const ProductCategory = {
+  food: 'food',
+  drinks: 'drinks',
+  other: 'other',
+} as const;
+
 export type ProductColorStockItem = {
   color: string;
   /** @minimum 0 */
@@ -136,6 +148,8 @@ export interface Product {
   id: string;
   businessId: string;
   name: string;
+  /** @nullable */
+  category?: ProductCategory;
   description?: string | null;
   price: number;
   /** Total stock; equals the sum of colorStock when colour variants are present. */
@@ -616,16 +630,44 @@ export interface BusinessUpdate {
   whatsappPhoneNumberId?: string;
 }
 
+/**
+ * @nullable
+ */
+export type ProductInputCategory = typeof ProductInputCategory[keyof typeof ProductInputCategory] | null;
+
+
+export const ProductInputCategory = {
+  food: 'food',
+  drinks: 'drinks',
+  other: 'other',
+} as const;
+
 export interface ProductInput {
   name: string;
+  /** @nullable */
+  category?: ProductInputCategory;
   description?: string;
   price: number;
   stockQty?: number;
   imageUrl?: string;
 }
 
+/**
+ * @nullable
+ */
+export type ProductUpdateCategory = typeof ProductUpdateCategory[keyof typeof ProductUpdateCategory] | null;
+
+
+export const ProductUpdateCategory = {
+  food: 'food',
+  drinks: 'drinks',
+  other: 'other',
+} as const;
+
 export interface ProductUpdate {
   name?: string;
+  /** @nullable */
+  category?: ProductUpdateCategory;
   description?: string;
   price?: number;
   stockQty?: number;

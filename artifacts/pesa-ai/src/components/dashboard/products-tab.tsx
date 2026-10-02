@@ -31,10 +31,23 @@ const productSchema = z.object({
   price:       z.coerce.number().min(1, "Price must be at least 1"),
   stockQty:    z.coerce.number().min(0, "Stock can't be negative"),
   description: z.string().optional(),
+  category:    z.enum(["food", "drinks", "other", "unclassified"]).optional(),
 });
 type ProductForm = z.infer<typeof productSchema>;
 
-function ProductFormFields({ form }: { form: any }) {
+function ProductCategoryBadge({ category }: { category?: string | null }) {
+  const badge = category === "food"
+    ? { label: "Food", className: "bg-orange-50 text-orange-700" }
+    : category === "drinks"
+      ? { label: "Drinks", className: "bg-sky-50 text-sky-700" }
+      : category === "other"
+        ? { label: "Other service · not in Order Food", className: "bg-slate-100 text-slate-600" }
+        : { label: "Needs category", className: "bg-amber-50 text-amber-800" };
+
+  return <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${badge.className}`}>{badge.label}</span>;
+}
+
+function ProductFormFields({ form, hospitalityBusiness }: { form: any; hospitalityBusiness: boolean }) {
   return (
     <>
       <FormField control={form.control} name="name" render={({ field }) => (
@@ -60,6 +73,28 @@ function ProductFormFields({ form }: { form: any }) {
           </FormItem>
         )} />
       </div>
+      {hospitalityBusiness && (
+        <FormField control={form.control} name="category" render={({ field }) => (
+          <FormItem>
+            <FormLabel>Order Food category</FormLabel>
+            <Select
+              value={field.value || "unclassified"}
+              onValueChange={(value) => field.onChange(value === "unclassified" ? undefined : value)}
+            >
+              <FormControl>
+                <SelectTrigger><SelectValue placeholder="Choose a category" /></SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="food">Food</SelectItem>
+                <SelectItem value="drinks">Drinks</SelectItem>
+                <SelectItem value="other">Other hotel service — not in Order Food</SelectItem>
+                <SelectItem value="unclassified">Not categorized — hidden from Order Food</SelectItem>
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )} />
+      )}
       <FormField control={form.control} name="description" render={({ field }) => (
         <FormItem>
           <FormLabel>Description <span className="text-muted-foreground font-normal">(helps the assistant sell it)</span></FormLabel>
@@ -140,15 +175,29 @@ export function ProductsTab() {
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
 
-  const createForm = useForm<ProductForm>({ resolver: zodResolver(productSchema), defaultValues: { name: "", price: 0, stockQty: 0, description: "" } });
-  const editForm   = useForm<ProductForm>({ resolver: zodResolver(productSchema), defaultValues: { name: "", price: 0, stockQty: 0, description: "" } });
+  const createForm = useForm<ProductForm>({ resolver: zodResolver(productSchema), defaultValues: { name: "", price: 0, stockQty: 0, description: "", category: "unclassified" } });
+  const editForm   = useForm<ProductForm>({ resolver: zodResolver(productSchema), defaultValues: { name: "", price: 0, stockQty: 0, description: "", category: "unclassified" } });
+
+  const uncategorizedHospitalityProducts = hospitalityBusiness
+    ? (products || []).filter((product) => product.active && !product.category).length
+    : 0;
 
   useEffect(() => {
-    if (editingProduct) editForm.reset({ name: editingProduct.name, price: editingProduct.price, stockQty: editingProduct.stockQty, description: editingProduct.description || "" });
+    if (editingProduct) editForm.reset({
+      name: editingProduct.name,
+      price: editingProduct.price,
+      stockQty: editingProduct.stockQty,
+      description: editingProduct.description || "",
+      category: editingProduct.category || "unclassified",
+    });
   }, [editingProduct, editForm]);
 
   const onSubmitCreate = (data: ProductForm) => {
-    createProduct.mutate({ businessId, data }, {
+    const { category, ...productFields } = data;
+    const createData = hospitalityBusiness
+      ? { ...productFields, category: !category || category === "unclassified" ? null : category }
+      : productFields;
+    createProduct.mutate({ businessId, data: createData }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListProductsQueryKey(businessId) });
         createForm.reset();
@@ -159,7 +208,11 @@ export function ProductsTab() {
 
   const onSubmitEdit = (data: ProductForm) => {
     if (!editingProduct) return;
-    updateProduct.mutate({ businessId, productId: editingProduct.id, data }, {
+    const { category, ...productFields } = data;
+    const updateData = hospitalityBusiness
+      ? { ...productFields, category: !category || category === "unclassified" ? null : category }
+      : productFields;
+    updateProduct.mutate({ businessId, productId: editingProduct.id, data: updateData }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListProductsQueryKey(businessId) });
         setEditingProduct(null);
@@ -200,6 +253,16 @@ export function ProductsTab() {
           className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm text-foreground"
         >
           Listed offerings are available by default. Stock counts are for inventory tracking and do not prevent customer orders.
+        </div>
+      )}
+      {uncategorizedHospitalityProducts > 0 && (
+        <div
+          data-testid="notice-uncategorized-hospitality-products"
+          role="note"
+          className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-950"
+        >
+          {uncategorizedHospitalityProducts} active catalog item{uncategorizedHospitalityProducts === 1 ? "" : "s"} need a category.
+          Assign Food, Drinks, or Other in Edit Product. Only Food and Drinks appear in Order Food.
         </div>
       )}
 
@@ -311,6 +374,7 @@ export function ProductsTab() {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-medium text-sm text-foreground truncate">{p.name}</span>
                           <SourceBadge source={(p as any).source} />
+                          {hospitalityBusiness && <ProductCategoryBadge category={p.category} />}
                         </div>
                         {p.description && <div className="text-xs text-muted-foreground truncate max-w-xs">{p.description}</div>}
                          {p.colorStock && p.colorStock.length > 0 && (
@@ -352,6 +416,7 @@ export function ProductsTab() {
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-medium text-sm text-foreground">{p.name}</span>
                             <SourceBadge source={(p as any).source} />
+                            {hospitalityBusiness && <ProductCategoryBadge category={p.category} />}
                           </div>
                           {p.description && (
                             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{p.description}</p>
@@ -396,7 +461,7 @@ export function ProductsTab() {
           <DialogHeader><DialogTitle>Edit Product</DialogTitle></DialogHeader>
           <Form {...editForm}>
             <form onSubmit={editForm.handleSubmit(onSubmitEdit)} className="space-y-4 mt-2">
-              <ProductFormFields form={editForm} />
+              <ProductFormFields form={editForm} hospitalityBusiness={hospitalityBusiness} />
               <button type="submit" disabled={updateProduct.isPending} className="w-full h-10 rounded-lg bg-primary text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 transition-colors">
                 {updateProduct.isPending ? "Saving…" : "Update Product"}
               </button>

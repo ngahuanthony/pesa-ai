@@ -5,12 +5,15 @@
  * Pesa AI API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProductCategory } from './productCategory';
 import type { ProductColorStockItem } from './productColorStockItem';
 
 export interface Product {
   id: string;
   businessId: string;
   name: string;
+  /** @nullable */
+  category?: ProductCategory;
   description?: string | null;
   price: number;
   /** Total stock; equals the sum of colorStock when colour variants are present. */

@@ -85,11 +85,10 @@ function isQuickMenuRequest(text) {
 
 function buildHospitalityMenuReply(business) {
   const products = db.listProducts(business.id, { activeOnly: true });
-  if (!products.length) {
-    return "There are no active food or drink items listed in the current catalog.";
-  }
-
-  const items = products.map((product) => {
+  const formatItems = (items) => items
+    .slice()
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map((product) => {
     const rawPrice = product.price;
     const price = rawPrice === null || rawPrice === undefined || rawPrice === ""
       ? null
@@ -98,10 +97,23 @@ function buildHospitalityMenuReply(business) {
       ? " — KSh " + price.toLocaleString("en-KE")
       : "";
     return "• " + product.name + priceText;
-  });
+    });
+  const sections = [
+    { category: "food", heading: "🍽️ *FOOD*" },
+    { category: "drinks", heading: "🥤 *DRINKS*" },
+  ]
+    .map(({ category, heading }) => {
+      const items = formatItems(products.filter((product) => product.category === category));
+      return items.length ? heading + "\n" + items.join("\n") : null;
+    })
+    .filter(Boolean);
 
-  return "Current menu from the catalog:\n\n" + items.join("\n") +
-    "\n\nReply with the item name and quantity to order.";
+  if (!sections.length) {
+    return "Our Food & Drinks menu is being updated. Please contact the hotel team for help with an order.";
+  }
+
+  return "Welcome to our Food & Drinks menu!\n\n" + sections.join("\n\n") +
+    "\n\nTo order, reply with the item name and quantity (for example, “2 Grilled Fish Fillet and 1 Fresh Juice”). I’ll confirm your order before placing it.";
 }
 
 async function handleCustomerMessage({ business, customerPhone, customerName, text, channel, serviceLocationToken = null, serviceLocationId = null }) {

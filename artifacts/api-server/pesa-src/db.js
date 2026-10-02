@@ -2032,7 +2032,7 @@ function isProductAvailable(business, product, quantity = product?.stockQty) {
   return isHospitalityBusiness(business) || Number(quantity) > 0;
 }
 
-function createProduct(businessId, { name, description, price, stockQty, imageUrl, source }) {
+function createProduct(businessId, { name, category, description, price, stockQty, imageUrl, source }) {
   return mutate((state) => {
     if (!state.businesses.some((b) => b.id === businessId)) {
       throw httpError(404, "Business not found");
@@ -2041,6 +2041,7 @@ function createProduct(businessId, { name, description, price, stockQty, imageUr
       id: id(),
       businessId,
       name,
+      category: ["food", "drinks", "other"].includes(category) ? category : null,
       description: description || "",
       price: Number(price),
       stockQty: Number.isFinite(Number(stockQty)) ? Number(stockQty) : 0,
@@ -2084,6 +2085,7 @@ function bulkCreateProducts(businessId, rows) {
         id: id(),
         businessId,
         name,
+        category: ["food", "drinks", "other"].includes(row.category) ? row.category : null,
         description: row.description !== undefined && row.description !== null ? String(row.description).trim() : "",
         price: priceNum,
         stockQty: Number.isFinite(stockQtyNum) && stockQtyNum >= 0 ? stockQtyNum : 0,

@@ -5,9 +5,12 @@
  * Pesa AI API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProductInputCategory } from './productInputCategory';
 
 export interface ProductInput {
   name: string;
+  /** @nullable */
+  category?: ProductInputCategory;
   description?: string;
   price: number;
   stockQty?: number;

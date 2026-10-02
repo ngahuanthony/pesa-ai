@@ -127,20 +127,25 @@ function systemPrompt(business, products, userText = "", history = []) {
   const catalogSummary = products
     .filter((p) => p.active)
     .map((p) => {
+      const category = hospitalityBusiness
+        ? ` [${p.category === "food" ? "FOOD" : p.category === "drinks" ? "DRINKS" : p.category === "other" ? "OTHER HOTEL SERVICE" : "UNCATEGORIZED"}]`
+        : "";
       const variants = Array.isArray(p.colorStock)
         ? p.colorStock.filter((entry) => entry.imageUrl).map((entry) => `${entry.color}: photo available`).join(", ")
         : "";
       const stockStatus = hospitalityBusiness
         ? "available; stock quantity does not limit ordering"
         : Number(p.stockQty) > 0 ? `${p.stockQty} in stock` : "out of stock";
-      return `- ${p.name}: KES ${p.price} (${stockStatus})${variants ? ` [${variants}]` : ""}`;
+      return `- ${p.name}${category}: KES ${p.price} (${stockStatus})${variants ? ` [${variants}]` : ""}`;
     })
     .join("\n");
   const availabilityRules = hospitalityBusiness
     ? `- For hotel and hospitality businesses, the active product catalog is the source of truth for what can be ordered and its price. Every active catalog item is available by default, regardless of stock quantity. Do not use stock warnings or availability claims in uploaded menus, brochures, or other knowledge documents as current availability; those documents may be stale. Do not tell customers that an active catalog item is out of stock or that its price is for reference only.
 - Do not infer that a listed food item or service is unavailable from a zero stock count or missing schedule, rate, or capacity information.
 - Do not invent prices, operating hours, room types, dates, capacity, or confirmed booking slots. Ask for the customer's details and say the business will confirm specifics when they are not in the approved business facts.
-- Only offer food items in the current catalog; do not invent menu items.`
+- For Order Food or any food/menu request, show only active catalog items categorized FOOD or DRINKS. Keep them in separate FOOD and DRINKS sections. Never include OTHER HOTEL SERVICE or UNCATEGORIZED items in that menu; rooms, accommodation, swimming, conferences, and events are not food or drinks.
+- Give a friendly ordering instruction: ask the guest to reply with item names and quantities, then confirm the selection before placing the order.
+- Only offer food and drink items in the current catalog; do not invent menu items.`
     : "- If something is out of stock or doesn't exist, say so plainly and suggest alternatives from the catalog.";
 
   const locationLine = business.location ? `Location: ${business.location}` : "";
@@ -226,6 +231,7 @@ function executeTool(business, customerId, toolName, toolInput) {
     return {
       results: matches.map((p) => ({
         name: p.name,
+        category: p.category || null,
         price: p.price,
         stockQty: hospitalityBusiness ? null : p.stockQty,
         availability: db.isProductAvailable(business, p) ? "available" : "out of stock",

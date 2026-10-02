@@ -239,6 +239,7 @@ export const ListProductsResponseItem = zod.object({
   "id": zod.string(),
   "businessId": zod.string(),
   "name": zod.string(),
+  "category": zod.union([zod.literal('food'),zod.literal('drinks'),zod.literal('other'),zod.literal(null)]).nullish(),
   "description": zod.string().nullish(),
   "price": zod.number(),
   "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
@@ -260,6 +261,7 @@ export const CreateProductParams = zod.object({
 
 export const CreateProductBody = zod.object({
   "name": zod.string(),
+  "category": zod.union([zod.literal('food'),zod.literal('drinks'),zod.literal('other'),zod.literal(null)]).nullish(),
   "description": zod.string().optional(),
   "price": zod.number(),
   "stockQty": zod.number().optional(),
@@ -274,6 +276,7 @@ export const CreateProductResponse = zod.object({
   "id": zod.string(),
   "businessId": zod.string(),
   "name": zod.string(),
+  "category": zod.union([zod.literal('food'),zod.literal('drinks'),zod.literal('other'),zod.literal(null)]).nullish(),
   "description": zod.string().nullish(),
   "price": zod.number(),
   "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
@@ -295,6 +298,7 @@ export const ImportProductsParams = zod.object({
 export const ImportProductsBody = zod.object({
   "rows": zod.array(zod.object({
   "name": zod.string(),
+  "category": zod.union([zod.literal('food'),zod.literal('drinks'),zod.literal('other'),zod.literal(null)]).nullish(),
   "description": zod.string().optional(),
   "price": zod.number(),
   "stockQty": zod.number().optional(),
@@ -312,6 +316,7 @@ export const UpdateProductParams = zod.object({
 
 export const UpdateProductBody = zod.object({
   "name": zod.string().optional(),
+  "category": zod.union([zod.literal('food'),zod.literal('drinks'),zod.literal('other'),zod.literal(null)]).nullish(),
   "description": zod.string().optional(),
   "price": zod.number().optional(),
   "stockQty": zod.number().optional(),
@@ -327,6 +332,7 @@ export const UpdateProductResponse = zod.object({
   "id": zod.string(),
   "businessId": zod.string(),
   "name": zod.string(),
+  "category": zod.union([zod.literal('food'),zod.literal('drinks'),zod.literal('other'),zod.literal(null)]).nullish(),
   "description": zod.string().nullish(),
   "price": zod.number(),
   "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
@@ -755,6 +761,7 @@ export const ConfirmStockIntakeResponse = zod.object({
   "id": zod.string(),
   "businessId": zod.string(),
   "name": zod.string(),
+  "category": zod.union([zod.literal('food'),zod.literal('drinks'),zod.literal('other'),zod.literal(null)]).nullish(),
   "description": zod.string().nullish(),
   "price": zod.number(),
   "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),
@@ -922,6 +929,7 @@ export const ConfirmVoiceStockResponse = zod.object({
   "id": zod.string(),
   "businessId": zod.string(),
   "name": zod.string(),
+  "category": zod.union([zod.literal('food'),zod.literal('drinks'),zod.literal('other'),zod.literal(null)]).nullish(),
   "description": zod.string().nullish(),
   "price": zod.number(),
   "stockQty": zod.number().describe('Total stock; equals the sum of colorStock when colour variants are present.'),

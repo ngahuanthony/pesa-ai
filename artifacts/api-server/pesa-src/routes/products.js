@@ -1,6 +1,14 @@
 const db = require("../db");
 const auth = require("../auth");
 
+const PRODUCT_CATEGORIES = new Set(["food", "drinks", "other"]);
+
+function validateCategory(category) {
+  if (category !== undefined && category !== null && !PRODUCT_CATEGORIES.has(category)) {
+    throw db.httpError(400, "category must be food, drinks, other, or null");
+  }
+}
+
 function list({ params, session }) {
   auth.requireOwnBusiness(session, params.businessId);
   db.getBusiness(params.businessId); // 404s if missing
@@ -9,24 +17,26 @@ function list({ params, session }) {
 
 function create({ params, body, session }) {
   auth.requireOwnBusiness(session, params.businessId);
-  const { name, description, price, stockQty, imageUrl } = body || {};
+  const { name, category, description, price, stockQty, imageUrl } = body || {};
+  validateCategory(category);
   if (!name || price === undefined || price === null || price === "") {
     throw db.httpError(400, "name and price are required");
   }
   if (Number.isNaN(Number(price)) || Number(price) < 0) {
     throw db.httpError(400, "price must be a non-negative number");
   }
-  const product = db.createProduct(params.businessId, { name, description, price, stockQty, imageUrl, source: "manual" });
+  const product = db.createProduct(params.businessId, { name, category, description, price, stockQty, imageUrl, source: "manual" });
   return { status: 201, data: product };
 }
 
 function update({ params, body, session }) {
   auth.requireOwnBusiness(session, params.businessId);
-  const allowed = ["name", "description", "price", "stockQty", "imageUrl", "active"];
+  const allowed = ["name", "category", "description", "price", "stockQty", "imageUrl", "active"];
   const patch = {};
   for (const key of allowed) {
     if (body[key] !== undefined) patch[key] = body[key];
   }
+  validateCategory(patch.category);
   return db.updateProduct(params.businessId, params.productId, patch);
 }
 
