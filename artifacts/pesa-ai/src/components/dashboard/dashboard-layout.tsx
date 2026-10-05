@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { BRAND_NAME } from "@/constants/brand";
 import { useToast } from "@/hooks/use-toast";
 import { isHospitalityBusiness } from "@/lib/business";
+import { playOrderAlertBeep } from "@/lib/order-alert-sound";
 
 const WA_SUB_ITEMS = [
   { label: "Phone Number",     href: "/dashboard/whatsapp" },
@@ -66,10 +67,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           const changed = orders.find((order) => !seenOrders.current!.has(order.id) || seenOrders.current!.get(order.id) !== Number(order.revision || 1));
           if (changed) {
             const isNew = !seenOrders.current.has(changed.id);
-            setLatestOrderAlert(changed);
+            setLatestOrderAlert({ ...changed, alertIsNew: isNew });
+            if (isNew && hospitalityBusiness) playOrderAlertBeep();
             toast({
               title: isNew ? "New order received" : "Order updated",
-              description: `${changed.serviceLocationSnapshot?.label ? `${changed.serviceLocationSnapshot.label} · ` : ""}#${String(changed.id).toUpperCase()} · KSh ${Number(changed.totalAmount || 0).toLocaleString("en-KE")}`,
+              description: `${changed.serviceLocationSnapshot?.label ? `${changed.serviceLocationSnapshot.label} · ` : ""}#${String(changed.id).slice(0, 8).toUpperCase()} · KSh ${Number(changed.totalAmount || 0).toLocaleString("en-KE")}`,
             });
           }
         }
@@ -81,7 +83,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     void checkOrders();
     const timer = window.setInterval(checkOrders, 5000);
     return () => { stopped = true; window.clearInterval(timer); };
-  }, [businessId, toast]);
+  }, [businessId, hospitalityBusiness, toast]);
 
   useEffect(() => {
     if (!businessId || !hospitalityBusiness) {
@@ -363,7 +365,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               >
                 <Bell className="h-4 w-4 flex-shrink-0 animate-pulse text-amber-600" />
                 <span className="min-w-0 flex-1 break-all text-sm font-semibold">
-                  Order #{String(latestOrderAlert.id).toUpperCase()}
+                  {latestOrderAlert.alertIsNew ? "New order" : "Order update"} #{String(latestOrderAlert.id).slice(0, 8).toUpperCase()}
                   {latestOrderAlert.serviceLocationSnapshot?.label ? ` · ${latestOrderAlert.serviceLocationSnapshot.label}` : ""}
                   {" "}needs attention
                 </span>

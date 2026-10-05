@@ -150,7 +150,7 @@ function systemPrompt(business, products, userText = "", history = []) {
 - Do not infer that a listed food item or service is unavailable from a zero stock count or missing schedule, rate, or capacity information.
 - Do not invent prices, operating hours, room types, dates, capacity, or confirmed booking slots. Ask for the customer's details and say the business will confirm specifics when they are not in the approved business facts.
 - For Order Food or any food/menu request, show only active catalog items categorized FOOD or DRINKS. Keep them in separate FOOD and DRINKS sections. Never include OTHER HOTEL SERVICE or UNCATEGORIZED items in that menu; rooms, accommodation, swimming, conferences, and events are not food or drinks.
-- Give a friendly ordering instruction: ask the guest to reply with item names and quantities, then confirm the selection before placing the order.
+- Ask the guest for item names and quantities, summarize the selection, and request confirmation once before placing the order. After the guest confirms that selection, do not ask them to confirm it again; collect any missing table or fulfillment detail and place the order when those details are supplied.
 - Only offer food and drink items in the current catalog; do not invent menu items.`
     : "- If something is out of stock or doesn't exist, say so plainly and suggest alternatives from the catalog.";
 
@@ -286,6 +286,10 @@ async function runClaudeAssistant(business, customerId, history, userText, opts 
     if (serviceLocation) {
       system += `\n\nCustomer service location: ${serviceLocation.kind} — ${serviceLocation.label}. Keep this location attached to any order you create.`;
     }
+  }
+  if (Number.isInteger(opts.tableNumberJustProvided)) {
+    system +=
+      `\n\nORDER CONTINUATION: The guest has just supplied Table ${opts.tableNumberJustProvided}. Review the recent conversation for the specific items and quantities they already selected and confirmed. If they clearly confirmed an order and the table number was the only missing detail, call create_order now with those items, fulfillment_type "dine_in", and table_number ${opts.tableNumberJustProvided}. Do not ask them to repeat the order or confirm it a second time. If no specific confirmed items and quantities are present in the conversation, do not invent an order; ask only for the missing order details.`;
   }
   if (opts.customerName) {
     const profileName = String(opts.customerName).trim().slice(0, 120);
@@ -445,9 +449,82 @@ function placeOrderFromToolCall(business, customerId, orderRequest, serviceLocat
 
 // --- mock fallback (no API key) ------------------------------------------
 
+function normalizeOrderSummaryItem(value) {
+  return String(value || "")
+    .replace(/^[*_\s]+|[*_\s]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function extractConfirmedOrderItems(history, products) {
+  const messages = Array.isArray(history) ? history : [];
+  let confirmationIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role !== "assistant") {
+      confirmationIndex = i;
+      break;
+    }
+  }
+  if (confirmationIndex < 0) return null;
+
+  const confirmation = String(messages[confirmationIndex].content || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ");
+  const affirmativeReplies = new Set([
+    "yes", "y", "yeah", "yep", "sure", "correct", "confirm", "confirmed",
+    "done", "go ahead", "place it", "order it", "that's right", "that is right",
+    "sawa", "ndio", "ndiyo", "yes please", "sure please",
+  ]);
+  if (!affirmativeReplies.has(confirmation)) return null;
+
+  let summary = "";
+  for (let i = confirmationIndex - 1; i >= 0; i--) {
+    if (messages[i].role === "assistant") {
+      summary = String(messages[i].content || "");
+      break;
+    }
+  }
+  if (!summary || !/\b(?:confirm|reply\s+done|is (?:that|this|the order) (?:correct|right)|does that look (?:right|good)|shall i place)\b/i.test(summary)) {
+    return null;
+  }
+
+  const mentions = [...summary.matchAll(/([1-9]\d{0,2})\s*[×x]\s*([^\n,;.!?]+)/gi)];
+  if (!mentions.length) return null;
+
+  const resolved = [];
+  for (const mention of mentions) {
+    const itemName = normalizeOrderSummaryItem(mention[2]);
+    const product = products.find((candidate) => normalizeOrderSummaryItem(candidate.name) === itemName);
+    if (!product) return null;
+    resolved.push({ product_name: product.name, quantity: Number(mention[1]) });
+  }
+  return resolved;
+}
+
 function runMockAssistant(business, customerId, history, userText, opts = {}) {
   const products = db.listProducts(business.id, { activeOnly: true });
   const text = userText.toLowerCase();
+
+  if (Number.isInteger(opts.tableNumberJustProvided)) {
+    const confirmedItems = extractConfirmedOrderItems(history, products);
+    if (confirmedItems) {
+      const order = placeOrderFromToolCall(business, customerId, {
+        items: confirmedItems,
+        fulfillmentType: "dine_in",
+        tableNumber: opts.tableNumberJustProvided,
+      }, opts.serviceLocationId);
+      if (!order.error) {
+        return { replyText: `[mock AI] Order placed for Table ${opts.tableNumberJustProvided}.`, order };
+      }
+    }
+    return {
+      replyText: `[mock AI] I have your table number as ${opts.tableNumberJustProvided}, but I can't safely identify a confirmed item and quantity in our chat. Please send only the missing item names and quantities; you don't need to confirm the order again.`,
+      order: null,
+    };
+  }
 
   // very small "order: <product name> x<qty>" convention so the simulator
   // can still demonstrate order creation without a real model.
@@ -537,4 +614,11 @@ async function getAssistantReply(business, customerId, history, userText, opts =
   return { ...result, mediaReplies };
 }
 
-module.exports = { getAssistantReply, getProductImageReplies, buildKnowledgeContext, runClaudeAssistant };
+module.exports = {
+  getAssistantReply,
+  getProductImageReplies,
+  buildKnowledgeContext,
+  runClaudeAssistant,
+  runMockAssistant,
+  extractConfirmedOrderItems,
+};

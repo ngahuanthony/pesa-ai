@@ -5,11 +5,16 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ShoppingBag, Smartphone, CheckCircle2, Pencil, Minus, Plus, Trash2, Printer } from "lucide-react";
+import { ShoppingBag, Smartphone, CheckCircle2, Pencil, Minus, Plus, Trash2, Printer, Volume2, VolumeX } from "lucide-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { isHospitalityBusiness } from "@/lib/business";
+import {
+  disableOrderAlertSound,
+  enableOrderAlertSound,
+  isOrderAlertSoundEnabled,
+} from "@/lib/order-alert-sound";
 
 const STATUS_STYLES: Record<string, string> = {
   new:       "bg-amber-100 text-amber-700",
@@ -239,6 +244,8 @@ export function OrdersTab() {
   const [editOrder, setEditOrder] = useState<any | null>(null);
   const [editItems, setEditItems] = useState<{ productId: string; productName: string; quantity: number }[]>([]);
   const [savingItems, setSavingItems] = useState(false);
+  const [orderFilter, setOrderFilter] = useState<"pending" | "served" | "all">("pending");
+  const [orderSoundEnabled, setOrderSoundEnabled] = useState(isOrderAlertSoundEnabled);
 
   const businessName = me?.business?.name || "Pesa SI shop";
   const [receiptWidth, setReceiptWidth] = useState<"58" | "80">(() => {
@@ -265,6 +272,39 @@ export function OrdersTab() {
       // Keep the current selection for this session if browser storage is disabled.
     }
   };
+
+  const toggleOrderSound = async () => {
+    if (orderSoundEnabled) {
+      disableOrderAlertSound();
+      setOrderSoundEnabled(false);
+      toast({ title: "Order sound alerts muted" });
+      return;
+    }
+    try {
+      await enableOrderAlertSound();
+      setOrderSoundEnabled(true);
+      toast({ title: "Order sound alerts enabled", description: "New hotel orders will beep while this dashboard session is open." });
+    } catch (error: any) {
+      toast({ title: error.message || "Could not enable sound alerts", variant: "destructive" });
+    }
+  };
+
+  const soundControl = (
+    <button
+      type="button"
+      onClick={() => void toggleOrderSound()}
+      data-testid="button-toggle-order-sound"
+      className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition-colors ${
+        orderSoundEnabled
+          ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+          : "border-border bg-white text-muted-foreground hover:bg-muted"
+      }`}
+      title="Browsers require a click before playing order alert sounds"
+    >
+      {orderSoundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+      {orderSoundEnabled ? "Beep alerts on" : "Enable beep alerts"}
+    </button>
+  );
 
   const openEdit = (order: any) => {
     setEditOrder(order);
@@ -378,14 +418,27 @@ export function OrdersTab() {
     return norm === "pending" || norm === "confirmed";
   };
 
-  const newCount = orders?.filter((o: any) =>
-    o.fulfillmentStatus?.toUpperCase() === "NEW" || o.status?.toLowerCase() === "pending"
-  ).length || 0;
+  const orderList = Array.isArray(orders) ? orders as any[] : [];
+  const statusOf = (order: any) => String(order.fulfillmentStatus || order.status || "").toUpperCase();
+  const pendingStatuses = new Set(["NEW", "ACCEPTED", "PREPARING", "READY", "PENDING", "CONFIRMED"]);
+  const servedStatuses = new Set(["SERVED", "COMPLETED", "FULFILLED"]);
+  const pendingCount = orderList.filter((order) => pendingStatuses.has(statusOf(order))).length;
+  const servedCount = orderList.filter((order) => servedStatuses.has(statusOf(order))).length;
+  const newCount = orderList.filter((order) =>
+    statusOf(order) === "NEW" || statusOf(order) === "PENDING"
+  ).length;
+  const filteredOrders = orderList.filter((order) => {
+    const status = statusOf(order);
+    if (orderFilter === "pending") return pendingStatuses.has(status);
+    if (orderFilter === "served") return servedStatuses.has(status);
+    return true;
+  });
 
   if (isLoading) return <div className="py-16 text-center text-muted-foreground text-sm">Loading orders…</div>;
 
   if (!orders?.length) return (
     <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-20 text-center px-4">
+      {soundControl}
       <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
         <ShoppingBag className="h-7 w-7 text-primary" />
       </div>
@@ -398,23 +451,46 @@ export function OrdersTab() {
 
   return (
     <>
-      <div className="mb-4 flex items-center justify-end gap-2">
-        <label htmlFor="receipt-paper-width" className="text-xs font-medium text-muted-foreground">Receipt printer width</label>
-        <Select value={receiptWidth} onValueChange={(value) => changeReceiptWidth(value as "58" | "80")}>
-          <SelectTrigger id="receipt-paper-width" className="h-9 w-28 bg-white text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="58">58 mm roll</SelectItem>
-            <SelectItem value="80">80 mm roll</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="inline-flex w-fit rounded-xl border border-border bg-white p-1" role="group" aria-label="Filter orders by service status">
+          {([
+            ["pending", `Pending (${pendingCount})`],
+            ["served", `Served (${servedCount})`],
+            ["all", `All (${orderList.length})`],
+          ] as const).map(([filter, label]) => (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => setOrderFilter(filter)}
+              aria-pressed={orderFilter === filter}
+              data-testid={`button-orders-filter-${filter}`}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                orderFilter === filter ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {soundControl}
+          <label htmlFor="receipt-paper-width" className="text-xs font-medium text-muted-foreground">Receipt printer width</label>
+          <Select value={receiptWidth} onValueChange={(value) => changeReceiptWidth(value as "58" | "80")}>
+            <SelectTrigger id="receipt-paper-width" className="h-9 w-28 bg-white text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="58">58 mm roll</SelectItem>
+              <SelectItem value="80">80 mm roll</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       {newCount > 0 && (
         <div className="mb-4 flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
           <div className="flex items-center gap-3">
             <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-            <p className="text-sm font-medium text-amber-800">You have {newCount} new order{newCount > 1 ? "s" : ""} waiting.</p>
+            <p className="text-sm font-medium text-amber-800">You have {newCount} new order{newCount > 1 ? "s" : ""} waiting. Orders update automatically every few seconds.</p>
           </div>
         </div>
       )}
@@ -428,10 +504,14 @@ export function OrdersTab() {
             ))}
           </div>
 
-          {(orders as any[]).map((o, i) => {
+          {filteredOrders.length === 0 ? (
+            <div className="px-4 py-12 text-center text-sm text-muted-foreground" data-testid={`text-empty-orders-${orderFilter}`}>
+              No {orderFilter === "all" ? "" : `${orderFilter} `}orders to show.
+            </div>
+          ) : filteredOrders.map((o, i) => {
             const meta: PaymentMeta | undefined = o.paymentMeta;
             return (
-              <div key={o.id} className={`grid grid-cols-[1.4fr_1.2fr_1.5fr_0.8fr_1fr_1.2fr] items-start px-4 py-4 ${i < orders.length - 1 ? "border-b border-border" : ""} hover:bg-muted/30 transition-colors`}>
+              <div key={o.id} data-testid={`row-order-${o.id}`} className={`grid grid-cols-[1.4fr_1.2fr_1.5fr_0.8fr_1fr_1.2fr] items-start px-4 py-4 ${i < filteredOrders.length - 1 ? "border-b border-border" : ""} hover:bg-muted/30 transition-colors`}>
                 <div>
                   <div className="break-all font-mono text-xs font-medium text-foreground">{formatOrderRef(o.id)}</div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
@@ -509,10 +589,14 @@ export function OrdersTab() {
 
         {/* ── Mobile card list (hidden on desktop) ── */}
         <div className="sm:hidden divide-y divide-border">
-          {(orders as any[]).map((o) => {
+          {filteredOrders.length === 0 ? (
+            <div className="px-4 py-12 text-center text-sm text-muted-foreground" data-testid={`text-empty-orders-mobile-${orderFilter}`}>
+              No {orderFilter === "all" ? "" : `${orderFilter} `}orders to show.
+            </div>
+          ) : filteredOrders.map((o) => {
             const meta: PaymentMeta | undefined = o.paymentMeta;
             return (
-              <div key={o.id} className="px-4 py-4 space-y-3">
+              <div key={o.id} data-testid={`card-order-${o.id}`} className="px-4 py-4 space-y-3">
                 {/* Header: order ref + date + status */}
                 <div className="flex items-center justify-between gap-2">
                   <div>

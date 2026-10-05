@@ -34,7 +34,21 @@ const HANDOVER_TRIGGERS = [
 function orderActions(replyText, order) {
   if (!order || order.error || !order.id) return { replyText, interactiveButtons: null };
   const total = Number(order.totalAmount || 0).toLocaleString("en-KE");
-  return { replyText: (replyText || "Order received!") + "\n\nTotal: KSh " + total + "\nChoose an option below:", interactiveButtons: [
+  const tableLabel = order.serviceLocationSnapshot?.kind === "TABLE"
+    ? String(order.serviceLocationSnapshot.label || "").trim()
+    : "";
+  const items = Array.isArray(order.items) ? order.items : [];
+  const orderMessage = tableLabel && items.length
+    ? [
+        `✅ *Order #${String(order.id).slice(0, 8).toUpperCase()} has been placed for ${tableLabel}.*`,
+        "",
+        ...items.map((item) => `• ${Number(item.quantity) || 1} × ${item.productName || "Menu item"}`),
+        "",
+        `*Total: KSh ${total}.*`,
+        "The hotel team will confirm payment details shortly. If you'd like anything else, just message us.",
+      ].join("\n")
+    : (replyText || "Order received!") + "\n\nTotal: KSh " + total;
+  return { replyText: orderMessage + "\n\nChoose a payment option or request a receipt below:", interactiveButtons: [
     { id: "mpesa_pay:" + order.id, title: "Lipa na M-Pesa" },
     { id: "deni_request:" + order.id, title: "Deni / Lipa Baadaye" },
     { id: "receipt:" + order.id, title: "Naomba Receipt" },
@@ -151,7 +165,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
   let resolvedLocationId = serviceLocationId;
   let locationChanged = false;
   let locationContext = null;
-  let numberOnlyTableReply = null;
+  let tableNumberJustProvided = null;
   if (!serviceLocationToken && !resolvedLocationId) {
     const { messages: previousMessages = [] } = db.getConversationHistory(business.id, customerPhone, 20);
     const previousAssistantText = [...previousMessages].reverse().find((message) => message.role === "assistant")?.content || "";
@@ -170,7 +184,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
       }
       resolvedLocationId = tableLocation.id;
       locationContext = tableLocation;
-      if (/^\d{1,3}$/.test(String(text || "").trim())) numberOnlyTableReply = tableNumber;
+      tableNumberJustProvided = tableNumber;
     }
   }
   if (serviceLocationToken) {
@@ -259,23 +273,18 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     };
   }
   if (isTableLocation) {
-    if (numberOnlyTableReply !== null) {
-      const replyText = `Thanks — you're at Table ${numberOnlyTableReply}. Tell me what you'd like from the menu, and I'll confirm your order.`;
-      db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", replyText); });
-      return {
-        replyText,
-        assistantReplyText: replyText,
-        order: null,
-        customer,
-        conversation,
-      };
-    }
     const { replyText: tableReply, mediaReplies, order, reservationRequest } = await getAssistantReply(
       business,
       customer.id,
       priorHistory,
       text,
-      { shopEntry: isTableQrEntry, serviceLocationId: resolvedLocationId, customerPhone, customerName }
+      {
+        shopEntry: isTableQrEntry,
+        serviceLocationId: resolvedLocationId,
+        tableNumberJustProvided,
+        customerPhone,
+        customerName,
+      }
     );
     const prepared = orderActions(tableReply, order);
     const configuredWelcome = String(business.welcomeMessage || "").trim();
