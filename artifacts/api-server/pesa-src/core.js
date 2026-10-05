@@ -157,8 +157,8 @@ function buildHospitalityMenuReply(business) {
 
       const otherItems = categoryProducts.filter((product) => !groupedProducts.has(product));
       if (otherItems.length) {
-        const label = category === "food" ? "Other Food Items" : "Other Drinks";
-        groups.push(`*${label}*\n${formatItems(otherItems, category).join("\n")}`);
+        const items = formatItems(otherItems, category).join("\n");
+        groups.push(groups.length ? `*More*\n${items}` : items);
       }
 
       return heading + "\n\n" + groups.join("\n\n");
@@ -170,11 +170,14 @@ function buildHospitalityMenuReply(business) {
   }
 
   const availabilityNotice = String(business.name || "").trim().toLowerCase() === "skyview opal hotel"
-    ? "✅ All listed items are available.\n\n"
-    : "";
-  return "Welcome to our Food & Drinks menu!\n\n" + availabilityNotice + sections.join("\n\n") +
-    "\n\nFor table orders, send your table number (1–40) by itself first. Then tell me the food and quantity.\n\n" +
-    "To order, reply with the item name and quantity. I’ll confirm your order before placing it.";
+    ? "✅ All shown items are available."
+    : null;
+  return [
+    "📋 *MENU*",
+    availabilityNotice,
+    sections.join("\n\n"),
+    "*To order:* Send the item name and quantity. For dine-in, send your table number (1–40) by itself first.",
+  ].filter(Boolean).join("\n\n");
 }
 
 async function handleCustomerMessage({ business, customerPhone, customerName, text, channel, serviceLocationToken = null, serviceLocationId = null }) {

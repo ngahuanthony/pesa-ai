@@ -561,14 +561,17 @@ test("hotel menu and Order Food selection reply only with active catalog names a
     channel: "whatsapp",
     text: "Menu",
   });
-  assert.match(menu.replyText, /Welcome to Hotel Fast Menu\./);
+  assert.match(menu.replyText, /Welcome to Hotel Fast Menu\.\n\n📋 \*MENU\*/);
+  assert.equal((menu.replyText.match(/\bwelcome\b/gi) || []).length, 1);
   assert.match(menu.replyText, /🍽️ \*FOOD\*/);
   assert.match(menu.replyText, /\*Seafood\*/);
   assert.match(menu.replyText, /Grilled Fish Fillet — KES 850/);
   assert.match(menu.replyText, /🥤 \*DRINKS\*/);
-  assert.match(menu.replyText, /\*Other Drinks\*/);
+  assert.match(menu.replyText, /🥤 \*DRINKS\*\n\n• Fresh Juice — KES 250/);
   assert.match(menu.replyText, /Fresh Juice — KES 250/);
-  assert.match(menu.replyText, /reply with the item name and quantity/i);
+  assert.equal((menu.replyText.match(/to order/gi) || []).length, 1);
+  assert.match(menu.replyText, /For dine-in, send your table number \(1–40\) by itself first\./);
+  assert.doesNotMatch(menu.replyText, /Welcome to our Food & Drinks menu|Other Food Items|Other Drinks/);
   assert.doesNotMatch(menu.replyText, /Garden Suite|Swimming Pool Access|Archived Special|Lobster Thermidor|out of stock|reference only|mock AI/i);
 
   const orderFood = await handleCustomerMessage({
@@ -580,7 +583,7 @@ test("hotel menu and Order Food selection reply only with active catalog names a
   });
   assert.match(orderFood.replyText, /Grilled Fish Fillet — KES 850/);
   assert.match(orderFood.replyText, /Fresh Juice — KES 250/);
-  assert.match(orderFood.replyText, /reply with the item name and quantity/i);
+  assert.match(orderFood.replyText, /send the item name and quantity/i);
   assert.doesNotMatch(orderFood.replyText, /Garden Suite|Swimming Pool Access|Archived Special|Lobster Thermidor|out of stock|reference only|mock AI/i);
   assert.equal(fish.stockQty, 0);
 });
@@ -641,11 +644,11 @@ test("Skyview menu category migration assigns the approved Food and Drinks list 
     channel: "whatsapp",
     text: "Menu",
   });
-  assert.match(menu.replyText, /✅ All listed items are available\./);
+  assert.match(menu.replyText, /✅ All shown items are available\./);
   assert.match(menu.replyText, /\*Seafood\*/);
   assert.match(menu.replyText, /Grilled Fish Fillet — KES 850/);
   assert.match(menu.replyText, /\*Iced Coffee\*/);
   assert.match(menu.replyText, /Vanilla Iced Latte — KES 400/);
   assert.doesNotMatch(menu.replyText, /Garden Suite|Beef Stew|Low Fat Milk/);
-  assert.match(menu.replyText, /reply with the item name and quantity/i);
+  assert.match(menu.replyText, /\*To order:\* Send the item name and quantity\./i);
 });

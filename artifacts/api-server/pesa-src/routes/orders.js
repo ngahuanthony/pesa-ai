@@ -2,11 +2,29 @@ const db = require("../db");
 const auth = require("../auth");
 const mpesa = require("../mpesa");
 const whatsapp = require("../whatsapp");
+const {
+  isSkyviewBusiness,
+  sendSkyviewThankYouIfEligible,
+} = require("../customer-notifications");
 
 function customerStatusMessage(order) {
   const reference = db.orderReference(order);
-  const location = order.serviceLocationSnapshot ? `\n${order.serviceLocationSnapshot.kind}: ${order.serviceLocationSnapshot.label}` : "";
   const status = String(order.fulfillmentStatus || order.status || "").toUpperCase();
+  const business = db.getBusiness(order.businessId);
+  if (isSkyviewBusiness(business)) {
+    if (status === "ACCEPTED") {
+      const location = order.serviceLocationSnapshot?.label
+        ? ` for ${order.serviceLocationSnapshot.label}`
+        : "";
+      return `✅ Order ${reference}${location} has been accepted and is now in preparation. It will be served shortly.`;
+    }
+    if (status === "CANCELLED") {
+      return `❌ Order ${reference} was cancelled. Please contact the business if you need help.`;
+    }
+    return null;
+  }
+
+  const location = order.serviceLocationSnapshot ? `\n${order.serviceLocationSnapshot.kind}: ${order.serviceLocationSnapshot.label}` : "";
   const messages = {
     ACCEPTED: `✅ Order ${reference} has been accepted.${location}\nWe will begin preparing it shortly.`,
     PREPARING: `👨‍🍳 Order ${reference} is now being prepared.${location}`,
@@ -25,6 +43,15 @@ async function notifyCustomer(order, text) {
   const token = whatsapp.resolveAccessToken(business);
   if (!business.whatsappPhoneNumberId || !customer?.customerPhone || !token) return false;
   return whatsapp.sendMessage(business.whatsappPhoneNumberId, customer.customerPhone, text, token);
+}
+
+async function notifyAfterStatusUpdate(order) {
+  await notifyCustomer(order, customerStatusMessage(order)).catch((error) =>
+    console.warn("[orders] Customer status notification failed:", error.message)
+  );
+  await sendSkyviewThankYouIfEligible(order.id).catch((error) =>
+    console.warn("[orders] Customer payment notification failed:", error.message)
+  );
 }
 
 function list({ params, session }) {
@@ -61,18 +88,18 @@ async function updateStatus({ params, body, session }) {
     };
     if (next === "CANCELLED" && current !== "COMPLETED" && current !== "CANCELLED") {
       const updated = db.updateOrderStatus(params.orderId, next, null, { actor: session.accountId || "merchant" });
-      await notifyCustomer(updated, customerStatusMessage(updated)).catch((error) => console.warn("[orders] Customer cancellation notification failed:", error.message));
+      await notifyAfterStatusUpdate(updated);
       return updated;
     }
     if (!transitions[current] || !transitions[current].includes(next)) {
       throw db.httpError(400, `Invalid fulfillment transition from ${current} to ${next}`);
     }
     const updated = db.updateOrderStatus(params.orderId, next, null, { actor: session.accountId || "merchant" });
-    await notifyCustomer(updated, customerStatusMessage(updated)).catch((error) => console.warn("[orders] Customer status notification failed:", error.message));
+    await notifyAfterStatusUpdate(updated);
     return updated;
   }
   const updated = db.updateOrderStatus(params.orderId, body.status, null, { actor: session.accountId || "merchant" });
-  await notifyCustomer(updated, customerStatusMessage(updated)).catch((error) => console.warn("[orders] Customer status notification failed:", error.message));
+  await notifyAfterStatusUpdate(updated);
   return updated;
 }
 
@@ -98,7 +125,7 @@ async function payWithMpesa({ params, body, session }) {
 // Manual "I received this payment" for bank transfers or undetected paybill
 // payments. Vendors use this from the Orders tab when they confirm money
 // arrived in their bank / M-Pesa statement but the system didn't auto-detect it.
-function markPaid({ params, body, session }) {
+async function markPaid({ params, body, session }) {
   auth.requireOwnBusiness(session, params.businessId);
   const order = db.getOrder(params.orderId);
   if (!order || order.businessId !== params.businessId) throw db.httpError(404, "Order not found");
@@ -119,11 +146,16 @@ function markPaid({ params, body, session }) {
   }, { actor: session.accountId || "merchant" });
   db.recordSaleForOrder(updated, { paymentMethod, mpesaTxnId: paymentRef || null });
   const business = db.getBusiness(updated.businessId);
-  const isSkyviewOpal = String(business.name || "").trim().replace(/\s+/g, " ").toLowerCase() === "skyview opal hotel";
-  const message = isSkyviewOpal
-    ? "✨ *Thank You for Visiting Skyview Opal!*\n\nThank you for choosing *Skyview Opal Hotel*. It was our pleasure having you with us, and we hope you enjoyed your experience.\n\nWe look forward to welcoming you back again soon! 💙\n\n*Skyview Opal — We can’t wait to see you again!*"
-    : `✅ Payment received for order ${db.orderReference(updated)}.\nAmount: KSh ${Number(updated.totalAmount).toLocaleString("en-KE")}${paymentRef ? `\nRef: ${paymentRef}` : ""}`;
-  notifyCustomer(updated, message).catch((error) => console.warn("[orders] Customer payment notification failed:", error.message));
+  if (isSkyviewBusiness(business)) {
+    await sendSkyviewThankYouIfEligible(updated.id).catch((error) =>
+      console.warn("[orders] Customer payment notification failed:", error.message)
+    );
+  } else {
+    const message = `✅ Payment received for order ${db.orderReference(updated)}.\nAmount: KSh ${Number(updated.totalAmount).toLocaleString("en-KE")}${paymentRef ? `\nRef: ${paymentRef}` : ""}`;
+    await notifyCustomer(updated, message).catch((error) =>
+      console.warn("[orders] Customer payment notification failed:", error.message)
+    );
+  }
   return updated;
 }
 

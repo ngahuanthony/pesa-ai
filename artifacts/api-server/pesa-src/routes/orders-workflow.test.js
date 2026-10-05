@@ -121,15 +121,15 @@ test("orders cannot close until served and paid", () => {
   assert.ok(paymentAudit.at);
 });
 
-test("manual payment route validates method and records staff actor and time", () => {
+test("manual payment route validates method and records staff actor and time", async () => {
   const { business, order } = setupOrder();
   const params = { businessId: business.id, orderId: order.id };
   const session = { businessId: business.id, accountId: "staff-account-2" };
-  assert.throws(
+  await assert.rejects(
     () => orderRoutes.markPaid({ params, body: { paymentMethod: "mpesa-stk" }, session }),
     /paymentMethod must be cash, card, or mpesa-manual/,
   );
-  const updated = orderRoutes.markPaid({
+  const updated = await orderRoutes.markPaid({
     params,
     body: { paymentMethod: "mpesa-manual", paymentRef: "MANUAL-REF" },
     session,
@@ -158,12 +158,22 @@ test("manual payment sends Skyview's thank-you only for Skyview Opal Hotel", asy
       business.name = "Skyview Opal Hotel";
       business.whatsappPhoneNumberId = "mock-phone-number-id";
     });
+    for (const status of ["ACCEPTED", "PREPARING", "READY", "SERVED"]) {
+      await orderRoutes.updateStatus({
+        params: { businessId: skyview.business.id, orderId: skyview.order.id },
+        body: { status },
+        session: { businessId: skyview.business.id, accountId: "staff-skyview" },
+      });
+    }
+    assert.equal(sentMessages.length, 1);
+    assert.match(sentMessages[0][2], /accepted and is now in preparation\. It will be served shortly/);
     await orderRoutes.markPaid({
       params: { businessId: skyview.business.id, orderId: skyview.order.id },
       body: { paymentMethod: "cash" },
       session: { businessId: skyview.business.id, accountId: "staff-skyview" },
     });
-    assert.equal(sentMessages[0][2], "✨ *Thank You for Visiting Skyview Opal!*\n\nThank you for choosing *Skyview Opal Hotel*. It was our pleasure having you with us, and we hope you enjoyed your experience.\n\nWe look forward to welcoming you back again soon! 💙\n\n*Skyview Opal — We can’t wait to see you again!*");
+    assert.equal(sentMessages.length, 2);
+    assert.equal(sentMessages[1][2], "✨ *Thank You for Visiting Skyview Opal!*\n\nThank you for choosing *Skyview Opal Hotel*. It was our pleasure having you with us, and we hope you enjoyed your experience.\n\nWe look forward to welcoming you back again soon! 💙\n\n*Skyview Opal — We can’t wait to see you again!*");
 
     const otherBusiness = setupOrder();
     db.mutate((state) => {
@@ -176,9 +186,48 @@ test("manual payment sends Skyview's thank-you only for Skyview Opal Hotel", asy
       body: { paymentMethod: "cash" },
       session: { businessId: otherBusiness.business.id, accountId: "staff-other" },
     });
+    assert.equal(sentMessages.length, 3);
+    assert.match(sentMessages[2][2], /^✅ Payment received for order/);
+    assert.doesNotMatch(sentMessages[2][2], /Skyview Opal/);
+  } finally {
+    whatsapp.resolveAccessToken = originalResolveAccessToken;
+    whatsapp.sendMessage = originalSendMessage;
+  }
+});
+
+test("Skyview sends appreciation only after an order is both served and paid, once", async () => {
+  const originalResolveAccessToken = whatsapp.resolveAccessToken;
+  const originalSendMessage = whatsapp.sendMessage;
+  const sentMessages = [];
+  whatsapp.resolveAccessToken = () => "mock-token";
+  whatsapp.sendMessage = async (...args) => {
+    sentMessages.push(args);
+    return { messages: [{ id: "mock-message" }] };
+  };
+
+  try {
+    const { business, order } = setupOrder();
+    db.mutate((state) => {
+      const savedBusiness = state.businesses.find((entry) => entry.id === business.id);
+      savedBusiness.name = "Skyview Opal Hotel";
+      savedBusiness.whatsappPhoneNumberId = "mock-phone-number-id";
+    });
+    const params = { businessId: business.id, orderId: order.id };
+    const session = { businessId: business.id, accountId: "staff-sequence" };
+
+    await orderRoutes.markPaid({ params, body: { paymentMethod: "cash" }, session });
+    assert.equal(sentMessages.length, 0, "payment alone must not send the visit appreciation message");
+
+    for (const status of ["ACCEPTED", "PREPARING", "READY", "SERVED"]) {
+      await orderRoutes.updateStatus({ params, body: { status }, session });
+    }
     assert.equal(sentMessages.length, 2);
-    assert.match(sentMessages[1][2], /^✅ Payment received for order/);
-    assert.doesNotMatch(sentMessages[1][2], /Skyview Opal/);
+    assert.match(sentMessages[0][2], /accepted and is now in preparation/);
+    assert.match(sentMessages[1][2], /^✨ \*Thank You for Visiting Skyview Opal!\*/);
+    assert.ok(db.getOrder(order.id).customerThankYouSentAt);
+
+    await orderRoutes.updateStatus({ params, body: { status: "COMPLETED" }, session });
+    assert.equal(sentMessages.length, 2, "closing a paid order must not send a duplicate appreciation message");
   } finally {
     whatsapp.resolveAccessToken = originalResolveAccessToken;
     whatsapp.sendMessage = originalSendMessage;

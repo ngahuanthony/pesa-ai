@@ -173,6 +173,8 @@ function systemPrompt(business, products, userText = "", history = []) {
 - Do not infer that a listed food item or service is unavailable from a zero stock count or missing schedule, rate, or capacity information.
 - Do not invent prices, operating hours, room types, dates, capacity, or confirmed booking slots. Ask for the customer's details and say the business will confirm specifics when they are not in the approved business facts.
 - For Order Food or any food/menu request, show only active catalog items categorized FOOD or DRINKS. Keep them in separate FOOD and DRINKS sections. Never include OTHER HOTEL SERVICE or UNCATEGORIZED items in that menu; rooms, accommodation, swimming, conferences, and events are not food or drinks.
+- Format a menu for WhatsApp: use a short title, separate FOOD and DRINKS headings, brief category headings, and one bullet per item with its exact catalog name and price. Keep each item in the list once; do not add descriptions, promotional filler, repeated greetings, repeated headings, or repeated ordering instructions.
+- End a menu with one concise next step. For dine-in, ask for the table number before the item and quantity; do not repeat an instruction the customer has already followed.
 - Ask the guest for item names and quantities, summarize the selection, and request confirmation once before placing the order. After the guest confirms that selection, do not ask them to confirm it again; collect any missing table or fulfillment detail and place the order when those details are supplied.
 - Only offer food and drink items in the current catalog; do not invent menu items.`
     : "- If something is out of stock or doesn't exist, say so plainly and suggest alternatives from the catalog.";
@@ -337,8 +339,8 @@ async function runClaudeAssistant(business, customerId, history, userText, opts 
   if (opts.shopEntry) {
     system +=
       "\n\nSPECIAL INSTRUCTION (first message via shop or table QR): The core has already sent the business welcome and, when available, the table-location reminder. Do not repeat the greeting. " +
-      "Immediately call search_products with an empty query, then show a concise, scannable menu preview with product names and prices. " +
-      "Tell the customer they can choose Order Food for the menu or tap another hotel-service option. Do this in one reply."
+      "Immediately call search_products with an empty query, then show a brief WhatsApp-friendly food-and-drinks preview with exact item names and prices, grouped by FOOD and DRINKS. " +
+      "Do not repeat items or add descriptions. Finish with one short instruction to choose Order Food for the full menu."
   }
 
   const messages = [

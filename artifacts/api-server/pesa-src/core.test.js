@@ -32,6 +32,43 @@ test("Skyview gets hotel-specific default welcome and scan copy", () => {
   assert.equal(db.generateShopEntryPrompt("Other Shop"), "Hi, I'd like to shop");
 });
 
+test("hospitality menu replies use one title and one clear ordering instruction", async () => {
+  const hotel = db.mutate((state) => db.createBusiness(state, {
+    name: "Skyview Opal Hotel",
+    category: "Hospitality",
+    merchantType: "hotel",
+    phone: "254700000901",
+    personalPhone: "254700000902",
+    pesaAiNumber: "254700000903",
+  }));
+  db.createProduct(hotel.id, { name: "Pilau Special", category: "food", price: 450, stockQty: 0 });
+  db.createProduct(hotel.id, { name: "Passion Juice", category: "drinks", price: 180, stockQty: 0 });
+  db.createProduct(hotel.id, { name: "Deluxe Room", category: "other", price: 8000, stockQty: 0 });
+  const customerPhone = "254700000904";
+  db.mutate((state) => {
+    const customer = db.findOrCreateCustomer(state, hotel.id, customerPhone, "Guest");
+    const conversation = db.findOrCreateConversation(state, hotel.id, customer.id, "whatsapp", null);
+    db.addMessage(state, conversation.id, "customer", "Hello");
+    db.addMessage(state, conversation.id, "assistant", "Welcome to Skyview Opal Hotel.");
+  });
+
+  const { replyText } = await handleCustomerMessage({
+    business: hotel,
+    customerPhone,
+    customerName: "Guest",
+    channel: "whatsapp",
+    text: "menu",
+  });
+
+  assert.equal((replyText.match(/📋 \*MENU\*/g) || []).length, 1);
+  assert.equal((replyText.match(/Pilau Special/g) || []).length, 1);
+  assert.equal((replyText.match(/Passion Juice/g) || []).length, 1);
+  assert.match(replyText, /🍽️ \*FOOD\*[\s\S]*🥤 \*DRINKS\*/);
+  assert.match(replyText, /✅ All shown items are available\./);
+  assert.equal((replyText.match(/\*To order:\*/g) || []).length, 1);
+  assert.doesNotMatch(replyText, /Welcome to our Food & Drinks menu|For table orders|Deluxe Room/);
+});
+
 test("a confirmed Skyview order is placed when the guest supplies their table number", async () => {
   const hotel = db.mutate((state) => db.createBusiness(state, {
     name: "Skyview Opal Hotel",
@@ -113,6 +150,7 @@ test("a confirmed Skyview order is placed when the guest supplies their table nu
     assert.ok(requests[0].messages.some((message) => message.content === "Done"));
     assert.equal(requests[0].messages.at(-1).content, "6");
     assert.match(requests[0].system, /do not ask them to repeat the order or confirm it a second time/i);
+    assert.match(requests[0].system, /Format a menu for WhatsApp/);
   } finally {
     global.fetch = originalFetch;
   }

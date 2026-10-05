@@ -2647,6 +2647,15 @@ function updateOrderStatus(orderId, status, paymentMeta = null, { actor = "syste
   });
 }
 
+function markOrderThankYouSent(orderId) {
+  return mutate((state) => {
+    const order = state.orders.find((candidate) => candidate.id === orderId);
+    if (!order) throw httpError(404, "Order not found");
+    if (!order.customerThankYouSentAt) order.customerThankYouSentAt = now();
+    return order;
+  });
+}
+
 function updateOrderItems(orderId, requestedItems, { actor = "merchant" } = {}) {
   if (!Array.isArray(requestedItems) || requestedItems.length === 0) {
     throw httpError(400, "An order must contain at least one item");
@@ -3638,6 +3647,7 @@ module.exports = {
   updateRoomReservation,
   getOrder,
   updateOrderStatus,
+  markOrderThankYouSent,
   updateOrderItems,
   getOpenOrdersForCustomer,
   addItemsToOpenOrder,
