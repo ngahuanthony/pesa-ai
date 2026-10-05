@@ -8,7 +8,7 @@ const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "pesa-si-core-"));
 process.env.DATA_DIR = testDataDir;
 process.env.ANTHROPIC_API_KEY = "unit-test-only";
 
-const { HOTEL_SHOP_LINK_TRIGGER, SHOP_LINK_TRIGGER, isShopLinkTrigger, handleCustomerMessage } = require("./core");
+const { HOTEL_SHOP_LINK_TRIGGER, SHOP_LINK_TRIGGER, isShopLinkTrigger, handleCustomerMessage, orderActions } = require("./core");
 const { runMockAssistant } = require("./ai");
 const db = require("./db");
 
@@ -99,6 +99,8 @@ test("a confirmed Skyview order is placed when the guest supplies their table nu
     assert.match(result.replyText, new RegExp(`Order #${result.order.id.slice(0, 8).toUpperCase()} has been placed for Table 6`));
     assert.match(result.replyText, /1 × Tea/);
     assert.match(result.replyText, /Total: KSh 150/);
+    assert.match(result.replyText, /hotel team will confirm payment details shortly/i);
+    assert.doesNotMatch(result.replyText, /Payment details:/);
     assert.doesNotMatch(result.replyText, /Please confirm your order|tell me what you'd like from the menu/i);
     assert.equal(requests.length, 2);
     assert.ok(requests[0].messages.some((message) => message.content === "Done"));
@@ -107,6 +109,32 @@ test("a confirmed Skyview order is placed when the guest supplies their table nu
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test("order confirmations include the saved Paybill account or Till instructions", () => {
+  const order = {
+    id: "order-payment-test",
+    totalAmount: 475,
+    serviceLocationSnapshot: { kind: "TABLE", label: "Table 6" },
+    items: [{ quantity: 1, productName: "Lunch" }],
+  };
+  const paybill = orderActions("Order received!", order, {
+    mpesa: {
+      method: "paybill_account",
+      shortcode: "123456",
+      accountNumber: "SKYVIEW-6",
+      accountMode: "static",
+    },
+  }, "254700000104");
+  assert.match(paybill.replyText, /Business number 123456/);
+  assert.match(paybill.replyText, /Account number: SKYVIEW-6/);
+  assert.doesNotMatch(paybill.replyText, /confirm payment details shortly/i);
+
+  const till = orderActions("Order received!", order, {
+    mpesa: { method: "till", shortcode: "654321" },
+  }, "254700000104");
+  assert.match(till.replyText, /Buy Goods and Services → Till 654321/);
+  assert.doesNotMatch(till.replyText, /Account number:/);
 });
 
 test("the no-key assistant fallback places only a previously confirmed table order", () => {

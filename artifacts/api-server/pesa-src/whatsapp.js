@@ -14,6 +14,7 @@ const fieldCrypto = require("./crypto");
 const { handleCustomerMessage } = require("./core");
 const { buildWhatsAppListPayload, getConciergePrompt } = require("./concierge");
 const mpesa = require("./mpesa");
+const { buildPublicPaymentInstructions } = require("./payment-instructions");
 
 const GRAPH_API_VERSION = "v21.0";
 const WHATSAPP_TEXT_LIMIT = 4000;
@@ -144,35 +145,6 @@ function buildReservationRequestNotice(reservation) {
     `Check availability and rate, then reply: CONFIRM ${reservation.reference} <rate in KSh>`,
     `Or reply: DECLINE ${reservation.reference}`,
   ].filter((line) => line !== null).join("\n");
-}
-
-function buildPublicPaymentInstructions(business, customerPhone) {
-  const lines = [];
-  const config = business?.mpesa;
-  if (config?.shortcode) {
-    if (config.method === "till") {
-      lines.push(`M-Pesa: Lipa na M-Pesa → Buy Goods and Services → Till ${config.shortcode}`);
-    } else if (config.method === "paybill" || config.method === "paybill_account") {
-      lines.push(`M-Pesa: Lipa na M-Pesa → Paybill → Business number ${config.shortcode}`);
-      if (config.method === "paybill_account") {
-        const account = config.accountMode === "dynamic_customer_phone"
-          ? normalizeIncomingPhone(customerPhone)
-          : String(config.accountNumber || "").trim();
-        if (account) lines.push(`Account number: ${account}`);
-      }
-    }
-  } else if (business?.paymentMethod === "mpesa" && business.paybillNumber) {
-    if (business.mpesaType === "till") {
-      lines.push(`M-Pesa: Lipa na M-Pesa → Buy Goods and Services → Till ${business.paybillNumber}`);
-    } else {
-      lines.push(`M-Pesa: Lipa na M-Pesa → Paybill → Business number ${business.paybillNumber}`);
-      if (business.paybillAccountNumber) lines.push(`Account number: ${business.paybillAccountNumber}`);
-    }
-  }
-  if (business?.paymentMethod === "bank" && business.bankName && business.bankAccountNumber) {
-    lines.push(`Bank transfer: ${business.bankName}, account ${business.bankAccountNumber}`);
-  }
-  return lines.length ? `\n\nPayment details:\n${lines.join("\n")}` : "";
 }
 
 async function notifyReservationDecision(business, reservation) {

@@ -6,6 +6,7 @@ const db = require("./db");
 const { getAssistantReply, getProductImageReplies } = require("./ai");
 const { buildConciergeList } = require("./concierge");
 const { HOTEL_MENU_GROUPS, getHotelMenuClassification } = require("./hospitality-menu");
+const { buildPublicPaymentInstructions } = require("./payment-instructions");
 
 // The pre-filled text baked into the shop QR / wa.me link.
 // When a customer taps the link, WhatsApp sends exactly this message.
@@ -31,9 +32,10 @@ const HANDOVER_TRIGGERS = [
 ];
 
 
-function orderActions(replyText, order) {
+function orderActions(replyText, order, business, customerPhone) {
   if (!order || order.error || !order.id) return { replyText, interactiveButtons: null };
   const total = Number(order.totalAmount || 0).toLocaleString("en-KE");
+  const paymentInstructions = buildPublicPaymentInstructions(business, customerPhone);
   const tableLabel = order.serviceLocationSnapshot?.kind === "TABLE"
     ? String(order.serviceLocationSnapshot.label || "").trim()
     : "";
@@ -45,9 +47,10 @@ function orderActions(replyText, order) {
         ...items.map((item) => `• ${Number(item.quantity) || 1} × ${item.productName || "Menu item"}`),
         "",
         `*Total: KSh ${total}.*`,
-        "The hotel team will confirm payment details shortly. If you'd like anything else, just message us.",
+        paymentInstructions.trim() || "The hotel team will confirm payment details shortly.",
+        "If you'd like anything else, just message us.",
       ].join("\n")
-    : (replyText || "Order received!") + "\n\nTotal: KSh " + total;
+    : (replyText || "Order received!") + "\n\nTotal: KSh " + total + paymentInstructions;
   return { replyText: orderMessage + "\n\nChoose a payment option or request a receipt below:", interactiveButtons: [
     { id: "mpesa_pay:" + order.id, title: "Lipa na M-Pesa" },
     { id: "deni_request:" + order.id, title: "Deni / Lipa Baadaye" },
@@ -286,7 +289,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
         customerName,
       }
     );
-    const prepared = orderActions(tableReply, order);
+    const prepared = orderActions(tableReply, order, business, customerPhone);
     const configuredWelcome = String(business.welcomeMessage || "").trim();
     const welcome = configuredWelcome || ("Welcome to " + business.name + "! I can help with dining, rooms, the pool, conferences, and events.");
     const locationGreeting = locationContext
@@ -358,13 +361,14 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
          business, customer.id, [], text,
          { shopEntry: true, serviceLocationId: resolvedLocationId, customerPhone, customerName }
        );
-      const prepared = orderActions(catalogReply, order);
+      const prepared = orderActions(catalogReply, order, business, customerPhone);
       db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", prepared.replyText); });
 
       // Return both so the WhatsApp sender can send them in order.
       return {
         replyText:    welcomeReply,   // sent first (null = skip)
-        extraReplies: [catalogReply], // sent immediately after
+        extraReplies: [prepared.replyText], // sent immediately after
+        interactiveButtons: prepared.interactiveButtons,
         order,
         reservationRequest,
         customer,
@@ -386,13 +390,14 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     business, customer.id, priorHistory, text,
     { serviceLocationId: resolvedLocationId, customerPhone, customerName }
   );
-  const prepared = orderActions(replyText, order);
+  const prepared = orderActions(replyText, order, business, customerPhone);
   db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", prepared.replyText); });
   return { replyText: prepared.replyText, mediaReplies, interactiveButtons: prepared.interactiveButtons, order, reservationRequest, customer, conversation };
 }
 
 module.exports = {
   handleCustomerMessage,
+  orderActions,
   extractTableNumber,
   SHOP_LINK_TRIGGER,
   HOTEL_SHOP_LINK_TRIGGER,
