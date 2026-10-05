@@ -143,13 +143,15 @@ function buildHospitalityMenuReply(business) {
     ? "✅ All listed items are available.\n\n"
     : "";
   return "Welcome to our Food & Drinks menu!\n\n" + availabilityNotice + sections.join("\n\n") +
-    "\n\nTo order, reply with the item name and quantity. I’ll confirm your order before placing it.";
+    "\n\nFor table orders, send your table number (1–40) by itself first. Then tell me the food and quantity.\n\n" +
+    "To order, reply with the item name and quantity. I’ll confirm your order before placing it.";
 }
 
 async function handleCustomerMessage({ business, customerPhone, customerName, text, channel, serviceLocationToken = null, serviceLocationId = null }) {
   let resolvedLocationId = serviceLocationId;
   let locationChanged = false;
   let locationContext = null;
+  let numberOnlyTableReply = null;
   if (!serviceLocationToken && !resolvedLocationId) {
     const { messages: previousMessages = [] } = db.getConversationHistory(business.id, customerPhone, 20);
     const previousAssistantText = [...previousMessages].reverse().find((message) => message.role === "assistant")?.content || "";
@@ -168,6 +170,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
       }
       resolvedLocationId = tableLocation.id;
       locationContext = tableLocation;
+      if (/^\d{1,3}$/.test(String(text || "").trim())) numberOnlyTableReply = tableNumber;
     }
   }
   if (serviceLocationToken) {
@@ -256,6 +259,17 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     };
   }
   if (isTableLocation) {
+    if (numberOnlyTableReply !== null) {
+      const replyText = `Thanks — you're at Table ${numberOnlyTableReply}. Tell me what you'd like from the menu, and I'll confirm your order.`;
+      db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", replyText); });
+      return {
+        replyText,
+        assistantReplyText: replyText,
+        order: null,
+        customer,
+        conversation,
+      };
+    }
     const { replyText: tableReply, mediaReplies, order, reservationRequest } = await getAssistantReply(
       business,
       customer.id,

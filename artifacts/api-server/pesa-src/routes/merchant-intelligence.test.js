@@ -62,6 +62,89 @@ test("Table 1–40 provisioning is tenant-scoped and idempotent", () => {
   assert.equal(db.listServiceLocations(a.id).length, 40);
 });
 
+test("Skyview production migration preserves the aggregate location and enables number-only table orders", async () => {
+  const hotel = business("Skyview Opal Hotel");
+  const aggregate = db.createServiceLocation(hotel.id, { kind: "OTHER", label: "Table 1–40" });
+  const preexistingTable = db.createServiceLocation(hotel.id, { kind: "TABLE", label: "Table 7", active: false });
+  const otherHotel = business("Unrelated Hotel");
+  db.createProduct(hotel.id, { name: "Tea", category: "food", price: 150, stockQty: 5 });
+
+  const options = {
+    businessName: "Skyview Opal Hotel",
+    aggregateLabel: "Table 1–40",
+    migrationId: "test-skyview-opal-hotel-table-locations",
+  };
+  const noAggregate = db.runOneTimeSkyviewTableLocationsMigration({
+    ...options,
+    businessName: "Unrelated Hotel",
+    migrationId: "test-unrelated-hotel-table-locations",
+  });
+  assert.equal(noAggregate.applied, false);
+  assert.equal(noAggregate.reason, "aggregate-location-match-count");
+  assert.equal(db.listServiceLocations(otherHotel.id).length, 0);
+
+  const migration = db.runOneTimeSkyviewTableLocationsMigration(options);
+  assert.equal(migration.applied, true);
+  assert.equal(migration.created, 39);
+  assert.equal(migration.existing, 1);
+  assert.equal(migration.activated, 1);
+  assert.equal(migration.aggregateLocationId, aggregate.id);
+
+  const locations = db.listServiceLocations(hotel.id);
+  const tables = locations.filter((location) => location.kind === "TABLE");
+  assert.equal(tables.length, 40);
+  assert.ok(tables.every((location) => location.active));
+  assert.ok(tables.filter((location) => location.id !== preexistingTable.id).every((location) => !location.publicToken));
+  assert.deepEqual(
+    [aggregate.id, aggregate.kind, aggregate.label, aggregate.active],
+    [locations.find((location) => location.id === aggregate.id).id, "OTHER", "Table 1–40", true],
+  );
+  assert.equal(
+    locations.find((location) => location.id === preexistingTable.id).publicToken,
+    preexistingTable.publicToken,
+  );
+  assert.equal(db.listServiceLocations(otherHotel.id).length, 0);
+
+  const repeated = db.runOneTimeSkyviewTableLocationsMigration(options);
+  assert.equal(repeated.applied, false);
+  assert.equal(repeated.reason, "already-applied");
+  assert.equal(db.listServiceLocations(hotel.id).length, 41);
+
+  const phone = "254799000040";
+  const firstScan = await handleCustomerMessage({
+    business: hotel,
+    customerPhone: phone,
+    channel: "whatsapp",
+    text: db.generateShopEntryPrompt("Skyview Opal Hotel"),
+  });
+  assert.equal(firstScan.interactiveList.rows.length, 6);
+  const menu = await handleCustomerMessage({
+    business: hotel,
+    customerPhone: phone,
+    channel: "whatsapp",
+    text: getConciergePrompt("concierge:food"),
+  });
+  assert.match(menu.replyText, /send your table number \(1–40\) by itself first/i);
+  const tableReply = await handleCustomerMessage({
+    business: hotel,
+    customerPhone: phone,
+    channel: "whatsapp",
+    text: "12",
+  });
+  const table12 = tables.find((location) => location.label === "Table 12");
+  assert.equal(tableReply.conversation.serviceLocationId, table12.id);
+  assert.match(tableReply.replyText, /you're at Table 12/i);
+
+  const order = await handleCustomerMessage({
+    business: hotel,
+    customerPhone: phone,
+    channel: "whatsapp",
+    text: "order: Tea x1",
+  });
+  assert.equal(order.order.serviceLocationId, table12.id);
+  assert.equal(order.order.serviceLocationSnapshot.label, "Table 12");
+});
+
 test("table-number parsing accepts explicit and prompted numeric replies only", () => {
   assert.equal(extractTableNumber("I'm at Table #12", ""), 12);
   assert.equal(extractTableNumber("12", "What table number are you at?"), 12);

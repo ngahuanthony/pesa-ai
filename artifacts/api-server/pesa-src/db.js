@@ -3039,6 +3039,102 @@ function runOneTimeWelcomeMessageUpdate({ businessName, welcomeMessage, migratio
   });
 }
 
+function runOneTimeSkyviewTableLocationsMigration({ businessName, aggregateLabel, migrationId }) {
+  return mutate((state) => {
+    state.migrations = state.migrations && typeof state.migrations === "object"
+      ? state.migrations
+      : {};
+    if (state.migrations[migrationId]) {
+      return { applied: false, reason: "already-applied", ...state.migrations[migrationId] };
+    }
+
+    const normalizedBusinessName = String(businessName || "").trim().toLowerCase();
+    const normalizedAggregateLabel = String(aggregateLabel || "").trim().toLowerCase();
+    if (!normalizedBusinessName || !normalizedAggregateLabel || !migrationId) {
+      return { applied: false, reason: "invalid-migration-input" };
+    }
+
+    const businesses = (state.businesses || []).filter(
+      (business) => String(business.name || "").trim().toLowerCase() === normalizedBusinessName
+    );
+    if (businesses.length !== 1) {
+      return { applied: false, reason: "business-name-match-count", matchCount: businesses.length };
+    }
+
+    const business = businesses[0];
+    if (!Array.isArray(state.serviceLocations)) state.serviceLocations = [];
+    const aggregateLocations = state.serviceLocations.filter((location) =>
+      location.businessId === business.id &&
+      String(location.label || "").trim().toLowerCase() === normalizedAggregateLabel
+    );
+    if (aggregateLocations.length !== 1) {
+      return {
+        applied: false,
+        reason: "aggregate-location-match-count",
+        matchCount: aggregateLocations.length,
+        businessId: business.id,
+      };
+    }
+    const aggregateLocation = aggregateLocations[0];
+    if (String(aggregateLocation.kind || "").toUpperCase() !== "OTHER") {
+      return { applied: false, reason: "aggregate-location-type-mismatch", businessId: business.id };
+    }
+
+    const labels = Array.from({ length: 40 }, (_, index) => `Table ${index + 1}`);
+    const existingByLabel = new Map();
+    for (const label of labels) {
+      const matches = state.serviceLocations.filter((location) =>
+        location.businessId === business.id &&
+        String(location.label || "").trim().toLowerCase() === label.toLowerCase()
+      );
+      if (matches.length > 1) {
+        return { applied: false, reason: "duplicate-table-location", label, businessId: business.id };
+      }
+      if (matches.length === 1 && String(matches[0].kind || "").toUpperCase() !== "TABLE") {
+        return { applied: false, reason: "table-location-type-conflict", label, businessId: business.id };
+      }
+      if (matches.length === 1) existingByLabel.set(label, matches[0]);
+    }
+
+    let created = 0;
+    let activated = 0;
+    for (const label of labels) {
+      const existing = existingByLabel.get(label);
+      if (existing) {
+        if (existing.active !== true) {
+          existing.active = true;
+          existing.updatedAt = now();
+          activated += 1;
+        }
+        continue;
+      }
+      state.serviceLocations.push({
+        id: id(),
+        businessId: business.id,
+        kind: "TABLE",
+        label,
+        active: true,
+        publicToken: null,
+        createdAt: now(),
+        updatedAt: now(),
+      });
+      created += 1;
+    }
+
+    const migration = {
+      appliedAt: now(),
+      businessId: business.id,
+      aggregateLocationId: aggregateLocation.id,
+      fields: ["serviceLocations"],
+      created,
+      existing: labels.length - created,
+      activated,
+    };
+    state.migrations[migrationId] = migration;
+    return { applied: true, ...migration };
+  });
+}
+
 function runOneTimeHotelMenuCategoryMigration({ businessName, migrationId }) {
   const normalizedBusinessName = String(businessName || "").trim().toLowerCase();
   if (!normalizedBusinessName || !migrationId) {
@@ -3184,6 +3280,7 @@ module.exports = {
   runOneTimeWhatsAppRoutingCorrection,
   runOneTimeExactWhatsAppPhoneNumberIdCorrection,
   runOneTimeWelcomeMessageUpdate,
+  runOneTimeSkyviewTableLocationsMigration,
   runOneTimeHotelMenuCategoryMigration,
   runOneTimeWhatsAppNumberCorrection,
   restoreDeletedBusinessForSingleOrphanedAccount,

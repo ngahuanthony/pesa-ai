@@ -606,6 +606,12 @@ persistence.init(db.DATA_FILE).then(() => {
       migrationId: "skyview-opal-hotel-welcome-message-v1",
     });
     console.log("[migration] Skyview Opal Hotel welcome message:", skyviewWelcome);
+    const skyviewTableLocations = db.runOneTimeSkyviewTableLocationsMigration({
+      businessName: "Skyview Opal Hotel",
+      aggregateLabel: "Table 1–40",
+      migrationId: "skyview-opal-hotel-table-locations-1-40-v1",
+    });
+    console.log("[migration] Skyview Opal Hotel Table 1–40 locations:", skyviewTableLocations);
     const skyviewMenuCategories = db.runOneTimeHotelMenuCategoryMigration({
       businessName: "Skyview Opal Hotel",
       migrationId: "skyview-opal-hotel-food-drinks-categories-v1",

@@ -158,6 +158,7 @@ export function BusinessIntelligenceTab() {
   const business = (me as any)?.business;
   const businessId = business?.id || "";
   const businessName = business?.name || BRAND_NAME;
+  const isSkyviewHotel = String(businessName).trim().toLowerCase() === "skyview opal hotel";
 
   const { toast } = useToast();
   
@@ -392,7 +393,11 @@ export function BusinessIntelligenceTab() {
 
         <TabsContent value="locations" className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Manage QR locations like tables or rooms for direct ordering.</p>
+            <p className="text-sm text-muted-foreground">
+              {isSkyviewHotel
+                ? "Skyview uses one WhatsApp QR for all hotel services. Guests can send their table number in chat to label food orders."
+                : "Manage QR locations like tables or rooms for direct ordering."}
+            </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <button
                 onClick={handleCreateDefaultTables}
@@ -417,7 +422,11 @@ export function BusinessIntelligenceTab() {
               <div className="p-12 flex flex-col items-center justify-center text-center">
                 <Map className="h-10 w-10 text-muted-foreground/30 mb-3" />
                 <h3 className="font-semibold text-foreground">No service locations</h3>
-                <p className="text-sm text-muted-foreground mt-1 max-w-sm">Add tables, rooms, or service points to generate order QR codes.</p>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                  {isSkyviewHotel
+                    ? "Guests use the single hotel WhatsApp QR, then tell the concierge their table number when placing a food order."
+                    : "Add tables, rooms, or service points to generate order QR codes."}
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -432,12 +441,14 @@ export function BusinessIntelligenceTab() {
                       {loc.publicToken && <p className="text-[10px] font-mono text-muted-foreground mt-1">Ref: {loc.publicToken.substring(0, 8)}</p>}
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
-                      <button 
-                        onClick={() => setQrLocation(loc)}
-                        className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted transition-colors"
-                      >
-                        View QR
-                      </button>
+                      {!isSkyviewHotel && (
+                        <button
+                          onClick={() => setQrLocation(loc)}
+                          className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted transition-colors"
+                        >
+                          View QR
+                        </button>
+                      )}
                       <button 
                         onClick={() => {
                           setEditingLocation(loc);
