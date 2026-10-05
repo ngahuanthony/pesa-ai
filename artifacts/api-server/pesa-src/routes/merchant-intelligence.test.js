@@ -64,31 +64,49 @@ test("Table 1–40 provisioning is tenant-scoped and idempotent", () => {
 
 test("Skyview production migration preserves the aggregate location and enables number-only table orders", async () => {
   const hotel = business("Skyview Opal Hotel");
-  const aggregate = db.createServiceLocation(hotel.id, { kind: "OTHER", label: "Table 1–40" });
+  const preservedLocation = db.createServiceLocation(hotel.id, { kind: "OTHER", label: "Lobby", active: false });
   const preexistingTable = db.createServiceLocation(hotel.id, { kind: "TABLE", label: "Table 7", active: false });
   const otherHotel = business("Unrelated Hotel");
   db.createProduct(hotel.id, { name: "Tea", category: "food", price: 150, stockQty: 5 });
 
+  const noAggregateMigration = db.runOneTimeSkyviewTableLocationsMigration({
+    businessName: "Skyview Opal Hotel",
+    aggregateLabel: "Table 1–40",
+    migrationId: "test-skyview-opal-hotel-table-locations-without-aggregate",
+  });
+  assert.equal(noAggregateMigration.applied, true);
+  assert.equal(noAggregateMigration.aggregateLocationId, null);
+  assert.equal(noAggregateMigration.aggregateMatchCount, 0);
+  assert.equal(noAggregateMigration.created, 39);
+  assert.equal(noAggregateMigration.existing, 1);
+  assert.equal(noAggregateMigration.activated, 1);
+  assert.deepEqual(
+    db.listServiceLocations(hotel.id).find((location) => location.id === preservedLocation.id),
+    preservedLocation,
+  );
+
+  const aggregate = db.createServiceLocation(hotel.id, { kind: "OTHER", label: "Table 1-40" });
   const options = {
     businessName: "Skyview Opal Hotel",
     aggregateLabel: "Table 1–40",
     migrationId: "test-skyview-opal-hotel-table-locations",
   };
-  const noAggregate = db.runOneTimeSkyviewTableLocationsMigration({
+  const unrelatedBusiness = db.runOneTimeSkyviewTableLocationsMigration({
     ...options,
     businessName: "Unrelated Hotel",
     migrationId: "test-unrelated-hotel-table-locations",
   });
-  assert.equal(noAggregate.applied, false);
-  assert.equal(noAggregate.reason, "aggregate-location-match-count");
+  assert.equal(unrelatedBusiness.applied, false);
+  assert.equal(unrelatedBusiness.reason, "unsupported-business");
   assert.equal(db.listServiceLocations(otherHotel.id).length, 0);
 
   const migration = db.runOneTimeSkyviewTableLocationsMigration(options);
   assert.equal(migration.applied, true);
-  assert.equal(migration.created, 39);
-  assert.equal(migration.existing, 1);
-  assert.equal(migration.activated, 1);
+  assert.equal(migration.created, 0);
+  assert.equal(migration.existing, 40);
+  assert.equal(migration.activated, 0);
   assert.equal(migration.aggregateLocationId, aggregate.id);
+  assert.equal(migration.aggregateMatchCount, 1);
 
   const locations = db.listServiceLocations(hotel.id);
   const tables = locations.filter((location) => location.kind === "TABLE");
@@ -97,7 +115,7 @@ test("Skyview production migration preserves the aggregate location and enables 
   assert.ok(tables.filter((location) => location.id !== preexistingTable.id).every((location) => !location.publicToken));
   assert.deepEqual(
     [aggregate.id, aggregate.kind, aggregate.label, aggregate.active],
-    [locations.find((location) => location.id === aggregate.id).id, "OTHER", "Table 1–40", true],
+    [locations.find((location) => location.id === aggregate.id).id, "OTHER", "Table 1-40", true],
   );
   assert.equal(
     locations.find((location) => location.id === preexistingTable.id).publicToken,
@@ -108,7 +126,7 @@ test("Skyview production migration preserves the aggregate location and enables 
   const repeated = db.runOneTimeSkyviewTableLocationsMigration(options);
   assert.equal(repeated.applied, false);
   assert.equal(repeated.reason, "already-applied");
-  assert.equal(db.listServiceLocations(hotel.id).length, 41);
+  assert.equal(db.listServiceLocations(hotel.id).length, 42);
 
   const phone = "254799000040";
   const firstScan = await handleCustomerMessage({
@@ -143,6 +161,27 @@ test("Skyview production migration preserves the aggregate location and enables 
   });
   assert.equal(order.order.serviceLocationId, table12.id);
   assert.equal(order.order.serviceLocationSnapshot.label, "Table 12");
+
+  const table40 = tables.find((location) => location.label === "Table 40");
+  db.mutate((state) => {
+    state.serviceLocations = state.serviceLocations.filter((location) => location.id !== table40.id);
+  });
+  const repairedTables = merchantIntelligence.locations.createDefaultTables({
+    params: { businessId: hotel.id },
+    session: { businessId: hotel.id },
+  });
+  assert.equal(repairedTables.data.created, 1);
+  assert.equal(
+    db.listServiceLocations(hotel.id).find((location) => location.label === "Table 40").publicToken,
+    null,
+  );
+  const addedHotelLocation = merchantIntelligence.locations.create({
+    params: { businessId: hotel.id },
+    session: { businessId: hotel.id },
+    body: { kind: "OTHER", label: "Pool" },
+  });
+  assert.equal(addedHotelLocation.data.publicToken, null);
+  assert.equal(db.listServiceLocations(hotel.id).length, 43);
 });
 
 test("table-number parsing accepts explicit and prompted numeric replies only", () => {

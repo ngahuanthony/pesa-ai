@@ -97,7 +97,11 @@ function extractPreview({ params, body, session }) {
 
 function own(session, businessId) {
   auth.requireOwnBusiness(session, businessId);
-  db.getBusiness(businessId);
+  return db.getBusiness(businessId);
+}
+
+function usesSharedHotelQr(business) {
+  return String(business?.name || "").trim().toLowerCase() === "skyview opal hotel";
 }
 
 const knowledge = {
@@ -110,8 +114,25 @@ const knowledge = {
 
 const locations = {
   list({ params, session }) { own(session, params.businessId); return db.listServiceLocations(params.businessId); },
-  create({ params, body, session }) { own(session, params.businessId); return { status: 201, data: db.createServiceLocation(params.businessId, body || {}) }; },
-  createDefaultTables({ params, session }) { own(session, params.businessId); return { status: 201, data: db.ensureDefaultTableLocations(params.businessId) }; },
+  create({ params, body, session }) {
+    const business = own(session, params.businessId);
+    return {
+      status: 201,
+      data: db.createServiceLocation(params.businessId, {
+        ...(body || {}),
+        generatePublicToken: !usesSharedHotelQr(business),
+      }),
+    };
+  },
+  createDefaultTables({ params, session }) {
+    const business = own(session, params.businessId);
+    return {
+      status: 201,
+      data: db.ensureDefaultTableLocations(params.businessId, {
+        generatePublicTokens: !usesSharedHotelQr(business),
+      }),
+    };
+  },
   update({ params, body, session }) { own(session, params.businessId); return db.updateServiceLocation(params.businessId, params.locationId, body || {}); },
   remove({ params, session }) { own(session, params.businessId); return db.deleteServiceLocation(params.businessId, params.locationId); },
   resolve({ params }) {

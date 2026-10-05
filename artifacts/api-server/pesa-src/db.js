@@ -3049,9 +3049,17 @@ function runOneTimeSkyviewTableLocationsMigration({ businessName, aggregateLabel
     }
 
     const normalizedBusinessName = String(businessName || "").trim().toLowerCase();
-    const normalizedAggregateLabel = String(aggregateLabel || "").trim().toLowerCase();
+    const normalizeAggregateLabel = (value) => String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\u2010-\u2015\u2212]/g, "-")
+      .replace(/\s+/g, "");
+    const normalizedAggregateLabel = normalizeAggregateLabel(aggregateLabel);
     if (!normalizedBusinessName || !normalizedAggregateLabel || !migrationId) {
       return { applied: false, reason: "invalid-migration-input" };
+    }
+    if (normalizedBusinessName !== "skyview opal hotel") {
+      return { applied: false, reason: "unsupported-business" };
     }
 
     const businesses = (state.businesses || []).filter(
@@ -3065,20 +3073,12 @@ function runOneTimeSkyviewTableLocationsMigration({ businessName, aggregateLabel
     if (!Array.isArray(state.serviceLocations)) state.serviceLocations = [];
     const aggregateLocations = state.serviceLocations.filter((location) =>
       location.businessId === business.id &&
-      String(location.label || "").trim().toLowerCase() === normalizedAggregateLabel
+      normalizeAggregateLabel(location.label) === normalizedAggregateLabel
     );
-    if (aggregateLocations.length !== 1) {
-      return {
-        applied: false,
-        reason: "aggregate-location-match-count",
-        matchCount: aggregateLocations.length,
-        businessId: business.id,
-      };
-    }
-    const aggregateLocation = aggregateLocations[0];
-    if (String(aggregateLocation.kind || "").toUpperCase() !== "OTHER") {
-      return { applied: false, reason: "aggregate-location-type-mismatch", businessId: business.id };
-    }
+    const aggregateLocation = aggregateLocations.length === 1 &&
+      String(aggregateLocations[0].kind || "").toUpperCase() === "OTHER"
+      ? aggregateLocations[0]
+      : null;
 
     const labels = Array.from({ length: 40 }, (_, index) => `Table ${index + 1}`);
     const existingByLabel = new Map();
@@ -3124,7 +3124,8 @@ function runOneTimeSkyviewTableLocationsMigration({ businessName, aggregateLabel
     const migration = {
       appliedAt: now(),
       businessId: business.id,
-      aggregateLocationId: aggregateLocation.id,
+      aggregateLocationId: aggregateLocation ? aggregateLocation.id : null,
+      aggregateMatchCount: aggregateLocations.length,
       fields: ["serviceLocations"],
       created,
       existing: labels.length - created,
@@ -3457,7 +3458,7 @@ function deleteKnowledgeEntry(businessId, entryId) {
   });
 }
 
-function createServiceLocation(businessId, { kind = "TABLE", label, active = true } = {}) {
+function createServiceLocation(businessId, { kind = "TABLE", label, active = true, generatePublicToken = true } = {}) {
   if (!String(label || "").trim()) throw httpError(400, "label is required");
   return mutate((state) => {
     if (!state.businesses.some((b) => b.id === businessId)) throw httpError(404, "Business not found");
@@ -3465,13 +3466,13 @@ function createServiceLocation(businessId, { kind = "TABLE", label, active = tru
     if (state.serviceLocations.some((item) => item.businessId === businessId && item.label.trim().toLowerCase() === String(label).trim().toLowerCase())) {
       throw httpError(409, "A service location with this label already exists");
     }
-    const location = { id: id(), businessId, kind: String(kind).toUpperCase().slice(0, 40), label: String(label).trim().slice(0, 120), active: active !== false, publicToken: crypto.randomBytes(24).toString("base64url"), createdAt: now(), updatedAt: now() };
+    const location = { id: id(), businessId, kind: String(kind).toUpperCase().slice(0, 40), label: String(label).trim().slice(0, 120), active: active !== false, publicToken: generatePublicToken ? crypto.randomBytes(24).toString("base64url") : null, createdAt: now(), updatedAt: now() };
     state.serviceLocations.push(location);
     return location;
   });
 }
 
-function ensureDefaultTableLocations(businessId) {
+function ensureDefaultTableLocations(businessId, { generatePublicTokens = true } = {}) {
   const labels = Array.from({ length: 40 }, (_, index) => `Table ${index + 1}`);
   return mutate((state) => {
     if (!state.businesses.some((business) => business.id === businessId)) throw httpError(404, "Business not found");
@@ -3497,7 +3498,7 @@ function ensureDefaultTableLocations(businessId) {
         kind: "TABLE",
         label,
         active: true,
-        publicToken: crypto.randomBytes(24).toString("base64url"),
+        publicToken: generatePublicTokens ? crypto.randomBytes(24).toString("base64url") : null,
         createdAt: now(),
         updatedAt: now(),
       };
