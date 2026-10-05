@@ -5,7 +5,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ShoppingBag, Smartphone, CheckCircle2, Pencil, Minus, Plus, Trash2, Printer, Volume2, VolumeX, Clock3 } from "lucide-react";
+import { ShoppingBag, Smartphone, CheckCircle2, Pencil, Minus, Plus, Trash2, Printer, Volume2, VolumeX, Clock3 , ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +17,26 @@ import {
   isOrderAlertSoundEnabled,
 } from "@/lib/order-alert-sound";
 import { OrderDayCloseout } from "./order-day-closeout";
+
+function OrderDayCloseoutDisclosure({ orders }: { orders: any[] }) {
+  return (
+    <details className="mb-4 rounded-xl border border-border bg-white" data-testid="details-order-day-closeout">
+      <summary
+        className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden"
+        data-testid="summary-order-day-closeout"
+      >
+        <span>
+          End-of-day summary
+          <span className="ml-2 text-xs font-normal text-muted-foreground">Open when needed</span>
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="border-t border-border px-3 py-3">
+        <OrderDayCloseout orders={orders} />
+      </div>
+    </details>
+  );
+}
 
 const STATUS_STYLES: Record<string, string> = {
   new:       "bg-amber-100 text-amber-700",
@@ -595,7 +615,7 @@ export function OrdersTab() {
 
   if (!orders?.length) return (
     <>
-      <OrderDayCloseout orders={orderList} />
+      <OrderDayCloseoutDisclosure orders={orderList} />
       <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-20 text-center px-4">
         {soundControl}
         <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
@@ -611,7 +631,7 @@ export function OrdersTab() {
 
   return (
     <>
-      <OrderDayCloseout orders={orderList} />
+      <OrderDayCloseoutDisclosure orders={orderList} />
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="inline-flex w-fit rounded-xl border border-border bg-white p-1" role="group" aria-label="Filter orders by open or closed status">
           {([
