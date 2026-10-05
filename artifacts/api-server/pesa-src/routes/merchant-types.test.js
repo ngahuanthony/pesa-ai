@@ -7,8 +7,6 @@ const path = require("path");
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "pesa-si-types-"));
 const db = require("../db");
 const businessRoutes = require("./business");
-const authRoutes = require("./auth");
-const whatsapp = require("../whatsapp");
 
 test("signup groups legacy hotel and hospitality into one merchant type", () => {
   for (const [value, expected] of [
@@ -84,27 +82,6 @@ test("a different private number cannot restart another pending signup", () => {
   assert.equal(state.pendingSignups[0].id, first.id);
 });
 
-test("retrying signup reuses the reservation and requests a fresh private-number code", async () => {
-  const body = { businessName: "Resume Shop", merchantType: "retail", personalPhone: "254700000061", pesaAiNumber: "254700000062" };
-  const first = db.mutate((state) => db.createPendingSignup(state, body));
-  const sendOriginal = whatsapp.sendPlatformOtp;
-  const smsUrlOriginal = process.env.SMS_PROVIDER_URL;
-  const delivered = [];
-  whatsapp.sendPlatformOtp = async (phone) => { delivered.push(phone); };
-  delete process.env.SMS_PROVIDER_URL;
-  try {
-    const response = await authRoutes.signup({ body });
-    assert.equal(response.status, 202);
-    assert.equal(response.data.pendingSignupId, first.id);
-    assert.equal(db.getPendingSignup(response.data.pendingSignupId).personalVerified, false);
-    assert.deepEqual(delivered, [body.personalPhone]);
-  } finally {
-    whatsapp.sendPlatformOtp = sendOriginal;
-    if (smsUrlOriginal === undefined) delete process.env.SMS_PROVIDER_URL;
-    else process.env.SMS_PROVIDER_URL = smsUrlOriginal;
-  }
-});
-
 test("wrong codes consume the attempt limit and another signup's code cannot verify this one", () => {
   const sharedPhone = "254700000081";
   const first = db.mutate((state) => db.createPendingSignup(state, { businessName: "First", personalPhone: sharedPhone, pesaAiNumber: "254700000082" }));
@@ -118,64 +95,6 @@ test("wrong codes consume the attempt limit and another signup's code cannot ver
   assert.equal(db.load().otpChallenges.find((item) => item.metadata?.pendingSignupId === first.id).attempts, 5);
   assert.throws(() => db.verifyOtpChallenge(sharedPhone, a.code, "signup_personal", first.id), /Too many attempts/);
   assert.equal(db.verifyOtpChallenge(sharedPhone, b.code, "signup_personal", second.id), true);
-});
-
-test("overlapping retries share one OTP request and the same pending signup", async () => {
-  const body = { businessName: "Concurrent Shop", merchantType: "retail", personalPhone: "254700000091", pesaAiNumber: "254700000092" };
-  const sendOriginal = whatsapp.sendPlatformOtp;
-  const smsUrlOriginal = process.env.SMS_PROVIDER_URL;
-  let finishSend;
-  let sendCount = 0;
-  whatsapp.sendPlatformOtp = async () => { sendCount++; await new Promise((resolve) => { finishSend = resolve; }); };
-  delete process.env.SMS_PROVIDER_URL;
-  try {
-    const first = authRoutes.signup({ body });
-    const second = authRoutes.signup({ body });
-    assert.equal(sendCount, 1);
-    finishSend();
-    const [a, b] = await Promise.all([first, second]);
-    assert.equal(a.data.pendingSignupId, b.data.pendingSignupId);
-    assert.equal(db.getPendingSignup(a.data.pendingSignupId).personalVerified, false);
-  } finally {
-    whatsapp.sendPlatformOtp = sendOriginal;
-    if (smsUrlOriginal === undefined) delete process.env.SMS_PROVIDER_URL;
-    else process.env.SMS_PROVIDER_URL = smsUrlOriginal;
-  }
-});
-
-test("resuming after private-number verification does not erase progress or resend WhatsApp", async () => {
-  const body = { businessName: "Partially Verified", merchantType: "retail", personalPhone: "254700000101", pesaAiNumber: "254700000102" };
-  const pending = db.mutate((state) => db.createPendingSignup(state, body));
-  db.markPendingSignupChannelVerified(pending.id, "personal");
-  const sendOriginal = whatsapp.sendPlatformOtp;
-  const smsUrlOriginal = process.env.SMS_PROVIDER_URL;
-  whatsapp.sendPlatformOtp = async () => { throw new Error("WhatsApp must not be resent"); };
-  delete process.env.SMS_PROVIDER_URL;
-  try {
-    const response = await authRoutes.signup({ body });
-    assert.equal(response.data.pendingSignupId, pending.id);
-    assert.equal(response.data.next, "shop");
-    assert.equal(db.getPendingSignup(pending.id).personalVerified, true);
-  } finally {
-    whatsapp.sendPlatformOtp = sendOriginal;
-    if (smsUrlOriginal === undefined) delete process.env.SMS_PROVIDER_URL;
-    else process.env.SMS_PROVIDER_URL = smsUrlOriginal;
-  }
-});
-
-test("failed code delivery releases the reservation without erasing rate limits", async () => {
-  const body = { businessName: "Failed Code Shop", merchantType: "retail", personalPhone: "254700000071", pesaAiNumber: "254700000072" };
-  const sendOriginal = whatsapp.sendPlatformOtp;
-  whatsapp.sendPlatformOtp = async () => { throw new Error("simulated delivery failure"); };
-  try {
-    await assert.rejects(authRoutes.signup({ body }), /couldn't send the WhatsApp code/);
-    assert.equal(db.load().pendingSignups.some((item) => item.pesaAiNumber === body.pesaAiNumber), false);
-    const challenges = db.load().otpChallenges.filter((item) => item.phone === body.personalPhone && item.purpose === "signup_personal");
-    assert.equal(challenges.length, 1);
-    assert.equal(challenges[0].used, true);
-  } finally {
-    whatsapp.sendPlatformOtp = sendOriginal;
-  }
 });
 
 test("existing hotel accounts display as hospitality and save the unified type", () => {

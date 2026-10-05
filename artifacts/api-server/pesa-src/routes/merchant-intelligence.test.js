@@ -151,7 +151,7 @@ test("Skyview production migration preserves the aggregate location and enables 
   });
   const table12 = tables.find((location) => location.label === "Table 12");
   assert.equal(tableReply.conversation.serviceLocationId, table12.id);
-  assert.match(tableReply.replyText, /you're at Table 12/i);
+  assert.match(tableReply.replyText, /you're connected to Table 12/i);
 
   const order = await handleCustomerMessage({
     business: hotel,

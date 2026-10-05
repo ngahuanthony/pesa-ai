@@ -1,4 +1,4 @@
-const PARSER_VERSION = "v2.1";
+const PARSER_VERSION = "v2.2";
 
 const colorMap = {
   black: ["black", "blak", "block", "brak", "burak", "nyeusi", "blacki", "weusi"],
@@ -38,6 +38,12 @@ function replaceWords(text, synonym, standard) {
 }
 function normalizeTranscript(raw) {
   let text = String(raw || "").toLowerCase();
+  const protectedSizes = [];
+  text = text.replace(/\bsize\s+(s|m|l|xl|xxl)\b/gi, (_match, size) => {
+    const marker = `\uE000${protectedSizes.length}\uE001`;
+    protectedSizes.push({ marker, size });
+    return `size ${marker}`;
+  });
   text = text.replace(/\bsamsung\s*17\b/g, "samsung a17");
   const phraseRules = [
     [/\b(?:sixteen|sikistini|sikstini|six\s+teen)\b/gi, "16"],
@@ -52,6 +58,7 @@ function normalizeTranscript(raw) {
   for (const [standard, synonyms] of Object.entries(colorMap)) for (const synonym of [...synonyms].sort((a, b) => b.length - a.length)) text = replaceWords(text, synonym, standard);
   for (const [standard, synonyms] of Object.entries(productTermMap)) for (const synonym of [...synonyms].sort((a, b) => b.length - a.length)) text = replaceWords(text, synonym, standard);
   for (const [standard, synonyms] of Object.entries(unitMap)) for (const synonym of [...synonyms].sort((a, b) => b.length - a.length)) text = replaceWords(text, synonym, standard);
+  for (const { marker, size } of protectedSizes) text = text.replace(marker, size);
   return text.replace(/\s+/g, " ").trim();
 }
 module.exports = { PARSER_VERSION, colorMap, numberMap, productTermMap, unitMap, categoryAttrs, normalizeTranscript };

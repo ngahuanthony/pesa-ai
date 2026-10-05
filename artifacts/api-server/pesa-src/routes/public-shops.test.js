@@ -70,7 +70,7 @@ test("accepts common Kenyan number formats and matches exact public numbers", ()
   assert.equal(local.phone, "254792717918");
   assert.deepEqual(local.shops.map((shop) => shop.name), ["A Accessories", "B Accessories"]);
   assert.deepEqual(international.shops.map((shop) => shop.name), local.shops.map((shop) => shop.name));
-  assert.match(local.shops[0].whatsappUrl, /text=Hi%20a-accessories-public-a/);
+  assert.match(local.shops[0].whatsappUrl, /text=Hi%20a-accessories-publica/);
 });
 
 test("returns only photographed matching variants for on-demand search", () => {

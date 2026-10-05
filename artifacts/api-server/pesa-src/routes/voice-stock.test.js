@@ -198,6 +198,8 @@ const { fallbackInterpret } = require("../universalParser");
 test("normalizes Swahili, Sheng, and common ASR variants", () => {
   assert.equal(normalizeTranscript("Samsung fold five Five black pieces five green pieces five block pieces"), "samsung fold 5 5 black pieces 5 green pieces 5 black pieces");
   assert.equal(normalizeTranscript("Shati tano nyeusi size L"), "shirt 5 black size l");
+  assert.equal(normalizeTranscript("Shati tano nyeusi size M"), "shirt 5 black size m");
+  assert.equal(normalizeTranscript("5 l"), "5 litre");
   assert.equal(normalizeTranscript("iPhone 16 pro marks black clear 10 pieces"), "iphone 16 pro max black clear 10 pieces");
 });
 
@@ -255,16 +257,21 @@ test("keeps a phone model number separate from the spoken quantity", () => {
   assert.equal(items[0].productId, null);
 });
 
-test("matches colour words and plural product names without losing the spoken colour", () => {
+test("suggests the closest catalog match for plural product wording without losing the spoken colour", () => {
   const items = fallbackInterpret(
     "iphone 16 pro max orange covers 10 pieces",
     { id: "phones", category: "phone_accessories" },
     [{ id: "iphone-cover", businessId: "phones", name: "iPhone 16 Pro Max Clear Cover", stockQty: 0 }],
   );
-  assert.equal(items[0].productId, "iphone-cover");
-  assert.equal(items[0].productName, "iPhone 16 Pro Max Clear Cover");
+  assert.equal(items[0].productId, null, "an inexact catalog match must remain review-only");
+  assert.deepEqual(items[0].suggestedProduct, {
+    id: "iphone-cover",
+    name: "iPhone 16 Pro Max Clear Cover",
+  });
   assert.equal(items[0].color, "orange");
   assert.equal(items[0].quantity, 10);
+  assert.equal(items[0].matchType, "suggested");
+  assert.equal(items[0].confidenceLevel, "review");
   assert.notEqual(items[0].confidenceLevel, "blocked");
 });
 
