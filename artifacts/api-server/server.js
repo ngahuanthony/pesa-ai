@@ -652,6 +652,7 @@ persistence.init(db.DATA_FILE).then(() => {
     }
   }
   startDailyReportScheduler();
+  whatsapp.startPaymentReminderScheduler();
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Pesa AI API running on port ${PORT}`);
     if (!process.env.ADMIN_PASSWORD)      console.warn("Warning: ADMIN_PASSWORD not set — admin panel disabled");

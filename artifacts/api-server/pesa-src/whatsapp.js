@@ -88,9 +88,13 @@ function verifyWebhook(query) {
 // in server.js (which has access to the raw Buffer before JSON parsing).
 
 async function sendButtonsMessage(phoneNumberId, to, body, buttons, accessToken) {
-  if (!accessToken || !buttons || !buttons.length) return;
+  if (!accessToken || !buttons || !buttons.length) return false;
   const res = await fetch("https://graph.facebook.com/" + GRAPH_API_VERSION + "/" + phoneNumberId + "/messages", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + accessToken }, body: JSON.stringify({ messaging_product: "whatsapp", to, type: "interactive", interactive: { type: "button", body: { text: body }, action: { buttons: buttons.slice(0, 3).map((button) => ({ type: "reply", reply: { id: button.id, title: button.title } })) } } }) });
-  if (!res.ok) console.error("[whatsapp] Interactive message failed (" + res.status + "): " + await res.text().catch(() => ""));
+  if (!res.ok) {
+    console.error("[whatsapp] Interactive message failed (" + res.status + "): " + await res.text().catch(() => ""));
+    return false;
+  }
+  return true;
 }
 
 async function sendListMessage(phoneNumberId, to, list, accessToken) {
@@ -220,10 +224,7 @@ async function handleButtonAction({ business, phoneNumberId, from, buttonId, acc
     return;
   }
   if (action === "deni_request") {
-    const customer = db.listOrders(business.id).find((item) => item.id === order.id);
-    const entry = db.createDeniRequest({ businessId: business.id, customerPhone: from, customerName: customer && customer.customerName, amount: order.totalAmount, product: (order.items || []).map((item) => item.productName + " x" + item.quantity).join(", "), orderId: order.id });
-    if (business.personalPhone && business.whatsappPhoneNumberId) await sendMessage(phoneNumberId, business.personalPhone, "Sale " + Number(entry.amount).toLocaleString("en-KE") + " KSh — " + (entry.product || "order") + " for " + (entry.customerName || entry.customerPhone) + ". Reply DENI to approve or IGNORE.", accessToken);
-    await sendMessage(phoneNumberId, from, "Nimeuliza mwenye shop kuhusu deni lako. Tutakujibu likikubaliwa.", accessToken);
+    await sendMessage(phoneNumberId, from, "Deni requests are no longer available from this button. Please message the business team to discuss payment.", accessToken);
     return;
   }
   if (action === "receipt") {
@@ -231,6 +232,76 @@ async function handleButtonAction({ business, phoneNumberId, from, buttonId, acc
     const ref = order.paymentMeta && order.paymentMeta.mpesaTxnId;
     await sendMessage(phoneNumberId, from, "Receipt\nOrder: " + order.id.slice(0, 8) + "\nTotal: KSh " + Number(order.totalAmount).toLocaleString("en-KE") + "\nStatus: " + order.status + (method ? "\nPayment: " + method : "") + (ref ? "\nRef: " + ref : ""), accessToken);
   }
+}
+
+async function processDuePaymentReminders({ orderId = null, limit = 20 } = {}) {
+  const reminders = db.claimDuePaymentReminders({ orderId, limit });
+  const results = [];
+
+  for (const reminder of reminders) {
+    try {
+      const order = db.getOrder(reminder.orderId);
+      if (!order) {
+        db.skipPaymentReminder(reminder.id, "order no longer exists");
+        results.push({ reminderId: reminder.id, status: "skipped" });
+        continue;
+      }
+      const paymentStatus = String(order.paymentStatus || "").toUpperCase();
+      const fulfillmentStatus = String(order.fulfillmentStatus || "").toUpperCase();
+      const orderStatus = String(order.status || "").toLowerCase();
+      if (paymentStatus === "PAID" || orderStatus === "paid") {
+        db.skipPaymentReminder(reminder.id, "order is paid");
+        results.push({ reminderId: reminder.id, status: "skipped" });
+        continue;
+      }
+      if (fulfillmentStatus === "CANCELLED" || orderStatus === "cancelled") {
+        db.skipPaymentReminder(reminder.id, "order is cancelled");
+        results.push({ reminderId: reminder.id, status: "skipped" });
+        continue;
+      }
+
+      const business = db.getBusiness(reminder.businessId);
+      const phoneNumberId = business.whatsappPhoneNumberId;
+      const accessToken = resolveAccessToken(business);
+      if (!phoneNumberId || !accessToken) {
+        throw new Error("WhatsApp delivery is not configured for this business");
+      }
+
+      const reference = String(order.id).slice(0, 8).toUpperCase();
+      const paymentInstructions = buildPublicPaymentInstructions(business, reminder.customerPhone).trim();
+      const text = [
+        `A quick reminder about your order #${reference}.`,
+        `Current total: KSh ${Number(order.totalAmount || 0).toLocaleString("en-KE")}.`,
+        paymentInstructions || "Please reply here and the team will help with payment.",
+        "If you've already paid, please ignore this message.",
+      ].join("\n\n");
+      const buttons = [{ id: "receipt:" + order.id, title: "Naomba Receipt" }];
+      const canSendStkPush = business.mpesa?.enabled === true && business.mpesa?.verified === true;
+      if (canSendStkPush) buttons.unshift({ id: "mpesa_pay:" + order.id, title: "Lipa na M-Pesa" });
+
+      const sent = await sendButtonsMessage(phoneNumberId, reminder.customerPhone, text, buttons, accessToken);
+      if (!sent) throw new Error("WhatsApp reminder delivery failed");
+      db.markPaymentReminderSent(reminder.id);
+      results.push({ reminderId: reminder.id, status: "sent" });
+    } catch (error) {
+      db.retryPaymentReminder(reminder.id, error.message);
+      console.error("[whatsapp] Payment reminder failed for order " + reminder.orderId + ": " + error.message);
+      results.push({ reminderId: reminder.id, status: "retrying" });
+    }
+  }
+
+  return results;
+}
+
+function startPaymentReminderScheduler() {
+  if (process.env.PAYMENT_REMINDER_CRON_ENABLED === "false") return null;
+  const timer = setInterval(() => {
+    processDuePaymentReminders().catch((error) => {
+      console.error("[whatsapp] Payment reminder scheduler failed: " + error.message);
+    });
+  }, 15_000);
+  timer.unref?.();
+  return timer;
 }
 
 async function handleIncomingWebhook(body) {
@@ -314,7 +385,7 @@ async function handleIncomingWebhook(body) {
     return;
   }
 
-  const { replyText, welcomeText, assistantReplyText, extraReplies, interactiveButtons, interactiveList, mediaReplies, reservationRequest } = await handleCustomerMessage({
+  const { replyText, welcomeText, assistantReplyText, extraReplies, interactiveButtons, interactiveList, mediaReplies, reservationRequest, order } = await handleCustomerMessage({
     business,
     customerPhone: from,
     customerName:  contactName,
@@ -347,6 +418,7 @@ async function handleIncomingWebhook(body) {
     }
   }
   if (interactiveButtons) await sendButtonsMessage(phoneNumberId, from, "Choose a payment option:", interactiveButtons, accessToken);
+  if (order?.id) await processDuePaymentReminders({ orderId: order.id });
 }
 
 function buildProductImageCaption(business, variant) {
@@ -590,4 +662,6 @@ module.exports = {
   updateWhatsAppBusinessProfile,
   updateWhatsAppProfilePicture,
   subscribeWaba,
+  processDuePaymentReminders,
+  startPaymentReminderScheduler,
 };

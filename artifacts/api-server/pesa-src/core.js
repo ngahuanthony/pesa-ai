@@ -6,7 +6,6 @@ const db = require("./db");
 const { getAssistantReply, getProductImageReplies } = require("./ai");
 const { buildConciergeList } = require("./concierge");
 const { HOTEL_MENU_GROUPS, getHotelMenuClassification } = require("./hospitality-menu");
-const { buildPublicPaymentInstructions } = require("./payment-instructions");
 
 // The pre-filled text baked into the shop QR / wa.me link.
 // When a customer taps the link, WhatsApp sends exactly this message.
@@ -32,30 +31,44 @@ const HANDOVER_TRIGGERS = [
 ];
 
 
-function orderActions(replyText, order, business, customerPhone) {
+function orderActions(replyText, order, business, customerPhone, { orderUpdated = false } = {}) {
   if (!order || order.error || !order.id) return { replyText, interactiveButtons: null };
   const total = Number(order.totalAmount || 0).toLocaleString("en-KE");
-  const paymentInstructions = buildPublicPaymentInstructions(business, customerPhone);
   const tableLabel = order.serviceLocationSnapshot?.kind === "TABLE"
     ? String(order.serviceLocationSnapshot.label || "").trim()
     : "";
   const items = Array.isArray(order.items) ? order.items : [];
-  const orderMessage = tableLabel && items.length
-    ? [
-        `✅ *Order #${String(order.id).slice(0, 8).toUpperCase()} has been placed for ${tableLabel}.*`,
-        "",
-        ...items.map((item) => `• ${Number(item.quantity) || 1} × ${item.productName || "Menu item"}`),
-        "",
-        `*Total: KSh ${total}.*`,
-        paymentInstructions.trim() || "The hotel team will confirm payment details shortly.",
-        "If you'd like anything else, just message us.",
-      ].join("\n")
-    : (replyText || "Order received!") + "\n\nTotal: KSh " + total + paymentInstructions;
-  return { replyText: orderMessage + "\n\nChoose a payment option or request a receipt below:", interactiveButtons: [
-    { id: "mpesa_pay:" + order.id, title: "Lipa na M-Pesa" },
-    { id: "deni_request:" + order.id, title: "Deni / Lipa Baadaye" },
-    { id: "receipt:" + order.id, title: "Naomba Receipt" },
-  ] };
+  const reference = String(order.id).slice(0, 8).toUpperCase();
+  const locationSuffix = tableLabel ? ` for ${tableLabel}` : "";
+  const orderMessage = [
+    orderUpdated
+      ? `✅ *I've added those items to order #${reference}${locationSuffix}.*`
+      : `✅ *Thanks! Order #${reference} has been placed${locationSuffix}.*`,
+    "",
+    ...items.map((item) => `• ${Number(item.quantity) || 1} × ${item.productName || "Menu item"}`),
+    "",
+    `*Total: KSh ${total}.*`,
+    "The team will prepare your order. If you'd like anything else, message us and we'll add it to this order.",
+  ].join("\n");
+  return { replyText: orderMessage, interactiveButtons: null };
+}
+
+function scheduleOrderPaymentReminder(order, business, customerPhone, orderUpdated = false) {
+  if (!order || order.error || !order.id) return null;
+  const isDineIn = String(
+    order.fulfillmentType ||
+    (String(order.serviceLocationSnapshot?.kind || "").toUpperCase() === "TABLE" ? "dine_in" : "")
+  ).toLowerCase() === "dine_in";
+  const createdAt = new Date(order.createdAt || Date.now()).getTime();
+  const dueAt = isDineIn && Number.isFinite(createdAt)
+    ? createdAt + 10 * 60 * 1000
+    : Date.now();
+  return db.schedulePaymentReminder({
+    businessId: business.id,
+    orderId: order.id,
+    customerPhone,
+    dueAt: new Date(dueAt).toISOString(),
+  });
 }
 
 function isHandoverRequest(text) {
@@ -276,7 +289,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     };
   }
   if (isTableLocation) {
-    const { replyText: tableReply, mediaReplies, order, reservationRequest } = await getAssistantReply(
+    const { replyText: tableReply, mediaReplies, order, orderUpdated, reservationRequest } = await getAssistantReply(
       business,
       customer.id,
       priorHistory,
@@ -289,7 +302,8 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
         customerName,
       }
     );
-    const prepared = orderActions(tableReply, order, business, customerPhone);
+    scheduleOrderPaymentReminder(order, business, customerPhone, orderUpdated);
+    const prepared = orderActions(tableReply, order, business, customerPhone, { orderUpdated });
     const configuredWelcome = String(business.welcomeMessage || "").trim();
     const welcome = configuredWelcome || ("Welcome to " + business.name + "! I can help with dining, rooms, the pool, conferences, and events.");
     const locationGreeting = locationContext
@@ -357,11 +371,12 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
         });
       }
 
-       const { replyText: catalogReply, order, reservationRequest } = await getAssistantReply(
+        const { replyText: catalogReply, order, orderUpdated, reservationRequest } = await getAssistantReply(
          business, customer.id, [], text,
          { shopEntry: true, serviceLocationId: resolvedLocationId, customerPhone, customerName }
        );
-      const prepared = orderActions(catalogReply, order, business, customerPhone);
+       scheduleOrderPaymentReminder(order, business, customerPhone, orderUpdated);
+       const prepared = orderActions(catalogReply, order, business, customerPhone, { orderUpdated });
       db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", prepared.replyText); });
 
       // Return both so the WhatsApp sender can send them in order.
@@ -386,11 +401,12 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     }
   }
 
-  const { replyText, mediaReplies, order, reservationRequest } = await getAssistantReply(
+  const { replyText, mediaReplies, order, orderUpdated, reservationRequest } = await getAssistantReply(
     business, customer.id, priorHistory, text,
     { serviceLocationId: resolvedLocationId, customerPhone, customerName }
   );
-  const prepared = orderActions(replyText, order, business, customerPhone);
+  scheduleOrderPaymentReminder(order, business, customerPhone, orderUpdated);
+  const prepared = orderActions(replyText, order, business, customerPhone, { orderUpdated });
   db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", prepared.replyText); });
   return { replyText: prepared.replyText, mediaReplies, interactiveButtons: prepared.interactiveButtons, order, reservationRequest, customer, conversation };
 }
@@ -398,6 +414,7 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
 module.exports = {
   handleCustomerMessage,
   orderActions,
+  scheduleOrderPaymentReminder,
   extractTableNumber,
   SHOP_LINK_TRIGGER,
   HOTEL_SHOP_LINK_TRIGGER,

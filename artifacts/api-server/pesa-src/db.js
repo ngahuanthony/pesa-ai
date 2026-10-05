@@ -40,6 +40,7 @@ function emptyState() {
     conversations: [],
     messages: [],
     orders: [],
+    paymentReminders: [],
     roomReservations: [],
     reports: [],
     videoScans: [],
@@ -2325,7 +2326,7 @@ function getConversationHistory(businessId, customerPhone, limit = 20) {
 
 // --- Orders --------------------------------------------------------------
 
-function createOrder(state, { businessId, customerId, items, serviceLocationId = null }) {
+function createOrder(state, { businessId, customerId, items, serviceLocationId = null, fulfillmentType = null }) {
   // items: [{ productId, quantity }]
   if (serviceLocationId) {
     const location = (state.serviceLocations || []).find((item) => item.id === serviceLocationId && item.businessId === businessId && item.active);
@@ -2357,6 +2358,7 @@ function createOrder(state, { businessId, customerId, items, serviceLocationId =
     fulfillmentStatus: "NEW",
     paymentStatus: "PENDING",
     paymentMethod: null,
+    fulfillmentType: fulfillmentType || (location && String(location.kind).toUpperCase() === "TABLE" ? "dine_in" : null),
     serviceLocationId: serviceLocationId || null,
     serviceLocationSnapshot: location ? { kind: location.kind, label: location.label } : null,
     totalAmount,
@@ -2622,6 +2624,169 @@ function updateOrderItems(orderId, requestedItems, { actor = "merchant" } = {}) 
       totalAmount: order.totalAmount,
     });
     return order;
+  });
+}
+
+function isEditableCustomerOrder(order) {
+  if (order.paymentStatus === "PAID" || ["paid", "fulfilled", "cancelled"].includes(String(order.status || "").toLowerCase())) {
+    return false;
+  }
+  const fulfillment = String(order.fulfillmentStatus || order.status || "").toUpperCase();
+  return ["NEW", "ACCEPTED", "PENDING", "CONFIRMED"].includes(fulfillment);
+}
+
+function getOpenOrdersForCustomer(businessId, customerId) {
+  return load().orders
+    .filter((order) =>
+      order.businessId === businessId &&
+      order.customerId === customerId &&
+      isEditableCustomerOrder(order)
+    )
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map((order) => ({
+      id: order.id,
+      fulfillmentType: order.fulfillmentType || (
+        String(order.serviceLocationSnapshot?.kind || "").toUpperCase() === "TABLE" ? "dine_in" : null
+      ),
+      serviceLocationSnapshot: order.serviceLocationSnapshot || null,
+      items: (order.items || []).map((item) => ({
+        productName: item.productName,
+        quantity: item.quantity,
+      })),
+      totalAmount: order.totalAmount,
+      createdAt: order.createdAt,
+    }));
+}
+
+function addItemsToOpenOrder(businessId, customerId, additionalItems, { actor = "customer_add_on" } = {}) {
+  if (!Array.isArray(additionalItems) || !additionalItems.length) {
+    throw httpError(400, "At least one additional order item is required");
+  }
+  const openOrders = load().orders
+    .filter((order) =>
+      order.businessId === businessId &&
+      order.customerId === customerId &&
+      isEditableCustomerOrder(order)
+    )
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  if (openOrders.length !== 1) {
+    throw httpError(
+      409,
+      openOrders.length
+        ? "More than one unpaid order is open. Ask the customer which order they want to update."
+        : "There is no unpaid open order to add items to."
+    );
+  }
+  const order = openOrders[0];
+  return updateOrderItems(order.id, [...(order.items || []), ...additionalItems], { actor });
+}
+
+function schedulePaymentReminder({ businessId, orderId, customerPhone, dueAt }) {
+  const dueTime = new Date(dueAt);
+  if (!businessId || !orderId || !customerPhone || !Number.isFinite(dueTime.getTime())) {
+    throw httpError(400, "A business, order, customer phone, and valid reminder time are required");
+  }
+  return mutate((state) => {
+    state.paymentReminders = Array.isArray(state.paymentReminders) ? state.paymentReminders : [];
+    let reminder = state.paymentReminders.find((item) => item.orderId === orderId);
+    if (!reminder) {
+      reminder = {
+        id: id(),
+        businessId,
+        orderId,
+        customerPhone: String(customerPhone),
+        dueAt: dueTime.toISOString(),
+        status: "pending",
+        attempts: 0,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      state.paymentReminders.push(reminder);
+    } else {
+      reminder.businessId = businessId;
+      reminder.customerPhone = String(customerPhone);
+      if (["sent", "failed", "skipped"].includes(reminder.status)) {
+        reminder.dueAt = dueTime.toISOString();
+        reminder.status = "pending";
+        reminder.attempts = 0;
+        reminder.leaseUntil = null;
+        reminder.lastError = null;
+        reminder.sentAt = null;
+      }
+      reminder.updatedAt = now();
+    }
+    return { ...reminder };
+  });
+}
+
+function claimDuePaymentReminders({ orderId = null, limit = 20, currentTime = now() } = {}) {
+  const currentTimeMs = new Date(currentTime).getTime();
+  if (!Number.isFinite(currentTimeMs)) throw httpError(400, "A valid current time is required");
+  const leaseUntil = new Date(currentTimeMs + 90_000).toISOString();
+  return mutate((state) => {
+    state.paymentReminders = Array.isArray(state.paymentReminders) ? state.paymentReminders : [];
+    const due = state.paymentReminders
+      .filter((item) => {
+        if (orderId && item.orderId !== orderId) return false;
+        const dueAt = new Date(item.dueAt).getTime();
+        if (item.status === "pending") return Number.isFinite(dueAt) && dueAt <= currentTimeMs;
+        if (item.status === "sending") {
+          const oldLease = new Date(item.leaseUntil || 0).getTime();
+          return !Number.isFinite(oldLease) || oldLease <= currentTimeMs;
+        }
+        return false;
+      })
+      .slice(0, Math.max(1, Math.min(100, Number(limit) || 20)));
+    for (const item of due) {
+      item.status = "sending";
+      item.attempts = Number(item.attempts || 0) + 1;
+      item.leaseUntil = leaseUntil;
+      item.updatedAt = now();
+    }
+    return due.map((item) => ({ ...item }));
+  });
+}
+
+function markPaymentReminderSent(reminderId) {
+  return mutate((state) => {
+    const reminder = (state.paymentReminders || []).find((item) => item.id === reminderId);
+    if (!reminder) return null;
+    reminder.status = "sent";
+    reminder.sentAt = now();
+    reminder.leaseUntil = null;
+    reminder.lastError = null;
+    reminder.updatedAt = now();
+    return { ...reminder };
+  });
+}
+
+function retryPaymentReminder(reminderId, errorMessage) {
+  return mutate((state) => {
+    const reminder = (state.paymentReminders || []).find((item) => item.id === reminderId);
+    if (!reminder) return null;
+    reminder.lastError = String(errorMessage || "WhatsApp send failed").slice(0, 300);
+    reminder.leaseUntil = null;
+    reminder.updatedAt = now();
+    if (Number(reminder.attempts || 0) >= 5) {
+      reminder.status = "failed";
+    } else {
+      const delayMs = Math.min(15 * 60_000, 60_000 * (2 ** Math.max(0, Number(reminder.attempts || 1) - 1)));
+      reminder.status = "pending";
+      reminder.dueAt = new Date(Date.now() + delayMs).toISOString();
+    }
+    return { ...reminder };
+  });
+}
+
+function skipPaymentReminder(reminderId, reason) {
+  return mutate((state) => {
+    const reminder = (state.paymentReminders || []).find((item) => item.id === reminderId);
+    if (!reminder) return null;
+    reminder.status = "skipped";
+    reminder.skipReason = String(reason || "not eligible").slice(0, 160);
+    reminder.leaseUntil = null;
+    reminder.updatedAt = now();
+    return { ...reminder };
   });
 }
 
@@ -3379,6 +3544,13 @@ module.exports = {
   getOrder,
   updateOrderStatus,
   updateOrderItems,
+  getOpenOrdersForCustomer,
+  addItemsToOpenOrder,
+  schedulePaymentReminder,
+  claimDuePaymentReminders,
+  markPaymentReminderSent,
+  retryPaymentReminder,
+  skipPaymentReminder,
   attachMpesaCheckoutRequest,
   updateMpesaPaymentAttempt,
   getOrderByCheckoutRequestId,
