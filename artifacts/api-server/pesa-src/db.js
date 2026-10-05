@@ -2414,6 +2414,8 @@ function createRoomReservation({
     throw httpError(400, "guestCount must be from 1 to 20");
   }
   if (!String(customerPhone || "").trim()) throw httpError(400, "customerPhone is required");
+  const cleanCustomerName = String(customerName || "").trim().slice(0, 120);
+  if (!cleanCustomerName) throw httpError(400, "customerName is required");
   return mutate((state) => {
     if (!state.businesses.some((business) => business.id === businessId)) throw httpError(404, "Business not found");
     if (!isHospitalityBusiness(state.businesses.find((business) => business.id === businessId))) {
@@ -2426,7 +2428,7 @@ function createRoomReservation({
       businessId,
       reference: `RR-${reservationId.slice(0, 8).toUpperCase()}`,
       customerId: customerId || null,
-      customerName: customerName ? String(customerName).trim().slice(0, 120) : null,
+      customerName: cleanCustomerName,
       customerPhone: String(customerPhone).trim().slice(0, 32),
       roomType: cleanRoomType,
       checkInDate,

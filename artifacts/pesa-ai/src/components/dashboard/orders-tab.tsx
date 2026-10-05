@@ -30,6 +30,10 @@ interface PaymentMeta {
   paidAt?:       string | null;
 }
 
+function formatOrderRef(id: unknown) {
+  return `#${String(id || "").toUpperCase()}`;
+}
+
 function PaymentAttempt({ attempt }: { attempt?: any }) {
   if (!attempt) return null;
   if (attempt.status === "PENDING") {
@@ -86,7 +90,7 @@ function printOrderDocument({
   const printWindow = window.open("", "_blank", "width=420,height=900");
   if (!printWindow) return false;
 
-  const orderRef = `#${String(order.id || "").slice(0, 8).toUpperCase()}`;
+  const orderRef = formatOrderRef(order.id);
   const createdAt = order.createdAt
     ? new Date(order.createdAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })
     : "";
@@ -429,7 +433,7 @@ export function OrdersTab() {
             return (
               <div key={o.id} className={`grid grid-cols-[1.4fr_1.2fr_1.5fr_0.8fr_1fr_1.2fr] items-start px-4 py-4 ${i < orders.length - 1 ? "border-b border-border" : ""} hover:bg-muted/30 transition-colors`}>
                 <div>
-                  <div className="font-mono text-xs font-medium text-foreground">#{o.id.substring(0, 8).toUpperCase()}</div>
+                  <div className="break-all font-mono text-xs font-medium text-foreground">{formatOrderRef(o.id)}</div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
                     {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                   </div>
@@ -512,7 +516,7 @@ export function OrdersTab() {
                 {/* Header: order ref + date + status */}
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <span className="font-mono text-xs font-semibold text-foreground">#{o.id.substring(0, 8).toUpperCase()}</span>
+                    <span className="break-all font-mono text-xs font-semibold text-foreground">{formatOrderRef(o.id)}</span>
                     <span className="text-[11px] text-muted-foreground ml-2">
                       {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                     </span>
@@ -623,7 +627,7 @@ export function OrdersTab() {
             return (
               <form onSubmit={handleMarkPaid} className="space-y-4 mt-4">
                 <div className="p-4 bg-muted rounded-xl text-sm space-y-1">
-                  <div>Order: <strong className="font-mono">#{o.id.substring(0, 8).toUpperCase()}</strong></div>
+                  <div className="break-all">Order: <strong className="font-mono">{formatOrderRef(o.id)}</strong></div>
                   <div>Amount: <strong>KES {(o.totalAmount ?? o.totalKES).toLocaleString()}</strong></div>
                   <div className="text-muted-foreground text-xs">Use this for bank transfers or M-Pesa paybill payments you confirmed in your statement.</div>
                 </div>
@@ -652,7 +656,7 @@ export function OrdersTab() {
       <Dialog open={editOrder !== null} onOpenChange={(open) => !open && setEditOrder(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Correct Order #{editOrder?.id.slice(0, 8).toUpperCase()}</DialogTitle>
+            <DialogTitle>Correct Order {formatOrderRef(editOrder?.id)}</DialogTitle>
           </DialogHeader>
           <div className="mt-3 space-y-4">
             {editOrder?.serviceLocationSnapshot && (

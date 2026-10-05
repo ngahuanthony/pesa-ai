@@ -63,6 +63,15 @@ test("reservation requests validate dates, guests, business type, and persist as
     checkOutDate: "2026-11-08",
     guestCount: 21,
   }), /guestCount must be from 1 to 20/i);
+  assert.throws(() => db.createRoomReservation({
+    businessId: hotel.id,
+    customerPhone: "254799000004",
+    roomType: "Standard room",
+    checkInDate: "2026-11-05",
+    checkOutDate: "2026-11-08",
+    guestCount: 2,
+    customerName: " ",
+  }), /customerName is required/i);
   const shop = createBusiness({ name: "Retail Shop", merchantType: "retail" });
   assert.throws(() => createRequest(shop), /only available for hospitality/i);
 });
@@ -193,6 +202,7 @@ test("AI uses a stubbed tool call to save a pending reservation without confirmi
         id: "reservation-tool",
         name: "create_room_reservation",
         input: {
+          guest_name: "Amina Otieno",
           room_type: "Standard room",
           check_in_date: "2026-11-05",
           check_out_date: "2026-11-08",
@@ -217,9 +227,82 @@ test("AI uses a stubbed tool call to save a pending reservation without confirmi
       customerPhone: "254799000009",
     });
     assert.equal(result.reservationRequest.status, "PENDING");
+    assert.equal(result.reservationRequest.customerName, "Amina Otieno");
     assert.equal(result.reservationRequest.quotedAmount, null);
     assert.match(result.replyText, /pending/i);
     assert.equal(responses.length, 0);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("AI uses the WhatsApp profile name as a fallback and refuses unnamed room requests", async () => {
+  const hotel = createBusiness();
+  const originalFetch = global.fetch;
+  const requests = [];
+  const responses = [
+    {
+      stop_reason: "tool_use",
+      content: [{
+        type: "tool_use",
+        id: "profile-name-reservation",
+        name: "create_room_reservation",
+        input: {
+          room_type: "Standard room",
+          check_in_date: "2026-12-05",
+          check_out_date: "2026-12-08",
+          guest_count: 1,
+        },
+      }],
+    },
+    {
+      stop_reason: "end_turn",
+      content: [{ type: "text", text: "Thanks. Reception will review your request." }],
+    },
+    {
+      stop_reason: "tool_use",
+      content: [{
+        type: "tool_use",
+        id: "unnamed-reservation",
+        name: "create_room_reservation",
+        input: {
+          room_type: "Standard room",
+          check_in_date: "2026-12-10",
+          check_out_date: "2026-12-12",
+          guest_count: 1,
+        },
+      }],
+    },
+    {
+      stop_reason: "end_turn",
+      content: [{ type: "text", text: "What name should I put on the room request?" }],
+    },
+  ];
+  global.fetch = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return { ok: true, json: async () => responses.shift() };
+  };
+
+  try {
+    const withProfile = await getAssistantReply(hotel, "profile-guest", [], "I want a room", {
+      customerName: "WhatsApp Profile",
+      customerPhone: "254799000010",
+    });
+    assert.equal(withProfile.reservationRequest.customerName, "WhatsApp Profile");
+    assert.match(requests[0].system, /Known WhatsApp profile name: "WhatsApp Profile"/);
+    const roomTool = requests[0].tools.find((tool) => tool.name === "create_room_reservation");
+    assert.ok(roomTool.input_schema.required.includes("guest_name"));
+
+    const withoutProfile = await getAssistantReply(hotel, "unnamed-guest", [], "I want a room", {
+      customerPhone: "254799000011",
+    });
+    assert.equal(withoutProfile.reservationRequest, null);
+    assert.match(withoutProfile.replyText, /what name/i);
+    assert.match(requests[3].messages.at(-1).content[0].content, /Ask the guest for their name/);
+    assert.equal(
+      db.listRoomReservations(hotel.id).filter((item) => item.customerPhone === "254799000011").length,
+      0,
+    );
   } finally {
     global.fetch = originalFetch;
   }

@@ -295,14 +295,14 @@ export function BusinessIntelligenceTab() {
   };
 
   const handleCreateDefaultTables = async () => {
-    if (!window.confirm("Create service locations for Table 1 through Table 35? Existing tables will be kept.")) return;
+    if (!window.confirm("Create service locations for Table 1 through Table 40? Existing tables will be kept.")) return;
     try {
       const result = await createDefaultTables.mutateAsync({ businessId });
       const inactiveNote = result.inactive
         ? ` ${result.inactive} existing table${result.inactive === 1 ? " is" : "s are"} inactive; reactivate them individually if needed.`
         : "";
       toast({
-        title: "Tables 1–35 are ready",
+        title: "Tables 1–40 are ready",
         description: `${result.created} created; ${result.existing} already existed.${inactiveNote}`,
       });
     } catch (err: any) {
@@ -399,7 +399,7 @@ export function BusinessIntelligenceTab() {
                 disabled={createDefaultTables.isPending}
                 className="inline-flex h-9 w-full sm:w-auto items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
               >
-                {createDefaultTables.isPending ? "Creating tables..." : "Create Tables 1–35"}
+                {createDefaultTables.isPending ? "Creating tables..." : "Create Tables 1–40"}
               </button>
               <button 
                 onClick={() => { resetLocationForm(); setLocationDialogOpen(true); }}

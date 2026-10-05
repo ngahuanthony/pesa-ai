@@ -39,12 +39,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [newOrderCount, setNewOrderCount] = useState(0);
   const [latestOrderAlert, setLatestOrderAlert] = useState<any>(null);
+  const [newReservationCount, setNewReservationCount] = useState(0);
+  const [latestReservationAlert, setLatestReservationAlert] = useState<any>(null);
   const seenOrders = useRef<Map<string, number> | null>(null);
+  const seenReservations = useRef<Set<string> | null>(null);
   const businessId = (me as any)?.business?.id || "";
   const hospitalityBusiness = isHospitalityBusiness((me as any)?.business);
 
   useEffect(() => {
     if (!businessId) return;
+    seenOrders.current = null;
+    seenReservations.current = null;
     let stopped = false;
     const checkOrders = async () => {
       try {
@@ -64,7 +69,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             setLatestOrderAlert(changed);
             toast({
               title: isNew ? "New order received" : "Order updated",
-              description: `${changed.serviceLocationSnapshot?.label ? `${changed.serviceLocationSnapshot.label} · ` : ""}#${changed.id.slice(0, 8).toUpperCase()} · KSh ${Number(changed.totalAmount || 0).toLocaleString("en-KE")}`,
+              description: `${changed.serviceLocationSnapshot?.label ? `${changed.serviceLocationSnapshot.label} · ` : ""}#${String(changed.id).toUpperCase()} · KSh ${Number(changed.totalAmount || 0).toLocaleString("en-KE")}`,
             });
           }
         }
@@ -77,6 +82,44 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     const timer = window.setInterval(checkOrders, 5000);
     return () => { stopped = true; window.clearInterval(timer); };
   }, [businessId, toast]);
+
+  useEffect(() => {
+    if (!businessId || !hospitalityBusiness) {
+      setNewReservationCount(0);
+      setLatestReservationAlert(null);
+      return;
+    }
+    seenReservations.current = null;
+    let stopped = false;
+    const checkReservations = async () => {
+      try {
+        const response = await fetch(`/api/businesses/${businessId}/reservations`, { credentials: "include" });
+        if (!response.ok) return;
+        const reservations = await response.json();
+        if (!Array.isArray(reservations) || stopped) return;
+        setNewReservationCount(reservations.filter((reservation) =>
+          String(reservation.status || "").toUpperCase() === "PENDING"
+        ).length);
+        const next = new Set<string>(reservations.map((reservation) => String(reservation.id)));
+        if (seenReservations.current) {
+          const newlyCreated = reservations.find((reservation) => !seenReservations.current!.has(String(reservation.id)));
+          if (newlyCreated) {
+            setLatestReservationAlert(newlyCreated);
+            toast({
+              title: "New room request",
+              description: `${newlyCreated.customerName || "Guest"} · ${newlyCreated.customerPhone || "No phone"} · ${newlyCreated.reference || ""}`,
+            });
+          }
+        }
+        seenReservations.current = next;
+      } catch {
+        // Reservations page retains the last successfully loaded data.
+      }
+    };
+    void checkReservations();
+    const timer = window.setInterval(checkReservations, 10000);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [businessId, hospitalityBusiness, toast]);
 
   const closeMobile = () => setMobileOpen(false);
 
@@ -233,13 +276,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         {navLink("/dashboard/customers", "Customers", Users)}
         <div className="relative">
           {navLink("/dashboard/orders", "Orders", ShoppingCart)}
-          {hospitalityBusiness && navLink("/dashboard/reservations", "Reservations", CalendarDays)}
           {newOrderCount > 0 && (
             <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
               {newOrderCount}
             </span>
           )}
         </div>
+        {hospitalityBusiness && (
+          <div className="relative">
+            {navLink("/dashboard/reservations", "Reservations", CalendarDays)}
+            {newReservationCount > 0 && (
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {newReservationCount}
+              </span>
+            )}
+          </div>
+        )}
         {navLink("/settings/mpesa",       "M-Pesa",   CreditCard)}
         {navLink("/dashboard/sales",     "Reports",   BarChart2)}
         {navLink("/dashboard/settings",  "Settings",  Settings)}
@@ -300,20 +352,38 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Main content ── */}
       <main className="flex-1 overflow-auto pt-14 sm:pt-0">
-        {latestOrderAlert && !location.startsWith("/dashboard/orders") && (
-          <Link
-            href="/dashboard/orders"
-            onClick={() => { setLatestOrderAlert(null); closeMobile(); }}
-            className="sticky top-0 z-30 flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 shadow-sm"
-          >
-            <Bell className="h-4 w-4 animate-pulse text-amber-600" />
-            <span className="min-w-0 flex-1 text-sm font-semibold">
-              Order #{latestOrderAlert.id.slice(0, 8).toUpperCase()}
-              {latestOrderAlert.serviceLocationSnapshot?.label ? ` · ${latestOrderAlert.serviceLocationSnapshot.label}` : ""}
-              {" "}needs attention
-            </span>
-            <span className="text-xs font-bold text-amber-700">Open →</span>
-          </Link>
+        {(latestOrderAlert && !location.startsWith("/dashboard/orders") ||
+          latestReservationAlert && !location.startsWith("/dashboard/reservations")) && (
+          <div className="sticky top-0 z-30">
+            {latestOrderAlert && !location.startsWith("/dashboard/orders") && (
+              <Link
+                href="/dashboard/orders"
+                onClick={() => { setLatestOrderAlert(null); closeMobile(); }}
+                className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 shadow-sm"
+              >
+                <Bell className="h-4 w-4 flex-shrink-0 animate-pulse text-amber-600" />
+                <span className="min-w-0 flex-1 break-all text-sm font-semibold">
+                  Order #{String(latestOrderAlert.id).toUpperCase()}
+                  {latestOrderAlert.serviceLocationSnapshot?.label ? ` · ${latestOrderAlert.serviceLocationSnapshot.label}` : ""}
+                  {" "}needs attention
+                </span>
+                <span className="shrink-0 text-xs font-bold text-amber-700">Open →</span>
+              </Link>
+            )}
+            {latestReservationAlert && !location.startsWith("/dashboard/reservations") && (
+              <Link
+                href="/dashboard/reservations"
+                onClick={() => { setLatestReservationAlert(null); closeMobile(); }}
+                className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 shadow-sm"
+              >
+                <Bell className="h-4 w-4 flex-shrink-0 animate-pulse text-amber-600" />
+                <span className="min-w-0 flex-1 text-sm font-semibold">
+                  Room request · {latestReservationAlert.customerName || "Guest"} · {latestReservationAlert.customerPhone || "No phone"} · {latestReservationAlert.reference}
+                </span>
+                <span className="shrink-0 text-xs font-bold text-amber-700">Open →</span>
+              </Link>
+            )}
+          </div>
         )}
         {children}
       </main>
