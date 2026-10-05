@@ -5,16 +5,18 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ShoppingBag, Smartphone, CheckCircle2, Pencil, Minus, Plus, Trash2, Printer, Volume2, VolumeX } from "lucide-react";
-import { useState } from "react";
+import { ShoppingBag, Smartphone, CheckCircle2, Pencil, Minus, Plus, Trash2, Printer, Volume2, VolumeX, Clock3 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { isHospitalityBusiness } from "@/lib/business";
+import { isOrderClosed, isOrderPaid, isOrderServed } from "@/lib/order-closeout";
 import {
   disableOrderAlertSound,
   enableOrderAlertSound,
   isOrderAlertSoundEnabled,
 } from "@/lib/order-alert-sound";
+import { OrderDayCloseout } from "./order-day-closeout";
 
 const STATUS_STYLES: Record<string, string> = {
   new:       "bg-amber-100 text-amber-700",
@@ -26,8 +28,10 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: "bg-rose-100 text-rose-700",
 };
 
+const ORDER_TIME_ZONE = "Africa/Nairobi";
+
 interface PaymentMeta {
-  paymentMethod?: "mpesa-stk" | "mpesa-c2b" | "manual";
+  paymentMethod?: "mpesa-stk" | "mpesa-c2b" | "manual" | "cash" | "card" | "mpesa-manual";
   mpesaTxnId?:   string | null;
   mpesaAmount?:  number | null;
   mpesaPhone?:   string | null;
@@ -35,17 +39,93 @@ interface PaymentMeta {
   paidAt?:       string | null;
 }
 
-function formatOrderRef(id: unknown) {
-  return `#${String(id || "").toUpperCase()}`;
+function formatOrderRef(order: any) {
+  const orderNumber = Number(order?.orderNumber);
+  return Number.isSafeInteger(orderNumber) && orderNumber >= 1001
+    ? `#${orderNumber}`
+    : `#${String(order?.id || "").slice(0, 8).toUpperCase()}`;
+}
+
+function getOrderTimestamp(createdAt: unknown): number | null {
+  const timestamp = Date.parse(String(createdAt ?? ""));
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function formatOrderReceivedAt(createdAt: unknown) {
+  const timestamp = getOrderTimestamp(createdAt);
+  if (timestamp === null) return "Time unavailable";
+  const date = new Date(timestamp);
+  const day = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: ORDER_TIME_ZONE,
+  }).format(date);
+  const time = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: ORDER_TIME_ZONE,
+  }).format(date);
+  return `${day} · ${time}`;
+}
+
+function formatWaitingDuration(createdAt: unknown) {
+  const timestamp = getOrderTimestamp(createdAt);
+  if (timestamp === null) return "Time unavailable";
+  const totalMinutes = Math.floor(Math.max(0, Date.now() - timestamp) / 60_000);
+  if (totalMinutes < 1) return "<1 min";
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
+function getWaitingMinutes(createdAt: unknown) {
+  const timestamp = getOrderTimestamp(createdAt);
+  return timestamp === null ? null : Math.floor(Math.max(0, Date.now() - timestamp) / 60_000);
+}
+
+function OrderTiming({
+  createdAt,
+  isActive,
+  isLongestWaiting,
+}: {
+  createdAt: unknown;
+  isActive: boolean;
+  isLongestWaiting: boolean;
+}) {
+  const waitingMinutes = getWaitingMinutes(createdAt);
+  const ageTone = waitingMinutes !== null && waitingMinutes >= 20
+    ? "bg-rose-100 text-rose-800"
+    : waitingMinutes !== null && waitingMinutes >= 10
+      ? "bg-amber-100 text-amber-800"
+      : "bg-muted text-muted-foreground";
+  return (
+    <div className="mt-1.5 space-y-1">
+      <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+        <Clock3 className="h-3 w-3 shrink-0" aria-hidden="true" />
+        <span>Received {formatOrderReceivedAt(createdAt)}</span>
+      </div>
+      {isActive && (
+        <span data-testid="status-order-age" className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${ageTone}`}>
+          {isLongestWaiting ? "Longest wait" : "Waiting"} · {formatWaitingDuration(createdAt)}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function PaymentAttempt({ attempt }: { attempt?: any }) {
   if (!attempt) return null;
   if (attempt.status === "PENDING") {
-    return <p className="mt-1 text-[10px] font-medium text-amber-700">M-Pesa prompt pending on {attempt.phone || "customer phone"}</p>;
+    const requestedAt = Date.parse(String(attempt.requestedAt || ""));
+    const timedOut = Number.isFinite(requestedAt) && Date.now() - requestedAt >= 120_000;
+    return timedOut
+      ? <p className="mt-1 text-[10px] font-semibold text-rose-700" data-testid="status-mpesa-timeout">M-Pesa prompt timed out after 2 minutes. Resend it or choose another payment method.</p>
+      : <p className="mt-1 text-[10px] font-medium text-amber-700">M-Pesa prompt pending on {attempt.phone || "customer phone"}</p>;
   }
   if (attempt.status === "FAILED") {
-    return <p className="mt-1 text-[10px] font-medium text-rose-600">Last M-Pesa attempt failed: {attempt.resultDesc || "Payment not completed"}. You can retry.</p>;
+    return <p className="mt-1 text-[10px] font-semibold text-rose-700" data-testid="status-mpesa-failed">M-Pesa prompt failed: {attempt.resultDesc || "Payment not completed"}. Resend it or choose another payment method.</p>;
   }
   return null;
 }
@@ -53,21 +133,40 @@ function PaymentAttempt({ attempt }: { attempt?: any }) {
 function paymentMethodLabel(method?: string) {
   if (method === "mpesa-stk")  return "M-Pesa (STK push)";
   if (method === "mpesa-c2b")  return "M-Pesa (paybill)";
+  if (method === "mpesa-manual") return "M-Pesa (manual confirmation)";
+  if (method === "cash") return "Cash (manual)";
+  if (method === "card") return "Card (manual)";
   if (method === "manual")     return "Manual confirmation";
   return "M-Pesa";
 }
 
-function PaymentDetails({ meta }: { meta: PaymentMeta }) {
+function getPaymentAudit(order: any) {
+  return [...(Array.isArray(order?.history) ? order.history : [])]
+    .reverse()
+    .find((entry: any) => entry.type === "payment");
+}
+
+function PaymentDetails({ meta, actor }: { meta: PaymentMeta; actor?: string }) {
   if (!meta) return null;
   return (
     <div className="mt-1 space-y-0.5">
       {(meta.mpesaTxnId || meta.paymentRef) && (
         <div className="text-[10px] font-mono text-muted-foreground">Ref: {meta.mpesaTxnId || meta.paymentRef}</div>
       )}
-      {meta.mpesaAmount && (
+      {meta.mpesaAmount != null && (
         <div className="text-[10px] text-muted-foreground">KES {meta.mpesaAmount.toLocaleString("en-KE")}</div>
       )}
       <div className="text-[10px] text-muted-foreground">{paymentMethodLabel(meta.paymentMethod)}</div>
+      {meta.paidAt && (
+        <div className="text-[10px] text-muted-foreground">
+          {actor ? `Recorded by ${actor} · ` : "Recorded "}
+          {new Intl.DateTimeFormat("en-KE", {
+            dateStyle: "medium",
+            timeStyle: "short",
+            timeZone: ORDER_TIME_ZONE,
+          }).format(new Date(meta.paidAt))}
+        </div>
+      )}
     </div>
   );
 }
@@ -95,7 +194,7 @@ function printOrderDocument({
   const printWindow = window.open("", "_blank", "width=420,height=900");
   if (!printWindow) return false;
 
-  const orderRef = formatOrderRef(order.id);
+  const orderRef = formatOrderRef(order);
   const createdAt = order.createdAt
     ? new Date(order.createdAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })
     : "";
@@ -186,32 +285,76 @@ function StatusSelect({ order, onChange }: { order: any; onChange: (id: string, 
   }
 
   const upperStatus = (currentStatus || "").toUpperCase();
-  const allowed = [upperStatus];
-  if (upperStatus === "NEW") allowed.push("ACCEPTED");
-  if (upperStatus === "ACCEPTED") allowed.push("PREPARING");
-  if (upperStatus === "PREPARING") allowed.push("READY");
-  if (upperStatus === "READY") allowed.push("SERVED");
-  if (upperStatus === "SERVED") allowed.push("COMPLETED");
-  if (upperStatus !== "CANCELLED" && upperStatus !== "COMPLETED") allowed.push("CANCELLED");
+  const nextStatus: Record<string, string> = {
+    NEW: "ACCEPTED",
+    PENDING: "ACCEPTED",
+    ACCEPTED: "PREPARING",
+    CONFIRMED: "PREPARING",
+    PREPARING: "READY",
+    READY: "SERVED",
+  };
+  if (upperStatus === "SERVED" && isOrderPaid(order)) nextStatus.SERVED = "COMPLETED";
+  const next = nextStatus[upperStatus];
+  const fallback = upperStatus === "COMPLETED" || upperStatus === "CANCELLED"
+    ? []
+      : ["NEW", "PENDING", "ACCEPTED", "CONFIRMED", "PREPARING", "READY"].includes(upperStatus) &&
+          next && !isOrderPaid(order)
+      ? ["CANCELLED"]
+        : [];
+  const labelByStatus: Record<string, string> = {
+    ACCEPTED: "Accept order",
+    PREPARING: "Start preparing",
+    READY: "Mark ready",
+    SERVED: "Mark served",
+    COMPLETED: "Close order",
+  };
+  const nameByStatus: Record<string, string> = {
+    NEW: "New",
+    ACCEPTED: "Accepted",
+    PREPARING: "Preparing",
+    READY: "Ready",
+    SERVED: "Served",
+    COMPLETED: "Closed",
+    CANCELLED: "Cancelled",
+  };
 
   return (
-    <Select value={upperStatus} onValueChange={(val) => onChange(order.id, val)}>
-      <SelectTrigger className={`h-7 text-xs font-semibold border-none w-auto pr-2 ${STATUS_STYLES[normStatus] ?? "bg-muted text-foreground"}`}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {allowed.map(st => (
-          <SelectItem key={st} value={st}>
-            {st === "NEW" ? "New" :
-             st === "ACCEPTED" ? "Accepted" :
-             st === "PREPARING" ? "Preparing" :
-             st === "READY" ? "Ready" :
-             st === "SERVED" ? "Served" :
-             st === "COMPLETED" ? "Completed" : "Cancelled"}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="space-y-2">
+      <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${STATUS_STYLES[normStatus] ?? "bg-muted text-foreground"}`}>
+        {nameByStatus[upperStatus] || currentStatus}
+      </span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {next && (
+          <button
+            type="button"
+            data-testid={`button-next-order-step-${order.id}`}
+            onClick={() => onChange(order.id, next)}
+            className="rounded-lg bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-primary/90"
+          >
+            {labelByStatus[next]}
+          </button>
+        )}
+        {fallback.length > 0 && (
+          <Select onValueChange={(value) => onChange(order.id, value)}>
+            <SelectTrigger
+              className="h-8 w-[5.5rem] bg-white px-2 text-[11px]"
+              aria-label={`More actions for ${formatOrderRef(order)}`}
+              data-testid={`select-order-fallback-${order.id}`}
+            >
+              <SelectValue placeholder="More" />
+            </SelectTrigger>
+            <SelectContent>
+              {fallback.map((status) => (
+                <SelectItem key={status} value={status}>{nameByStatus[status]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+      {upperStatus === "SERVED" && !isOrderPaid(order) && (
+        <p className="text-[10px] font-semibold text-amber-800">Payment needed before closing</p>
+      )}
+    </div>
   );
 }
 
@@ -219,7 +362,7 @@ export function OrdersTab() {
   const { data: me } = useGetMe();
   const businessId = me?.business?.id || "";
   const hospitalityBusiness = isHospitalityBusiness(me?.business);
-  const { data: orders, isLoading } = useListOrders(businessId, {
+  const { data: orders, isLoading, isError } = useListOrders(businessId, {
     query: {
       enabled: !!businessId,
       queryKey: getListOrdersQueryKey(businessId),
@@ -244,8 +387,9 @@ export function OrdersTab() {
   const [editOrder, setEditOrder] = useState<any | null>(null);
   const [editItems, setEditItems] = useState<{ productId: string; productName: string; quantity: number }[]>([]);
   const [savingItems, setSavingItems] = useState(false);
-  const [orderFilter, setOrderFilter] = useState<"pending" | "served" | "all">("pending");
+  const [orderFilter, setOrderFilter] = useState<"active" | "closed">("active");
   const [orderSoundEnabled, setOrderSoundEnabled] = useState(isOrderAlertSoundEnabled);
+  const [manualPaymentMethod, setManualPaymentMethod] = useState<"cash" | "card" | "mpesa-manual">("cash");
 
   const businessName = me?.business?.name || "Pesa SI shop";
   const [receiptWidth, setReceiptWidth] = useState<"58" | "80">(() => {
@@ -299,10 +443,10 @@ export function OrdersTab() {
           ? "border-emerald-300 bg-emerald-50 text-emerald-800"
           : "border-border bg-white text-muted-foreground hover:bg-muted"
       }`}
-      title="Browsers require a click before playing order alert sounds"
+      title="Sound is on by default. Browser playback starts after your first interaction."
     >
       {orderSoundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-      {orderSoundEnabled ? "Beep alerts on" : "Enable beep alerts"}
+      {orderSoundEnabled ? "Sound on · mute" : "Turn sound on"}
     </button>
   );
 
@@ -384,7 +528,10 @@ export function OrdersTab() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentRef: paymentRef.trim() || null }),
+        body: JSON.stringify({
+          paymentMethod: manualPaymentMethod,
+          paymentRef: paymentRef.trim() || null,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Failed" }));
@@ -402,14 +549,6 @@ export function OrdersTab() {
   };
 
   const currentOrder = orders?.find((o) => o.id === payOrder);
-  const isOrderPaid = (o: any) => {
-    if (o.fulfillmentStatus) {
-      return o.paymentStatus === "PAID";
-    }
-    const norm = (o.status || "").toLowerCase();
-    return norm === "paid" || norm === "fulfilled";
-  };
-
   const isOrderActionableForPayment = (o: any) => {
     if (o.fulfillmentStatus) {
       return o.paymentStatus !== "PAID" && o.fulfillmentStatus !== "CANCELLED";
@@ -420,43 +559,64 @@ export function OrdersTab() {
 
   const orderList = Array.isArray(orders) ? orders as any[] : [];
   const statusOf = (order: any) => String(order.fulfillmentStatus || order.status || "").toUpperCase();
-  const pendingStatuses = new Set(["NEW", "ACCEPTED", "PREPARING", "READY", "PENDING", "CONFIRMED"]);
-  const servedStatuses = new Set(["SERVED", "COMPLETED", "FULFILLED"]);
-  const pendingCount = orderList.filter((order) => pendingStatuses.has(statusOf(order))).length;
-  const servedCount = orderList.filter((order) => servedStatuses.has(statusOf(order))).length;
+  const activeCount = orderList.filter((order) => !isOrderClosed(order)).length;
+  const closedCount = orderList.filter(isOrderClosed).length;
+  const servedUnpaidCount = orderList.filter((order) => isOrderServed(order) && !isOrderPaid(order) && !isOrderClosed(order)).length;
   const newCount = orderList.filter((order) =>
     statusOf(order) === "NEW" || statusOf(order) === "PENDING"
   ).length;
   const filteredOrders = orderList.filter((order) => {
-    const status = statusOf(order);
-    if (orderFilter === "pending") return pendingStatuses.has(status);
-    if (orderFilter === "served") return servedStatuses.has(status);
-    return true;
+    return orderFilter === "active" ? !isOrderClosed(order) : isOrderClosed(order);
+  }).sort((a, b) => {
+    const aActive = !isOrderClosed(a);
+    const bActive = !isOrderClosed(b);
+    if (aActive !== bActive) return aActive ? -1 : 1;
+
+    const aTime = getOrderTimestamp(a.createdAt);
+    const bTime = getOrderTimestamp(b.createdAt);
+    if (aTime === null) return bTime === null ? String(a.id).localeCompare(String(b.id)) : 1;
+    if (bTime === null) return -1;
+    return aActive ? aTime - bTime : bTime - aTime;
   });
+  const longestWaitingOrderId = filteredOrders.find((order) =>
+    !isOrderClosed(order) &&
+    getOrderTimestamp(order.createdAt) !== null
+  )?.id;
+  const emptyOrdersMessage = orderFilter === "active"
+    ? "No active orders to show."
+    : "No closed orders to show.";
 
   if (isLoading) return <div className="py-16 text-center text-muted-foreground text-sm">Loading orders…</div>;
+  if (isError) return (
+    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-8 text-center text-sm text-rose-800" role="alert" data-testid="status-orders-load-error">
+      Orders and the end-of-day summary could not be loaded. Refresh the page to try again.
+    </div>
+  );
 
   if (!orders?.length) return (
-    <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-20 text-center px-4">
-      {soundControl}
-      <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-        <ShoppingBag className="h-7 w-7 text-primary" />
+    <>
+      <OrderDayCloseout orders={orderList} />
+      <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-20 text-center px-4">
+        {soundControl}
+        <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+          <ShoppingBag className="h-7 w-7 text-primary" />
+        </div>
+        <h3 className="text-lg font-bold mb-2">No orders yet</h3>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          When customers order through your WhatsApp assistant, their orders appear here for you to track and fulfil.
+        </p>
       </div>
-      <h3 className="text-lg font-bold mb-2">No orders yet</h3>
-      <p className="text-sm text-muted-foreground max-w-sm">
-        When customers order through your WhatsApp assistant, their orders appear here for you to track and fulfil.
-      </p>
-    </div>
+    </>
   );
 
   return (
     <>
+      <OrderDayCloseout orders={orderList} />
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="inline-flex w-fit rounded-xl border border-border bg-white p-1" role="group" aria-label="Filter orders by service status">
+        <div className="inline-flex w-fit rounded-xl border border-border bg-white p-1" role="group" aria-label="Filter orders by open or closed status">
           {([
-            ["pending", `Pending (${pendingCount})`],
-            ["served", `Served (${servedCount})`],
-            ["all", `All (${orderList.length})`],
+            ["active", `Active (${activeCount})`],
+            ["closed", `Closed (${closedCount})`],
           ] as const).map(([filter, label]) => (
             <button
               key={filter}
@@ -486,11 +646,24 @@ export function OrdersTab() {
           </Select>
         </div>
       </div>
+      {servedUnpaidCount > 0 && (
+        <div
+          className="mb-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950"
+          role="status"
+          data-testid="banner-served-unpaid"
+        >
+          <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+          <p className="text-sm font-semibold">
+            {servedUnpaidCount} served order{servedUnpaidCount === 1 ? " is" : "s are"} still unpaid.
+            {" "}Record the payment to close {servedUnpaidCount === 1 ? "it" : "them"}.
+          </p>
+        </div>
+      )}
       {newCount > 0 && (
         <div className="mb-4 flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
           <div className="flex items-center gap-3">
             <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-            <p className="text-sm font-medium text-amber-800">You have {newCount} new order{newCount > 1 ? "s" : ""} waiting. Orders update automatically every few seconds.</p>
+          <p className="text-sm font-medium text-amber-800">You have {newCount} new order{newCount > 1 ? "s" : ""} waiting. Active orders are sorted by longest wait.</p>
           </div>
         </div>
       )}
@@ -498,25 +671,52 @@ export function OrdersTab() {
 
         {/* ── Desktop table (hidden on mobile) ── */}
         <div className="hidden sm:block">
-          <div className="grid grid-cols-[1.4fr_1.2fr_1.5fr_0.8fr_1fr_1.2fr] bg-muted/50 px-4 py-2.5 border-b border-border">
-            {["ORDER", "CUSTOMER", "ITEMS", "TOTAL", "STATUS", "PAYMENT"].map((h) => (
+          <div className="grid grid-cols-[1.35fr_1.1fr_1.5fr_0.8fr_1fr_1.2fr] bg-muted/50 px-4 py-2.5 border-b border-border">
+            {["TABLE / LOCATION", "CUSTOMER", "ITEMS", "TOTAL", "FULFILMENT", "PAYMENT"].map((h) => (
               <span key={h} className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{h}</span>
             ))}
           </div>
 
           {filteredOrders.length === 0 ? (
             <div className="px-4 py-12 text-center text-sm text-muted-foreground" data-testid={`text-empty-orders-${orderFilter}`}>
-              No {orderFilter === "all" ? "" : `${orderFilter} `}orders to show.
+              {emptyOrdersMessage}
             </div>
           ) : filteredOrders.map((o, i) => {
             const meta: PaymentMeta | undefined = o.paymentMeta;
+            const paymentAudit = getPaymentAudit(o);
+            const servedUnpaid = isOrderServed(o) && !isOrderPaid(o) && !isOrderClosed(o);
+            const mpesaAttempt = (o as any).mpesaPaymentAttempt;
+            const requestedAt = Date.parse(String(mpesaAttempt?.requestedAt || ""));
+            const mpesaTimedOut = mpesaAttempt?.status === "PENDING" &&
+              Number.isFinite(requestedAt) && Date.now() - requestedAt >= 120_000;
+            const canResendMpesa = mpesaAttempt?.status === "FAILED" || mpesaTimedOut;
+            const mpesaStillPending = mpesaAttempt?.status === "PENDING" && !mpesaTimedOut;
             return (
-              <div key={o.id} data-testid={`row-order-${o.id}`} className={`grid grid-cols-[1.4fr_1.2fr_1.5fr_0.8fr_1fr_1.2fr] items-start px-4 py-4 ${i < filteredOrders.length - 1 ? "border-b border-border" : ""} hover:bg-muted/30 transition-colors`}>
-                <div>
-                  <div className="break-all font-mono text-xs font-medium text-foreground">{formatOrderRef(o.id)}</div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">
-                    {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+              <div
+                key={o.id}
+                data-testid={`row-order-${o.id}`}
+                className={`grid grid-cols-[1.35fr_1.1fr_1.5fr_0.8fr_1fr_1.2fr] items-start px-4 py-4 transition-colors ${
+                  servedUnpaid ? "border-l-4 border-amber-500 bg-amber-50/70" : "hover:bg-muted/30"
+                } ${i < filteredOrders.length - 1 ? "border-b border-border" : ""}`}
+              >
+                {servedUnpaid && (
+                  <div className="-mx-4 -mt-4 col-span-6 mb-3 border-b border-amber-200 bg-amber-100/70 px-4 py-2 text-xs font-bold text-amber-900">
+                    Served · payment still needed before this order can be closed
                   </div>
+                )}
+                <div>
+                  <div className="text-sm font-extrabold leading-tight text-foreground">
+                    {o.serviceLocationSnapshot?.label || "No table/location"}
+                  </div>
+                  <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                    {o.serviceLocationSnapshot?.kind || "Order"}
+                  </div>
+                  <div title={String(o.id)} className="mt-1 font-mono text-xs font-semibold text-muted-foreground">{formatOrderRef(o)}</div>
+                  <OrderTiming
+                    createdAt={o.createdAt}
+                    isActive={!isOrderClosed(o)}
+                    isLongestWaiting={o.id === longestWaitingOrderId}
+                  />
                   <div className="mt-2 flex flex-wrap gap-1">
                     <button onClick={() => printOrder(o, "order")} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-muted" title="Print order receipt on thermal paper">
                       <Printer className="h-3 w-3" /> Receipt
@@ -529,12 +729,6 @@ export function OrdersTab() {
                 <div>
                   <div className="text-sm font-medium text-foreground">{o.customerName || "Customer"}</div>
                   <div className="text-xs text-muted-foreground">{o.customerPhone}</div>
-                  {o.serviceLocationSnapshot && (
-                    <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/60 text-[10px] font-medium text-muted-foreground">
-                      <span className="uppercase text-[9px] font-bold">{o.serviceLocationSnapshot.kind}</span>
-                      <span>{o.serviceLocationSnapshot.label}</span>
-                    </div>
-                  )}
                 </div>
                 <div className="space-y-0.5">
                   {o.items.map((item: any, idx: number) => (
@@ -549,12 +743,6 @@ export function OrdersTab() {
                 <div className="text-sm font-bold text-foreground">KES {(o.totalAmount ?? o.totalKES).toLocaleString()}</div>
                 <div>
                   <StatusSelect order={o} onChange={handleStatusChange} />
-                  {(o.paymentStatus || o.fulfillmentStatus) && (
-                    <div className="flex gap-1.5 mt-2">
-                      {o.paymentStatus && <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">{o.paymentStatus}</span>}
-                      {o.fulfillmentStatus && <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">{o.fulfillmentStatus}</span>}
-                    </div>
-                  )}
                 </div>
                 <div>
                   {isOrderPaid(o) ? (
@@ -562,22 +750,25 @@ export function OrdersTab() {
                       <div className="flex items-center gap-1 text-xs text-emerald-600 font-semibold">
                         <CheckCircle2 className="h-3.5 w-3.5" /> Paid
                       </div>
-                      {meta && <PaymentDetails meta={meta} />}
+                      {meta && <PaymentDetails meta={meta} actor={paymentAudit?.actor} />}
                       <PaymentAttempt attempt={(o as any).mpesaPaymentAttempt} />
                     </div>
                   ) : isOrderActionableForPayment(o) ? (
                     <div className="flex flex-col gap-1.5">
+                      <PaymentAttempt attempt={mpesaAttempt} />
                       <button
+                        data-testid={canResendMpesa ? `button-resend-mpesa-${o.id}` : `button-mpesa-prompt-${o.id}`}
+                        disabled={mpesaStillPending}
                         onClick={() => { setPayOrder(o.id); setPayPhone(o.customerPhone); }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/5 transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <Smartphone className="h-3.5 w-3.5" /> M-Pesa prompt
+                        <Smartphone className="h-3.5 w-3.5" /> {canResendMpesa ? "Resend prompt" : mpesaStillPending ? "Prompt pending" : "M-Pesa prompt"}
                       </button>
                       <button
-                        onClick={() => { setMarkOrder(o.id); setPaymentRef(""); }}
+                        onClick={() => { setMarkOrder(o.id); setPaymentRef(""); setManualPaymentMethod("cash"); }}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
                       >
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Mark as Paid
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Record payment
                       </button>
                     </div>
                   ) : null}
@@ -591,19 +782,45 @@ export function OrdersTab() {
         <div className="sm:hidden divide-y divide-border">
           {filteredOrders.length === 0 ? (
             <div className="px-4 py-12 text-center text-sm text-muted-foreground" data-testid={`text-empty-orders-mobile-${orderFilter}`}>
-              No {orderFilter === "all" ? "" : `${orderFilter} `}orders to show.
+              {emptyOrdersMessage}
             </div>
           ) : filteredOrders.map((o) => {
             const meta: PaymentMeta | undefined = o.paymentMeta;
+            const paymentAudit = getPaymentAudit(o);
+            const servedUnpaid = isOrderServed(o) && !isOrderPaid(o) && !isOrderClosed(o);
+            const mpesaAttempt = (o as any).mpesaPaymentAttempt;
+            const requestedAt = Date.parse(String(mpesaAttempt?.requestedAt || ""));
+            const mpesaTimedOut = mpesaAttempt?.status === "PENDING" &&
+              Number.isFinite(requestedAt) && Date.now() - requestedAt >= 120_000;
+            const canResendMpesa = mpesaAttempt?.status === "FAILED" || mpesaTimedOut;
+            const mpesaStillPending = mpesaAttempt?.status === "PENDING" && !mpesaTimedOut;
             return (
-              <div key={o.id} data-testid={`card-order-${o.id}`} className="px-4 py-4 space-y-3">
-                {/* Header: order ref + date + status */}
+              <div
+                key={o.id}
+                data-testid={`card-order-${o.id}`}
+                className={`space-y-3 border-l-4 px-4 py-4 ${
+                  servedUnpaid ? "border-amber-500 bg-amber-50/70" : "border-transparent"
+                }`}
+              >
+                {servedUnpaid && (
+                  <div className="-mx-4 -mt-4 border-b border-amber-200 bg-amber-100/70 px-4 py-2 text-xs font-bold text-amber-900">
+                    Served · payment still needed before this order can be closed
+                  </div>
+                )}
                 <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <span className="break-all font-mono text-xs font-semibold text-foreground">{formatOrderRef(o.id)}</span>
-                    <span className="text-[11px] text-muted-foreground ml-2">
-                      {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                    </span>
+                  <div className="min-w-0">
+                    <div className="text-base font-extrabold leading-tight text-foreground">
+                      {o.serviceLocationSnapshot?.label || "No table/location"}
+                    </div>
+                    <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                      {o.serviceLocationSnapshot?.kind || "Order"}
+                    </div>
+                    <span title={String(o.id)} className="mt-1 inline-block font-mono text-xs font-semibold text-muted-foreground">{formatOrderRef(o)}</span>
+                    <OrderTiming
+                      createdAt={o.createdAt}
+                      isActive={!isOrderClosed(o)}
+                      isLongestWaiting={o.id === longestWaitingOrderId}
+                    />
                     <div className="mt-2 flex flex-wrap gap-1">
                       <button onClick={() => printOrder(o, "order")} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-muted" title="Print order receipt on thermal paper">
                         <Printer className="h-3 w-3" /> Receipt
@@ -612,12 +829,6 @@ export function OrdersTab() {
                         <Printer className="h-3 w-3" /> Bill
                       </button>
                     </div>
-                    {(o.paymentStatus || o.fulfillmentStatus) && (
-                      <div className="flex gap-1.5 mt-1">
-                        {o.paymentStatus && <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">{o.paymentStatus}</span>}
-                        {o.fulfillmentStatus && <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">{o.fulfillmentStatus}</span>}
-                      </div>
-                    )}
                   </div>
                   <StatusSelect order={o} onChange={handleStatusChange} />
                 </div>
@@ -630,12 +841,6 @@ export function OrdersTab() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-foreground">{o.customerName || "Customer"}</div>
                     <div className="text-xs text-muted-foreground">{o.customerPhone}</div>
-                    {o.serviceLocationSnapshot && (
-                      <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/60 text-[10px] font-medium text-muted-foreground">
-                        <span className="uppercase text-[9px] font-bold">{o.serviceLocationSnapshot.kind}</span>
-                        <span>{o.serviceLocationSnapshot.label}</span>
-                      </div>
-                    )}
                   </div>
                   <div className="text-sm font-bold text-foreground flex-shrink-0">KES {(o.totalAmount ?? o.totalKES).toLocaleString()}</div>
                 </div>
@@ -656,24 +861,29 @@ export function OrdersTab() {
                 {isOrderPaid(o) ? (
                   <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
                     <CheckCircle2 className="h-3.5 w-3.5" /> Paid
-                    {meta && <PaymentDetails meta={meta} />}
+                    {meta && <PaymentDetails meta={meta} actor={paymentAudit?.actor} />}
                     <PaymentAttempt attempt={(o as any).mpesaPaymentAttempt} />
                   </div>
                 ) : isOrderActionableForPayment(o) ? (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { setPayOrder(o.id); setPayPhone(o.customerPhone); }}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-primary/30 px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/5 transition-colors"
-                    >
-                      <Smartphone className="h-3.5 w-3.5" /> M-Pesa Prompt
-                    </button>
-                    <button
-                      onClick={() => { setMarkOrder(o.id); setPaymentRef(""); }}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 px-3 py-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Mark Paid
-                    </button>
-                  </div>
+                    <div className="space-y-2">
+                      <PaymentAttempt attempt={mpesaAttempt} />
+                      <div className="flex gap-2">
+                        <button
+                          data-testid={canResendMpesa ? `button-resend-mpesa-${o.id}` : `button-mpesa-prompt-${o.id}`}
+                          disabled={mpesaStillPending}
+                          onClick={() => { setPayOrder(o.id); setPayPhone(o.customerPhone); }}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-primary/30 px-3 py-2.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Smartphone className="h-3.5 w-3.5" /> {canResendMpesa ? "Resend prompt" : mpesaStillPending ? "Prompt pending" : "M-Pesa prompt"}
+                        </button>
+                        <button
+                          onClick={() => { setMarkOrder(o.id); setPaymentRef(""); setManualPaymentMethod("cash"); }}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 px-3 py-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Record payment
+                        </button>
+                      </div>
+                    </div>
                 ) : null}
               </div>
             );
@@ -711,16 +921,32 @@ export function OrdersTab() {
             return (
               <form onSubmit={handleMarkPaid} className="space-y-4 mt-4">
                 <div className="p-4 bg-muted rounded-xl text-sm space-y-1">
-                  <div className="break-all">Order: <strong className="font-mono">{formatOrderRef(o.id)}</strong></div>
+                  <div>Order: <strong className="font-mono">{formatOrderRef(o)}</strong></div>
                   <div>Amount: <strong>KES {(o.totalAmount ?? o.totalKES).toLocaleString()}</strong></div>
-                  <div className="text-muted-foreground text-xs">Use this for bank transfers or M-Pesa paybill payments you confirmed in your statement.</div>
+                  <div className="text-muted-foreground text-xs">Choose how the customer paid. This records the staff account and time for reconciliation.</div>
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="manual-payment-method" className="text-sm font-medium">Payment method</label>
+                  <Select
+                    value={manualPaymentMethod}
+                    onValueChange={(value) => setManualPaymentMethod(value as "cash" | "card" | "mpesa-manual")}
+                  >
+                    <SelectTrigger id="manual-payment-method" className="h-10 bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="card">Card</SelectItem>
+                      <SelectItem value="mpesa-manual">M-Pesa (manual confirmation)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">Payment reference <span className="text-muted-foreground font-normal">(optional)</span></label>
                   <Input
                     value={paymentRef}
                     onChange={(e) => setPaymentRef(e.target.value)}
-                    placeholder="e.g. Bank ref, M-Pesa TransID, cheque no."
+                    placeholder="M-Pesa reference or receipt note"
                   />
                   <p className="text-xs text-muted-foreground">Saved for reconciliation — visible on this order.</p>
                 </div>
@@ -740,7 +966,7 @@ export function OrdersTab() {
       <Dialog open={editOrder !== null} onOpenChange={(open) => !open && setEditOrder(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Correct Order {formatOrderRef(editOrder?.id)}</DialogTitle>
+            <DialogTitle>Correct Order {formatOrderRef(editOrder)}</DialogTitle>
           </DialogHeader>
           <div className="mt-3 space-y-4">
             {editOrder?.serviceLocationSnapshot && (

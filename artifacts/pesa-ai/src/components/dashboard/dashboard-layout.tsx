@@ -6,12 +6,13 @@ import {
   Users, CreditCard, Layers, ScanLine, BarChart2,
   Menu, X, Mic, BrainCircuit, Bell, CalendarDays
 } from "lucide-react";
-import { useLogout, useGetMe } from "@workspace/api-client-react";
+import { getListOrdersQueryKey, useLogout, useGetMe } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { BRAND_NAME } from "@/constants/brand";
 import { useToast } from "@/hooks/use-toast";
 import { isHospitalityBusiness } from "@/lib/business";
-import { playOrderAlertBeep } from "@/lib/order-alert-sound";
+import { activateOrderAlertSound, playOrderAlertBeep } from "@/lib/order-alert-sound";
 
 const WA_SUB_ITEMS = [
   { label: "Phone Number",     href: "/dashboard/whatsapp" },
@@ -30,6 +31,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { data: me } = useGetMe();
   const logout = useLogout();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const waActive    = location.startsWith("/dashboard/whatsapp");
@@ -43,13 +45,27 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [newReservationCount, setNewReservationCount] = useState(0);
   const [latestReservationAlert, setLatestReservationAlert] = useState<any>(null);
   const seenOrders = useRef<Map<string, number> | null>(null);
+  const unattendedOrderAlerts = useRef<Map<string, number>>(new Map());
   const seenReservations = useRef<Set<string> | null>(null);
   const businessId = (me as any)?.business?.id || "";
   const hospitalityBusiness = isHospitalityBusiness((me as any)?.business);
 
   useEffect(() => {
+    const activate = () => {
+      void activateOrderAlertSound().catch(() => undefined);
+    };
+    window.addEventListener("pointerdown", activate, { capture: true, once: true });
+    window.addEventListener("keydown", activate, { capture: true, once: true });
+    return () => {
+      window.removeEventListener("pointerdown", activate, { capture: true });
+      window.removeEventListener("keydown", activate, { capture: true });
+    };
+  }, []);
+
+  useEffect(() => {
     if (!businessId) return;
     seenOrders.current = null;
+    unattendedOrderAlerts.current.clear();
     seenReservations.current = null;
     let stopped = false;
     const checkOrders = async () => {
@@ -58,20 +74,41 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         if (!response.ok) return;
         const orders = await response.json();
         if (!Array.isArray(orders) || stopped) return;
-        setNewOrderCount(orders.filter((order) =>
-          String(order.fulfillmentStatus || order.status || "").toUpperCase() === "NEW" ||
-          String(order.status || "").toLowerCase() === "pending"
-        ).length);
+        queryClient.setQueryData(getListOrdersQueryKey(businessId), orders);
+        const unattended = orders.filter((order) =>
+          ["NEW", "PENDING"].includes(String(order.fulfillmentStatus || order.status || "").toUpperCase())
+        );
+        const unattendedIds = new Set<string>(unattended.map((order) => String(order.id)));
+        setNewOrderCount(unattended.length);
+        const hadBaseline = seenOrders.current !== null;
+        const now = Date.now();
+        let shouldBeep = false;
+        for (const order of unattended) {
+          const dueAt = unattendedOrderAlerts.current.get(order.id);
+          if (dueAt === undefined) {
+            unattendedOrderAlerts.current.set(order.id, now + 180_000);
+            if (hadBaseline) shouldBeep = true;
+          } else if (dueAt <= now) {
+            unattendedOrderAlerts.current.set(order.id, now + 180_000);
+            shouldBeep = true;
+          }
+        }
+        for (const id of unattendedOrderAlerts.current.keys()) {
+          if (!unattendedIds.has(id)) unattendedOrderAlerts.current.delete(id);
+        }
+        if (shouldBeep) playOrderAlertBeep();
         const next = new Map<string, number>(orders.map((order) => [order.id, Number(order.revision || 1)]));
         if (seenOrders.current) {
           const changed = orders.find((order) => !seenOrders.current!.has(order.id) || seenOrders.current!.get(order.id) !== Number(order.revision || 1));
           if (changed) {
             const isNew = !seenOrders.current.has(changed.id);
             setLatestOrderAlert({ ...changed, alertIsNew: isNew });
-            if (isNew && hospitalityBusiness) playOrderAlertBeep();
+            const reference = Number.isSafeInteger(Number(changed.orderNumber))
+              ? `#${Number(changed.orderNumber)}`
+              : `#${String(changed.id).slice(0, 8).toUpperCase()}`;
             toast({
               title: isNew ? "New order received" : "Order updated",
-              description: `${changed.serviceLocationSnapshot?.label ? `${changed.serviceLocationSnapshot.label} · ` : ""}#${String(changed.id).slice(0, 8).toUpperCase()} · KSh ${Number(changed.totalAmount || 0).toLocaleString("en-KE")}`,
+              description: `${changed.serviceLocationSnapshot?.label ? `${changed.serviceLocationSnapshot.label} · ` : ""}${reference} · KSh ${Number(changed.totalAmount || 0).toLocaleString("en-KE")}`,
             });
           }
         }
@@ -82,6 +119,44 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     };
     void checkOrders();
     const timer = window.setInterval(checkOrders, 5000);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [businessId, queryClient, hospitalityBusiness, toast]);
+
+  useEffect(() => {
+    if (!businessId || !hospitalityBusiness) {
+      setNewReservationCount(0);
+      setLatestReservationAlert(null);
+      return;
+    }
+    seenReservations.current = null;
+    let stopped = false;
+    const checkReservations = async () => {
+      try {
+        const response = await fetch(`/api/businesses/${businessId}/reservations`, { credentials: "include" });
+        if (!response.ok) return;
+        const reservations = await response.json();
+        if (!Array.isArray(reservations) || stopped) return;
+        setNewReservationCount(reservations.filter((reservation) =>
+          String(reservation.status || "").toUpperCase() === "PENDING"
+        ).length);
+        const next = new Set<string>(reservations.map((reservation) => String(reservation.id)));
+        if (seenReservations.current) {
+          const newlyCreated = reservations.find((reservation) => !seenReservations.current!.has(String(reservation.id)));
+          if (newlyCreated) {
+            setLatestReservationAlert(newlyCreated);
+            toast({
+              title: "New room request",
+              description: `${newlyCreated.customerName || "Guest"} · ${newlyCreated.customerPhone || "No phone"} · ${newlyCreated.reference || ""}`,
+            });
+          }
+        }
+        seenReservations.current = next;
+      } catch {
+        // Reservations page retains the last successfully loaded data.
+      }
+    };
+    void checkReservations();
+    const timer = window.setInterval(checkReservations, 10000);
     return () => { stopped = true; window.clearInterval(timer); };
   }, [businessId, hospitalityBusiness, toast]);
 
@@ -365,7 +440,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               >
                 <Bell className="h-4 w-4 flex-shrink-0 animate-pulse text-amber-600" />
                 <span className="min-w-0 flex-1 break-all text-sm font-semibold">
-                  {latestOrderAlert.alertIsNew ? "New order" : "Order update"} #{String(latestOrderAlert.id).slice(0, 8).toUpperCase()}
+                  {latestOrderAlert.alertIsNew ? "New order" : "Order update"} {Number.isSafeInteger(Number(latestOrderAlert.orderNumber)) ? `#${Number(latestOrderAlert.orderNumber)}` : `#${String(latestOrderAlert.id).slice(0, 8).toUpperCase()}`}
                   {latestOrderAlert.serviceLocationSnapshot?.label ? ` · ${latestOrderAlert.serviceLocationSnapshot.label}` : ""}
                   {" "}needs attention
                 </span>

@@ -150,6 +150,8 @@ function load() {
     // Keep receiving details but never migrate old passkeys/OAuth into the
     // new Pesa SI app. Every merchant must be authorized again by admin.
     let changed = false;
+    if (backfillOrderNumbers(state)) changed = true;
+    if (backfillOrderWorkflow(state)) changed = true;
     for (const business of state.businesses || []) {
       if (!business.mpesaCredentials) continue;
       const old = business.mpesaCredentials;
@@ -204,6 +206,90 @@ function id() {
 
 function now() {
   return new Date().toISOString();
+}
+
+const FIRST_ORDER_NUMBER = 1001;
+
+function validOrderNumber(order) {
+  const value = Number(order && order.orderNumber);
+  return Number.isSafeInteger(value) && value >= FIRST_ORDER_NUMBER ? value : null;
+}
+
+function backfillOrderNumbers(state) {
+  const ordersByBusiness = new Map();
+  for (const order of state.orders || []) {
+    const group = ordersByBusiness.get(order.businessId) || [];
+    group.push(order);
+    ordersByBusiness.set(order.businessId, group);
+  }
+
+  let changed = false;
+  for (const orders of ordersByBusiness.values()) {
+    let highestNumber = FIRST_ORDER_NUMBER - 1;
+    for (const order of orders) {
+      const number = validOrderNumber(order);
+      if (number !== null) highestNumber = Math.max(highestNumber, number);
+    }
+    const unnumbered = orders
+      .filter((order) => validOrderNumber(order) === null)
+      .sort((a, b) => {
+        const aTime = Date.parse(a.createdAt || "") || 0;
+        const bTime = Date.parse(b.createdAt || "") || 0;
+        return aTime - bTime || String(a.id).localeCompare(String(b.id));
+      });
+    for (const order of unnumbered) {
+      order.orderNumber = ++highestNumber;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function backfillOrderWorkflow(state) {
+  let changed = false;
+  const fulfillmentByLegacyStatus = {
+    PENDING: "NEW",
+    CONFIRMED: "ACCEPTED",
+    NEW: "NEW",
+    ACCEPTED: "ACCEPTED",
+    PREPARING: "PREPARING",
+    READY: "READY",
+    SERVED: "SERVED",
+    CANCELLED: "CANCELLED",
+    CANCELED: "CANCELLED",
+    PAID: "NEW",
+  };
+
+  for (const order of state.orders || []) {
+    if (order.fulfillmentStatus) continue;
+    const legacyStatus = String(order.status || "").trim().toUpperCase();
+    const hadPaymentStatus = order.paymentStatus === "PAID" || order.paymentStatus === "PENDING";
+    if (!hadPaymentStatus) {
+      order.paymentStatus = ["PAID", "FULFILLED", "COMPLETED"].includes(legacyStatus) ? "PAID" : "PENDING";
+    }
+    const isPaid = order.paymentStatus === "PAID";
+    if (legacyStatus === "FULFILLED" || legacyStatus === "COMPLETED") {
+      order.fulfillmentStatus = isPaid ? "COMPLETED" : "SERVED";
+    } else {
+      order.fulfillmentStatus = fulfillmentByLegacyStatus[legacyStatus] || "NEW";
+    }
+    changed = true;
+  }
+  return changed;
+}
+
+function nextOrderNumber(state, businessId) {
+  const highestNumber = (state.orders || [])
+    .filter((order) => order.businessId === businessId)
+    .reduce((highest, order) => Math.max(highest, validOrderNumber(order) || 0), FIRST_ORDER_NUMBER - 1);
+  return highestNumber + 1;
+}
+
+function orderReference(order) {
+  const number = validOrderNumber(order);
+  return number === null
+    ? `#${String(order && order.id || "").slice(0, 8).toUpperCase()}`
+    : `#${number}`;
 }
 
 // --- generic helpers -------------------------------------------------
@@ -2352,6 +2438,7 @@ function createOrder(state, { businessId, customerId, items, serviceLocationId =
   const location = serviceLocationId ? state.serviceLocations.find((item) => item.id === serviceLocationId) : null;
   const order = {
     id: id(),
+    orderNumber: nextOrderNumber(state, businessId),
     businessId,
     customerId,
     status: "pending",
@@ -2516,6 +2603,13 @@ function updateOrderStatus(orderId, status, paymentMeta = null, { actor = "syste
     const previousStatus = o.status;
     const previousFulfillmentStatus = o.fulfillmentStatus || null;
     const previousPaymentStatus = o.paymentStatus || null;
+    if (
+      o.fulfillmentStatus &&
+      String(status).toUpperCase() === "COMPLETED" &&
+      (String(o.fulfillmentStatus).toUpperCase() !== "SERVED" || o.paymentStatus !== "PAID")
+    ) {
+      throw httpError(409, "An order can be closed only after it has been served and paid");
+    }
     o.status = status;
     if (o.fulfillmentStatus && !paymentMeta) {
       const fulfillment = ["pending", "confirmed", "paid", "fulfilled", "cancelled"].includes(status)
@@ -3453,6 +3547,7 @@ module.exports = {
   repairSingleOrphanedAccount,
   id,
   now,
+  orderReference,
   httpError,
   PLANS,
   PLAN_ORDER,

@@ -1,5 +1,24 @@
 let audioContext: AudioContext | null = null;
-let enabledForSession = false;
+const SOUND_PREFERENCE_KEY = "pesa-si-order-alert-sound";
+
+function readSoundPreference() {
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(SOUND_PREFERENCE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+let enabledForSession = readSoundPreference();
+
+function persistSoundPreference(enabled: boolean) {
+  try {
+    window.localStorage.setItem(SOUND_PREFERENCE_KEY, enabled ? "on" : "off");
+  } catch {
+    // Keep the preference for this session when browser storage is unavailable.
+  }
+}
 
 function playTonePair(context: AudioContext) {
   const playTone = (frequency: number, startAt: number) => {
@@ -22,7 +41,15 @@ function playTonePair(context: AudioContext) {
 }
 
 export function isOrderAlertSoundEnabled() {
-  return enabledForSession && audioContext?.state === "running";
+  return enabledForSession;
+}
+
+export async function activateOrderAlertSound() {
+  if (!enabledForSession || typeof window === "undefined" || !window.AudioContext) return;
+  if (!audioContext || audioContext.state === "closed") {
+    audioContext = new window.AudioContext();
+  }
+  if (audioContext.state !== "running") await audioContext.resume();
 }
 
 export async function enableOrderAlertSound() {
@@ -35,11 +62,13 @@ export async function enableOrderAlertSound() {
   }
   await audioContext.resume();
   enabledForSession = true;
+  persistSoundPreference(true);
   playTonePair(audioContext);
 }
 
 export function disableOrderAlertSound() {
   enabledForSession = false;
+  persistSoundPreference(false);
   if (audioContext?.state === "running") void audioContext.suspend();
 }
 

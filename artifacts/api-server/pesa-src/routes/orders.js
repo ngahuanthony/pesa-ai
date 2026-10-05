@@ -4,16 +4,16 @@ const mpesa = require("../mpesa");
 const whatsapp = require("../whatsapp");
 
 function customerStatusMessage(order) {
-  const reference = order.id.slice(0, 8).toUpperCase();
+  const reference = db.orderReference(order);
   const location = order.serviceLocationSnapshot ? `\n${order.serviceLocationSnapshot.kind}: ${order.serviceLocationSnapshot.label}` : "";
   const status = String(order.fulfillmentStatus || order.status || "").toUpperCase();
   const messages = {
-    ACCEPTED: `✅ Order #${reference} has been accepted.${location}\nWe will begin preparing it shortly.`,
-    PREPARING: `👨‍🍳 Order #${reference} is now being prepared.${location}`,
-    READY: `🔔 Order #${reference} is ready.${location}`,
-    SERVED: `🍽️ Order #${reference} has been served.${location}`,
-    COMPLETED: `✅ Order #${reference} is complete. Thank you!`,
-    CANCELLED: `❌ Order #${reference} was cancelled. Please contact the business if you need help.`,
+    ACCEPTED: `✅ Order ${reference} has been accepted.${location}\nWe will begin preparing it shortly.`,
+    PREPARING: `👨‍🍳 Order ${reference} is now being prepared.${location}`,
+    READY: `🔔 Order ${reference} is ready.${location}`,
+    SERVED: `🍽️ Order ${reference} has been served.${location}`,
+    COMPLETED: `✅ Order ${reference} is complete. Thank you!`,
+    CANCELLED: `❌ Order ${reference} was cancelled. Please contact the business if you need help.`,
   };
   return messages[status] || null;
 }
@@ -47,6 +47,9 @@ async function updateStatus({ params, body, session }) {
     if (next === "CANCELLED" && order.paymentStatus === "PAID") {
       throw db.httpError(409, "Paid orders cannot be cancelled until the payment has been refunded and reconciled");
     }
+    if (next === "COMPLETED" && (current !== "SERVED" || order.paymentStatus !== "PAID")) {
+      throw db.httpError(409, "An order can be closed only after it has been served and paid");
+    }
     const transitions = {
       NEW: ["ACCEPTED", "CANCELLED"],
       ACCEPTED: ["PREPARING", "CANCELLED"],
@@ -79,7 +82,7 @@ async function updateItems({ params, body, session }) {
   if (!existing || existing.businessId !== params.businessId) throw db.httpError(404, "Order not found");
   const updated = db.updateOrderItems(params.orderId, body && body.items, { actor: session.accountId || "merchant" });
   const lines = updated.items.map((item) => `${item.quantity}× ${item.productName}`).join("\n");
-  const message = `✏️ Order #${updated.id.slice(0, 8).toUpperCase()} was updated:\n${lines}\nNew total: KSh ${Number(updated.totalAmount).toLocaleString("en-KE")}`;
+  const message = `✏️ Order ${db.orderReference(updated)} was updated:\n${lines}\nNew total: KSh ${Number(updated.totalAmount).toLocaleString("en-KE")}`;
   await notifyCustomer(updated, message).catch((error) => console.warn("[orders] Customer correction notification failed:", error.message));
   return updated;
 }
@@ -99,16 +102,28 @@ function markPaid({ params, body, session }) {
   auth.requireOwnBusiness(session, params.businessId);
   const order = db.getOrder(params.orderId);
   if (!order || order.businessId !== params.businessId) throw db.httpError(404, "Order not found");
+  const paymentMethod = body && body.paymentMethod;
+  if (!["cash", "card", "mpesa-manual"].includes(paymentMethod)) {
+    throw db.httpError(400, "paymentMethod must be cash, card, or mpesa-manual");
+  }
+  if (String(order.fulfillmentStatus || order.status || "").toUpperCase() === "CANCELLED") {
+    throw db.httpError(409, "Cancelled orders cannot be marked as paid");
+  }
   if (order.paymentStatus === "PAID" || order.status === "paid" || order.status === "fulfilled") {
     throw db.httpError(400, "Order is already paid or fulfilled");
   }
   const paymentRef = (body && body.paymentRef) ? String(body.paymentRef).trim() : null;
   const updated = db.updateOrderStatus(params.orderId, "paid", {
-    paymentMethod: "manual",
+    paymentMethod,
     paymentRef:    paymentRef || null,
   }, { actor: session.accountId || "merchant" });
-  db.recordSaleForOrder(updated, { paymentMethod: "manual", mpesaTxnId: paymentRef || null });
-  notifyCustomer(updated, `✅ Payment received for order #${updated.id.slice(0, 8).toUpperCase()}.\nAmount: KSh ${Number(updated.totalAmount).toLocaleString("en-KE")}${paymentRef ? `\nRef: ${paymentRef}` : ""}`).catch((error) => console.warn("[orders] Customer payment notification failed:", error.message));
+  db.recordSaleForOrder(updated, { paymentMethod, mpesaTxnId: paymentRef || null });
+  const business = db.getBusiness(updated.businessId);
+  const isSkyviewOpal = String(business.name || "").trim().replace(/\s+/g, " ").toLowerCase() === "skyview opal hotel";
+  const message = isSkyviewOpal
+    ? "✨ *Thank You for Visiting Skyview Opal!*\n\nThank you for choosing *Skyview Opal Hotel*. It was our pleasure having you with us, and we hope you enjoyed your experience.\n\nWe look forward to welcoming you back again soon! 💙\n\n*Skyview Opal — We can’t wait to see you again!*"
+    : `✅ Payment received for order ${db.orderReference(updated)}.\nAmount: KSh ${Number(updated.totalAmount).toLocaleString("en-KE")}${paymentRef ? `\nRef: ${paymentRef}` : ""}`;
+  notifyCustomer(updated, message).catch((error) => console.warn("[orders] Customer payment notification failed:", error.message));
   return updated;
 }
 
