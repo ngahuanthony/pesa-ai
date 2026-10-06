@@ -4,7 +4,7 @@
 
 const db = require("./db");
 const { getAssistantReply, getProductImageReplies } = require("./ai");
-const { buildConciergeList } = require("./concierge");
+const { buildConciergeList, getConciergePrompt } = require("./concierge");
 const { HOTEL_MENU_GROUPS, getHotelMenuClassification } = require("./hospitality-menu");
 
 // The pre-filled text baked into the shop QR / wa.me link.
@@ -180,6 +180,60 @@ function buildHospitalityMenuReply(business) {
   ].filter(Boolean).join("\n\n");
 }
 
+function normalizeHospitalityIntentText(text) {
+  return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function getStandardHospitalityServiceIntent(text) {
+  if (/\blocation\s*=/i.test(String(text || ""))) return null;
+  const normalized = normalizeHospitalityIntentText(text);
+  const options = [
+    ["rooms", "concierge:rooms"],
+    ["pool", "concierge:pool"],
+    ["conferences", "concierge:conferences"],
+    ["events", "concierge:events"],
+    ["hotel_info", "concierge:hotel_info"],
+  ];
+  for (const [intent, optionId] of options) {
+    if (normalized === normalizeHospitalityIntentText(getConciergePrompt(optionId))) return intent;
+  }
+  if (/\b(room|rooms|accommodation)\b/.test(normalized) && /\b(rate|rates|price|prices|availability|available)\b/.test(normalized)) {
+    // Keep genuine booking requests on the AI path, where the pending
+    // reservation tool can collect details without claiming a booking.
+    if (!/\b(book|booking|reserve|reservation|check in|check out)\b/.test(normalized) && !/\d/.test(normalized)) return "rooms";
+  }
+  if (/\b(pool|swimming)\b/.test(normalized) && /\b(price|prices|rate|rates|hour|hours|access|pool)\b/.test(normalized)) return "pool";
+  if (/\b(conference|conferences|meeting room|meeting rooms)\b/.test(normalized)) return "conferences";
+  if (/\b(event|events|celebration|celebrations)\b/.test(normalized)) return "events";
+  if (/\b(hotel information|hotel info|location|facilities)\b/.test(normalized)) return "hotel_info";
+  return null;
+}
+
+function buildStandardHospitalityServiceReply(business, intent) {
+  if (intent === "rooms") {
+    return "Room rates and availability depend on your dates. Please send your check-in date, check-out date, and number of guests. Reception will confirm room options and the final rate.";
+  }
+  if (intent === "pool") {
+    return "Please share the date and time you plan to visit. The hotel team will confirm pool access, current pricing, and opening hours.";
+  }
+  if (intent === "conferences") {
+    return "Please share the date, expected number of attendees, and any room or equipment needs. The hotel team will confirm available packages and pricing.";
+  }
+  if (intent === "events") {
+    return "Please share the event date, type of event, and expected number of guests. The hotel team will confirm venue options, availability, and pricing.";
+  }
+
+  const details = [
+    business.location ? `📍 ${business.location}` : null,
+    business.buildingName ? `Building: ${business.buildingName}` : null,
+    business.shopNumber ? `Address details: ${business.shopNumber}` : null,
+    business.publicPhone ? `Phone: ${business.publicPhone}` : null,
+  ].filter(Boolean);
+  return details.length
+    ? `Here are the hotel details on file:\n${details.join("\n")}\n\nPlease contact the hotel team for current facilities, rates, and availability.`
+    : "Please contact the hotel team for directions and current facility details.";
+}
+
 async function handleCustomerMessage({ business, customerPhone, customerName, text, channel, serviceLocationToken = null, serviceLocationId = null }) {
   let resolvedLocationId = serviceLocationId;
   let locationChanged = false;
@@ -264,6 +318,24 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
     locationContext &&
     String(locationContext.kind).toUpperCase() === "TABLE"
   );
+  const isShopLinkEntry = isShopLinkTrigger(text);
+  const isSkyviewHotel =
+    String(business.name || "").trim().toLowerCase() === "skyview opal hotel";
+  if (isShopLinkEntry && isSkyviewHotel) {
+    const welcomeReply = business.welcomeMessage || db.generateWelcomeMessage(business);
+    db.mutate((state) => {
+      db.addMessage(state, conversation.id, "assistant", welcomeReply);
+    });
+    return {
+      replyText: welcomeReply,
+      welcomeText: welcomeReply,
+      assistantReplyText: null,
+      interactiveList: buildConciergeList(business.name, { servicesAvailableByDefault: db.isHospitalityBusiness(business) }),
+      order: null,
+      customer,
+      conversation,
+    };
+  }
   if (db.isHospitalityBusiness(business) && isQuickMenuRequest(text)) {
     const menuReply = buildHospitalityMenuReply(business);
     const configuredWelcome = String(business.welcomeMessage || "").trim();
@@ -290,6 +362,33 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
       customer,
       conversation,
     };
+  }
+  if (db.isHospitalityBusiness(business)) {
+    const serviceIntent = getStandardHospitalityServiceIntent(text);
+    if (serviceIntent) {
+      const serviceReply = buildStandardHospitalityServiceReply(business, serviceIntent);
+      const configuredWelcome = String(business.welcomeMessage || "").trim();
+      const locationGreeting = locationContext
+        ? "📍 You're connected to " + locationContext.label + ". Just in case, please also tell me the table number printed beside you on the table."
+        : null;
+      const contextGreeting = isFirstMessage
+        ? locationContext
+          ? [configuredWelcome || ("Welcome to " + business.name + "! I can help with dining, rooms, the pool, conferences, and events."), locationGreeting].filter(Boolean).join("\n\n")
+          : configuredWelcome || null
+        : locationChanged
+          ? locationGreeting
+          : null;
+      const replyText = [contextGreeting, serviceReply].filter(Boolean).join("\n\n");
+      db.mutate((state) => { db.addMessage(state, conversation.id, "assistant", replyText); });
+      return {
+        replyText,
+        welcomeText: contextGreeting,
+        assistantReplyText: serviceReply,
+        order: null,
+        customer,
+        conversation,
+      };
+    }
   }
   if (isTableLocation) {
     const { replyText: tableReply, mediaReplies, order, orderUpdated, reservationRequest } = await getAssistantReply(
@@ -330,29 +429,6 @@ async function handleCustomerMessage({ business, customerPhone, customerName, te
         : null,
       order,
       reservationRequest,
-      customer,
-      conversation,
-    };
-  }
-
-  const isShopLinkEntry = isShopLinkTrigger(text);
-  const isSkyviewHotel =
-    String(business.name || "").trim().toLowerCase() === "skyview opal hotel";
-
-  // The hotel's general-purpose WhatsApp QR should open the service menu
-  // before invoking AI. Table QR entries are handled above with their
-  // location context; this covers the hotel's non-table QR link.
-  if (isShopLinkEntry && isSkyviewHotel) {
-    const welcomeReply = business.welcomeMessage || db.generateWelcomeMessage(business);
-    db.mutate((state) => {
-      db.addMessage(state, conversation.id, "assistant", welcomeReply);
-    });
-    return {
-      replyText: welcomeReply,
-      welcomeText: welcomeReply,
-      assistantReplyText: null,
-      interactiveList: buildConciergeList(business.name, { servicesAvailableByDefault: db.isHospitalityBusiness(business) }),
-      order: null,
       customer,
       conversation,
     };

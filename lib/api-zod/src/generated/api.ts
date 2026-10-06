@@ -623,6 +623,37 @@ export const GetSalesSummaryResponse = zod.object({
 })
 
 
+export const GetBusinessAiUsageParams = zod.object({
+  "businessId": zod.coerce.string()
+})
+
+export const GetBusinessAiUsageResponse = zod.object({
+  "periodDays": zod.number().int(),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "requestCount": zod.number().int(),
+  "inputTokens": zod.number().int(),
+  "outputTokens": zod.number().int(),
+  "cacheCreationInputTokens": zod.number().int(),
+  "cacheReadInputTokens": zod.number().int(),
+  "totalTokens": zod.number().int(),
+  "estimatedSpendUsd": zod.number().nullable().describe('Token-based estimate, not verified account billing; null if any request in the period has unknown pricing.'),
+  "unpricedRequestCount": zod.number().int(),
+  "models": zod.array(zod.string()),
+  "daily": zod.array(zod.object({
+  "date": zod.coerce.date(),
+  "requestCount": zod.number().int(),
+  "inputTokens": zod.number().int(),
+  "outputTokens": zod.number().int(),
+  "cacheCreationInputTokens": zod.number().int(),
+  "cacheReadInputTokens": zod.number().int(),
+  "totalTokens": zod.number().int(),
+  "estimatedSpendUsd": zod.number().nullable().describe('Token-based estimate, or null when pricing is unavailable for any request that day.'),
+  "unpricedRequestCount": zod.number().int()
+}))
+})
+
+
 export const GetBusinessWhatsAppStatusParams = zod.object({
   "businessId": zod.coerce.string()
 })

@@ -29,6 +29,7 @@ import type {
   AdminWhatsAppStatus,
   AuthResult,
   Business,
+  BusinessAiUsageSummary,
   BusinessUpdate,
   BusinessWithSubscription,
   ChatMessage,
@@ -1793,6 +1794,77 @@ export function useGetSalesSummary<TData = Awaited<ReturnType<typeof getSalesSum
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetSalesSummaryQueryOptions(businessId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetBusinessAiUsageUrl = (businessId: string,) => {
+
+
+
+
+  return `/api/businesses/${businessId}/ai-usage`
+}
+
+export const getBusinessAiUsage = async (businessId: string, options?: Parameters<typeof customFetch>[1]): Promise<BusinessAiUsageSummary> => {
+
+  return customFetch<BusinessAiUsageSummary>(getGetBusinessAiUsageUrl(businessId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBusinessAiUsageQueryKey = (businessId: string,) => {
+    return [
+    `/api/businesses/${businessId}/ai-usage`
+    ] as const;
+    }
+
+
+export const getGetBusinessAiUsageQueryOptions = <TData = Awaited<ReturnType<typeof getBusinessAiUsage>>, TError = ErrorType<unknown>>(businessId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessAiUsage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBusinessAiUsageQueryKey(businessId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBusinessAiUsage>>> = ({ signal }) => getBusinessAiUsage(businessId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: businessId !== null && businessId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBusinessAiUsage>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBusinessAiUsageQueryResult = NonNullable<Awaited<ReturnType<typeof getBusinessAiUsage>>>
+export type GetBusinessAiUsageQueryError = ErrorType<unknown>
+
+
+
+export function useGetBusinessAiUsage<TData = Awaited<ReturnType<typeof getBusinessAiUsage>>, TError = ErrorType<unknown>>(
+ businessId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessAiUsage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBusinessAiUsageQueryOptions(businessId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -16,6 +16,38 @@ const db = require("./db");
 
 test.after(() => fs.rmSync(testDataDir, { recursive: true, force: true }));
 
+test("standard hotel room enquiries use fixed replies without calling AI", async () => {
+  const hotel = db.mutate((state) => db.createBusiness(state, {
+    name: "Fixed Reply Test Hotel",
+    category: "Hospitality",
+    merchantType: "hotel",
+    phone: "254701123456",
+    personalPhone: "254701123456",
+    pesaAiNumber: "254701123457",
+  }));
+  const originalFetch = global.fetch;
+  let fetchCalls = 0;
+  global.fetch = async () => {
+    fetchCalls += 1;
+    throw new Error("A standard service reply should not call the AI provider");
+  };
+  try {
+    const result = await handleCustomerMessage({
+      business: hotel,
+      customerPhone: "254701123458",
+      customerName: "Guest",
+      text: "Tell me about your rooms, current rates, and availability.",
+      channel: "simulator",
+    });
+    assert.match(result.replyText, /check-in date, check-out date, and number of guests/i);
+    assert.match(result.replyText, /Reception will confirm/i);
+  } finally {
+    global.fetch = originalFetch;
+  }
+  assert.equal(fetchCalls, 0);
+  assert.equal(db.getBusinessAiUsage(hotel.id).requestCount, 0);
+});
+
 test("recognizes the Skyview hotel QR prompt and legacy shop trigger", () => {
   assert.equal(isShopLinkTrigger(HOTEL_SHOP_LINK_TRIGGER), true);
   assert.equal(isShopLinkTrigger(`  ${HOTEL_SHOP_LINK_TRIGGER.toUpperCase()}  `), true);

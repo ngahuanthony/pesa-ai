@@ -73,6 +73,7 @@ const authRoutes = require("./pesa-src/routes/auth");
 const setupRoutes = require("./pesa-src/routes/setup");
 const subscriptionRoutes = require("./pesa-src/routes/subscription");
 const salesRoutes = require("./pesa-src/routes/sales");
+const aiUsageRoutes = require("./pesa-src/routes/ai-usage");
 const mpesaSettingsRoutes = require("./pesa-src/routes/mpesaSettings");
 const adminRoutes = require("./pesa-src/routes/admin");
 const reportsRoutes = require("./pesa-src/routes/reports");
@@ -210,6 +211,7 @@ router.post("/api/businesses/:businessId/mpesa/connect", mpesaSettingsRoutes.con
 router.post("/api/businesses/:businessId/mpesa/disconnect", mpesaSettingsRoutes.disconnect);
 
 router.get("/api/businesses/:businessId/sales/summary", salesRoutes.summary);
+router.get("/api/businesses/:businessId/ai-usage", aiUsageRoutes.get);
 
 router.get("/api/businesses/:businessId/video-scan",                  videoScanRoutes.listScans);
 router.get("/api/businesses/:businessId/video-scan/:scanId",           videoScanRoutes.getScan);

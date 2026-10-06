@@ -9,6 +9,42 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface AiUsageDay {
+  date: string;
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+  totalTokens: number;
+  /**
+     * Token-based estimate, or null when pricing is unavailable for any request that day.
+     * @nullable
+     */
+  estimatedSpendUsd: number | null;
+  unpricedRequestCount: number;
+}
+
+export interface BusinessAiUsageSummary {
+  periodDays: number;
+  startDate: string;
+  endDate: string;
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+  totalTokens: number;
+  /**
+     * Token-based estimate, not verified account billing; null if any request in the period has unknown pricing.
+     * @nullable
+     */
+  estimatedSpendUsd: number | null;
+  unpricedRequestCount: number;
+  models: string[];
+  daily: AiUsageDay[];
+}
+
 /**
  * @nullable
  */

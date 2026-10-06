@@ -11,6 +11,7 @@ tags:
   - name: health
   - name: auth
   - name: business
+  - name: ai-usage
   - name: products
   - name: orders
   - name: sales
@@ -522,6 +523,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/SalesSummary"
 
+  /businesses/{businessId}/ai-usage:
+    get:
+      operationId: getBusinessAiUsage
+      tags: [ai-usage]
+      parameters:
+        - $ref: "#/components/parameters/BusinessId"
+      responses:
+        "200":
+          description: Provider-reported AI token usage and estimated spend for the signed-in business owner.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessAiUsageSummary"
+
   /businesses/{businessId}/whatsapp/status:
     get:
       operationId: getBusinessWhatsAppStatus
@@ -957,6 +972,91 @@ components:
           type: string
       required:
         - status
+
+    AiUsageDay:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        requestCount:
+          type: integer
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        cacheCreationInputTokens:
+          type: integer
+        cacheReadInputTokens:
+          type: integer
+        totalTokens:
+          type: integer
+        estimatedSpendUsd:
+          type: ["number", "null"]
+          description: Token-based estimate, or null when pricing is unavailable for any request that day.
+        unpricedRequestCount:
+          type: integer
+      required:
+        - date
+        - requestCount
+        - inputTokens
+        - outputTokens
+        - cacheCreationInputTokens
+        - cacheReadInputTokens
+        - totalTokens
+        - estimatedSpendUsd
+        - unpricedRequestCount
+
+    BusinessAiUsageSummary:
+      type: object
+      properties:
+        periodDays:
+          type: integer
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        requestCount:
+          type: integer
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        cacheCreationInputTokens:
+          type: integer
+        cacheReadInputTokens:
+          type: integer
+        totalTokens:
+          type: integer
+        estimatedSpendUsd:
+          type: ["number", "null"]
+          description: Token-based estimate, not verified account billing; null if any request in the period has unknown pricing.
+        unpricedRequestCount:
+          type: integer
+        models:
+          type: array
+          items:
+            type: string
+        daily:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiUsageDay"
+      required:
+        - periodDays
+        - startDate
+        - endDate
+        - requestCount
+        - inputTokens
+        - outputTokens
+        - cacheCreationInputTokens
+        - cacheReadInputTokens
+        - totalTokens
+        - estimatedSpendUsd
+        - unpricedRequestCount
+        - models
+        - daily
 
     Business:
       type: object

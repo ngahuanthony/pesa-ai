@@ -51,6 +51,7 @@ function emptyState() {
     dailyReportRuns: [],
     knowledgeEntries: [],
     serviceLocations: [],
+    aiUsage: [],
   };
 }
 
@@ -3664,6 +3665,8 @@ module.exports = {
   setConversationHandover,
   getHandoverConversations,
   getActivityFeed,
+  recordAiUsage,
+  getBusinessAiUsage,
   getSalesSummary,
   createReport,
   getReportsGroupedByBusiness,
@@ -3956,4 +3959,154 @@ function getActivityFeed(businessId, limit = 20) {
   return [...aiEvents, ...orderEvents]
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, limit);
+}
+
+// Aggregate provider-reported model usage once per customer interaction.
+// Daily buckets keep the persisted JSON store small while retaining a useful
+// owner-facing 30-day history.
+function recordAiUsage({
+  businessId,
+  model,
+  requestCount = 1,
+  inputTokens = 0,
+  outputTokens = 0,
+  cacheCreationInputTokens = 0,
+  cacheReadInputTokens = 0,
+  estimatedCostUsd = null,
+}) {
+  return mutate((state) => {
+    if (!(state.businesses || []).some((business) => business.id === businessId)) {
+      throw httpError(404, "Business not found");
+    }
+    if (!Array.isArray(state.aiUsage)) state.aiUsage = [];
+    const date = now().slice(0, 10);
+    const modelName = String(model || "unknown").slice(0, 120);
+    let bucket = state.aiUsage.find((entry) =>
+      entry.businessId === businessId && entry.date === date && entry.model === modelName
+    );
+    if (!bucket) {
+      bucket = {
+        businessId,
+        date,
+        model: modelName,
+        requestCount: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        estimatedCostUsd: 0,
+        unpricedRequestCount: 0,
+        updatedAt: now(),
+      };
+      state.aiUsage.push(bucket);
+    }
+
+    const addCount = (field, value) => {
+      const count = Number(value);
+      if (Number.isFinite(count) && count > 0) bucket[field] += Math.floor(count);
+    };
+    addCount("requestCount", requestCount);
+    addCount("inputTokens", inputTokens);
+    addCount("outputTokens", outputTokens);
+    addCount("cacheCreationInputTokens", cacheCreationInputTokens);
+    addCount("cacheReadInputTokens", cacheReadInputTokens);
+    if (Number.isFinite(estimatedCostUsd) && estimatedCostUsd >= 0) {
+      bucket.estimatedCostUsd += estimatedCostUsd;
+    } else {
+      addCount("unpricedRequestCount", requestCount);
+    }
+    bucket.updatedAt = now();
+    return bucket;
+  });
+}
+
+function getBusinessAiUsage(businessId, periodDays = 30) {
+  const state = load();
+  if (!(state.businesses || []).some((business) => business.id === businessId)) {
+    throw httpError(404, "Business not found");
+  }
+  const days = Math.max(1, Math.min(90, Math.floor(Number(periodDays) || 30)));
+  const endDate = new Date().toISOString().slice(0, 10);
+  const start = new Date(`${endDate}T00:00:00.000Z`);
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+  const startDate = start.toISOString().slice(0, 10);
+  const records = (state.aiUsage || []).filter((entry) =>
+    entry.businessId === businessId && entry.date >= startDate && entry.date <= endDate
+  );
+  const byDate = new Map();
+  const models = new Set();
+  for (const entry of records) {
+    models.add(entry.model);
+    let day = byDate.get(entry.date);
+    if (!day) {
+      day = {
+        date: entry.date,
+        requestCount: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        estimatedCostUsd: 0,
+        unpricedRequestCount: 0,
+      };
+      byDate.set(entry.date, day);
+    }
+    for (const field of [
+      "requestCount",
+      "inputTokens",
+      "outputTokens",
+      "cacheCreationInputTokens",
+      "cacheReadInputTokens",
+      "unpricedRequestCount",
+    ]) {
+      day[field] += Number(entry[field]) || 0;
+    }
+    day.estimatedCostUsd += Number(entry.estimatedCostUsd) || 0;
+  }
+
+  const daily = [...byDate.values()]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((day) => ({
+      ...day,
+      totalTokens: day.inputTokens + day.outputTokens + day.cacheCreationInputTokens + day.cacheReadInputTokens,
+      estimatedSpendUsd: day.unpricedRequestCount ? null : day.estimatedCostUsd,
+    }));
+  const totals = daily.reduce((result, day) => {
+    for (const field of [
+      "requestCount",
+      "inputTokens",
+      "outputTokens",
+      "cacheCreationInputTokens",
+      "cacheReadInputTokens",
+      "unpricedRequestCount",
+    ]) {
+      result[field] += day[field];
+    }
+    result.estimatedCostUsd += day.estimatedCostUsd;
+    return result;
+  }, {
+    requestCount: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+    estimatedCostUsd: 0,
+    unpricedRequestCount: 0,
+  });
+
+  return {
+    periodDays: days,
+    startDate,
+    endDate,
+    requestCount: totals.requestCount,
+    inputTokens: totals.inputTokens,
+    outputTokens: totals.outputTokens,
+    cacheCreationInputTokens: totals.cacheCreationInputTokens,
+    cacheReadInputTokens: totals.cacheReadInputTokens,
+    totalTokens: totals.inputTokens + totals.outputTokens + totals.cacheCreationInputTokens + totals.cacheReadInputTokens,
+    estimatedSpendUsd: totals.unpricedRequestCount ? null : totals.estimatedCostUsd,
+    unpricedRequestCount: totals.unpricedRequestCount,
+    models: [...models].sort(),
+    daily,
+  };
 }

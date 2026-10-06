@@ -13,6 +13,65 @@ const db = require("./db");
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929";
 const API_URL = "https://api.anthropic.com/v1/messages";
+const MODEL_TOKEN_RATES_PER_MILLION_USD = {
+  "claude-sonnet-4-5-20250929": {
+    input: 3,
+    output: 15,
+    cacheWrite: 3.75,
+    cacheRead: 0.3,
+  },
+};
+
+function getTokenRates() {
+  const defaults = MODEL_TOKEN_RATES_PER_MILLION_USD[MODEL];
+  const parseOverride = (key) => {
+    const raw = String(process.env[key] || "").trim();
+    if (!raw) return null;
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  };
+  const inputOverride = parseOverride("ANTHROPIC_INPUT_COST_PER_MILLION_USD");
+  const outputOverride = parseOverride("ANTHROPIC_OUTPUT_COST_PER_MILLION_USD");
+  if (!defaults && (!Number.isFinite(inputOverride) || !Number.isFinite(outputOverride))) return null;
+  const input = Number.isFinite(inputOverride)
+    ? inputOverride
+    : defaults?.input;
+  const output = Number.isFinite(outputOverride)
+    ? outputOverride
+    : defaults?.output;
+  if (!Number.isFinite(input) || !Number.isFinite(output) || input < 0 || output < 0) return null;
+  return {
+    input,
+    output,
+    cacheWrite: defaults?.cacheWrite ?? input,
+    cacheRead: defaults?.cacheRead ?? input,
+  };
+}
+
+function reportedUsage(usage = {}) {
+  const count = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+  };
+  return {
+    inputTokens: count(usage.input_tokens ?? usage.inputTokens),
+    outputTokens: count(usage.output_tokens ?? usage.outputTokens),
+    cacheCreationInputTokens: count(usage.cache_creation_input_tokens ?? usage.cacheCreationInputTokens),
+    cacheReadInputTokens: count(usage.cache_read_input_tokens ?? usage.cacheReadInputTokens),
+  };
+}
+
+function estimateUsageCostUsd(usage) {
+  const rates = getTokenRates();
+  if (!rates) return null;
+  const tokens = reportedUsage(usage);
+  return (
+    tokens.inputTokens * rates.input +
+    tokens.outputTokens * rates.output +
+    tokens.cacheCreationInputTokens * rates.cacheWrite +
+    tokens.cacheReadInputTokens * rates.cacheRead
+  ) / 1_000_000;
+}
 
 const TOOLS = [
   {
@@ -235,7 +294,7 @@ async function callClaude(messages, system, tools = TOOLS) {
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: 768,
       system,
       tools,
       messages,
@@ -355,119 +414,155 @@ async function runClaudeAssistant(business, customerId, history, userText, opts 
   let orderUpdated = false;
   let reservationRequest = null;
   let orderMutationHandled = false;
-  const MAX_TURNS = 5;
+  const MAX_TURNS = 3;
+  let completedRequests = 0;
+  const usageTotals = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+  };
+  let usageMissing = false;
 
-  for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const tools = db.isHospitalityBusiness(business)
-      ? TOOLS
-      : TOOLS.filter((tool) => tool.name !== "create_room_reservation");
-    const response = await callClaude(messages, system, tools);
-    messages.push({ role: "assistant", content: response.content });
+  try {
+    for (let turn = 0; turn < MAX_TURNS; turn++) {
+      const tools = db.isHospitalityBusiness(business)
+        ? TOOLS
+        : TOOLS.filter((tool) => tool.name !== "create_room_reservation");
+      const response = await callClaude(messages, system, tools);
+      completedRequests += 1;
+      if (
+        !response.usage ||
+        !Number.isFinite(Number(response.usage.input_tokens)) ||
+        !Number.isFinite(Number(response.usage.output_tokens))
+      ) {
+        usageMissing = true;
+      }
+      const turnUsage = reportedUsage(response.usage);
+      for (const field of Object.keys(usageTotals)) usageTotals[field] += turnUsage[field];
+      messages.push({ role: "assistant", content: response.content });
 
-    if (response.stop_reason !== "tool_use") {
-      const text = response.content
-        .filter((b) => b.type === "text")
-        .map((b) => b.text)
-        .join("\n")
-        .trim();
-      return { replyText: text || "Sorry, I didn't quite catch that — could you rephrase?", order, orderUpdated, reservationRequest };
+      if (response.stop_reason !== "tool_use") {
+        const text = response.content
+          .filter((b) => b.type === "text")
+          .map((b) => b.text)
+          .join("\n")
+          .trim();
+        return { replyText: text || "Sorry, I didn't quite catch that — could you rephrase?", order, orderUpdated, reservationRequest };
+      }
+
+      const toolResults = [];
+      for (const block of response.content) {
+        if (block.type !== "tool_use") continue;
+        const result = executeTool(business, customerId, block.name, block.input);
+        if (result.__create_order__) {
+          if (orderMutationHandled) {
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: JSON.stringify({ error: "Only one order change can be made at a time. Ask the customer which change they intend." }),
+            });
+            continue;
+          }
+          orderMutationHandled = true;
+          order = placeOrderFromToolCall(business, customerId, result.__create_order__, opts.serviceLocationId);
+          orderUpdated = false;
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: JSON.stringify(
+              order.error ? { error: order.error } : { success: true, order_id: order.id, total: order.totalAmount }
+            ),
+          });
+        } else if (result.__add_items_to_open_order__) {
+          if (orderMutationHandled) {
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: JSON.stringify({ error: "Only one order change can be made at a time. Ask the customer which change they intend." }),
+            });
+            continue;
+          }
+          orderMutationHandled = true;
+          try {
+            order = addItemsToOpenOrderFromToolCall(
+              business,
+              customerId,
+              result.__add_items_to_open_order__.items
+            );
+            orderUpdated = true;
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: JSON.stringify({
+                success: true,
+                order_id: order.id,
+                total: order.totalAmount,
+                items: order.items.map((item) => ({ product_name: item.productName, quantity: item.quantity })),
+                message: "Items added to the existing open order. Do not create another order.",
+              }),
+            });
+          } catch (error) {
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: JSON.stringify({ error: error.message || "The open order could not be updated." }),
+            });
+          }
+        } else if (result.__create_room_reservation__) {
+          const reservationDetails = result.__create_room_reservation__;
+          const customerName = String(reservationDetails.guestName || opts.customerName || "").trim();
+          if (!customerName) {
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: JSON.stringify({ error: "Ask the guest for their name before saving the room request." }),
+            });
+          } else {
+            const { guestName, ...requestDetails } = reservationDetails;
+            reservationRequest = db.createRoomReservation({
+              businessId: business.id,
+              customerId,
+              customerName,
+              customerPhone: opts.customerPhone || "",
+              ...requestDetails,
+            });
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: JSON.stringify({
+                success: true,
+                status: "PENDING",
+                reference: reservationRequest.reference,
+                message: "Request saved. Reception must check dates and quote a rate before confirmation.",
+              }),
+            });
+          }
+        } else {
+          toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
+        }
+      }
+      messages.push({ role: "user", content: toolResults });
     }
 
-    const toolResults = [];
-    for (const block of response.content) {
-      if (block.type !== "tool_use") continue;
-      const result = executeTool(business, customerId, block.name, block.input);
-      if (result.__create_order__) {
-        if (orderMutationHandled) {
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: JSON.stringify({ error: "Only one order change can be made at a time. Ask the customer which change they intend." }),
-          });
-          continue;
-        }
-        orderMutationHandled = true;
-        order = placeOrderFromToolCall(business, customerId, result.__create_order__, opts.serviceLocationId);
-        orderUpdated = false;
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: JSON.stringify(
-            order.error ? { error: order.error } : { success: true, order_id: order.id, total: order.totalAmount }
-          ),
+    return { replyText: "Sorry, I'm having trouble processing that right now — please try again shortly.", order, orderUpdated, reservationRequest };
+  } finally {
+    if (completedRequests > 0) {
+      try {
+        db.recordAiUsage({
+          businessId: business.id,
+          model: MODEL,
+          requestCount: completedRequests,
+          ...usageTotals,
+          estimatedCostUsd: usageMissing ? null : estimateUsageCostUsd(usageTotals),
         });
-      } else if (result.__add_items_to_open_order__) {
-        if (orderMutationHandled) {
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: JSON.stringify({ error: "Only one order change can be made at a time. Ask the customer which change they intend." }),
-          });
-          continue;
-        }
-        orderMutationHandled = true;
-        try {
-          order = addItemsToOpenOrderFromToolCall(
-            business,
-            customerId,
-            result.__add_items_to_open_order__.items
-          );
-          orderUpdated = true;
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: JSON.stringify({
-              success: true,
-              order_id: order.id,
-              total: order.totalAmount,
-              items: order.items.map((item) => ({ product_name: item.productName, quantity: item.quantity })),
-              message: "Items added to the existing open order. Do not create another order.",
-            }),
-          });
-        } catch (error) {
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: JSON.stringify({ error: error.message || "The open order could not be updated." }),
-          });
-        }
-      } else if (result.__create_room_reservation__) {
-        const reservationDetails = result.__create_room_reservation__;
-        const customerName = String(reservationDetails.guestName || opts.customerName || "").trim();
-        if (!customerName) {
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: JSON.stringify({ error: "Ask the guest for their name before saving the room request." }),
-          });
-        } else {
-          const { guestName, ...requestDetails } = reservationDetails;
-          reservationRequest = db.createRoomReservation({
-            businessId: business.id,
-            customerId,
-            customerName,
-            customerPhone: opts.customerPhone || "",
-            ...requestDetails,
-          });
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: JSON.stringify({
-              success: true,
-              status: "PENDING",
-              reference: reservationRequest.reference,
-              message: "Request saved. Reception must check dates and quote a rate before confirmation.",
-            }),
-          });
-        }
-      } else {
-        toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
+      } catch (error) {
+        // Usage persistence must not discard a customer response already
+        // generated by the provider; keep the failure visible to operators.
+        console.error("[AI usage] Failed to persist Anthropic usage:", error.message);
       }
     }
-    messages.push({ role: "user", content: toolResults });
   }
-
-  return { replyText: "Sorry, I'm having trouble processing that right now — please try again shortly.", order, orderUpdated, reservationRequest };
 }
 
 function addItemsToOpenOrderFromToolCall(business, customerId, requestedItems) {

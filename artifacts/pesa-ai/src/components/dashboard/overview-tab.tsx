@@ -14,6 +14,7 @@ import { Link } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ShopQRCard } from "@/components/dashboard/shop-qr-card";
+import { AiUsageCard } from "@/components/dashboard/ai-usage-card";
 import { getShopEntryPrompt, normalizeKenyanWhatsAppNumber } from "@/lib/shop-entry-prompt";
 import { getMessagingBlockMessage } from "@/lib/whatsapp-readiness";
 
@@ -381,6 +382,8 @@ export function OverviewTab() {
           </div>
         </div>
       )}
+
+      <AiUsageCard businessId={businessId} />
 
       {/* ── Bottom row: Recent Orders + AI Activity Feed ── */}
       <div className="grid lg:grid-cols-[1fr_340px] gap-4">
